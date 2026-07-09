@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mock-server",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["server/mock/mock_server.py", "server/mock/media", "8080"],
+      "port": 8080
+    }
+  ]
+}

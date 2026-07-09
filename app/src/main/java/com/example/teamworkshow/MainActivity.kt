@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.InputType
 import android.view.MotionEvent
 import android.view.View
@@ -21,10 +23,12 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.teamworkshow.model.MediaItem
+import com.example.teamworkshow.network.SyncManager
 import com.example.teamworkshow.player.PlayerCallback
 import com.example.teamworkshow.player.SlideShowController
 import com.example.teamworkshow.playlist.PlaylistManager
 import java.io.File
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), PlayerCallback {
 
@@ -38,6 +42,16 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var exoPlayer: ExoPlayer
     private lateinit var slideShowController: SlideShowController
 
+    private lateinit var syncManager: SyncManager
+    private val syncExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val syncRunnable = object : Runnable {
+        override fun run() {
+            syncNow(userTriggered = false)
+            mainHandler.postDelayed(this, SYNC_INTERVAL_MS)
+        }
+    }
+
     private val tapTimestamps = ArrayDeque<Long>()
 
     companion object {
@@ -46,6 +60,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         private const val TAP_COUNT_REQUIRED = 5
         private const val TAP_WINDOW_MS = 2_000L
         private const val CORNER_DP = 150f
+        private const val SYNC_INTERVAL_MS = 60_000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,6 +82,32 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         val playlist = PlaylistManager(mediaDir)
         slideShowController = SlideShowController(playlist, this)
         slideShowController.start()
+
+        syncManager = SyncManager(this, mediaDir)
+        // Immediate sync on launch, then poll periodically.
+        mainHandler.post(syncRunnable)
+    }
+
+    // ---------- Server sync ----------
+
+    /** Runs a sync on a background thread; reloads the slideshow if media changed. */
+    private fun syncNow(userTriggered: Boolean) {
+        if (syncManager.getServerUrl() == null) {
+            if (userTriggered) {
+                Toast.makeText(this, R.string.sync_no_server, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        syncExecutor.execute {
+            val changed = syncManager.sync()
+            mainHandler.post {
+                if (changed) slideShowController.reload()
+                if (userTriggered) {
+                    val msg = if (changed) R.string.sync_updated else R.string.sync_no_change
+                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     // ---------- Immersive Mode ----------
@@ -196,6 +237,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     private fun showMaintenanceMenu() {
         val options = arrayOf(
+            getString(R.string.maintenance_server),
+            getString(R.string.maintenance_sync_now),
             getString(R.string.maintenance_reload),
             getString(R.string.maintenance_exit)
         )
@@ -203,10 +246,30 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             .setTitle(R.string.maintenance_title)
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> slideShowController.reload()
-                    1 -> finishAndRemoveTask()
+                    0 -> showServerUrlDialog()
+                    1 -> syncNow(userTriggered = true)
+                    2 -> slideShowController.reload()
+                    3 -> finishAndRemoveTask()
                 }
             }
+            .setOnDismissListener { hideSystemBars() }
+            .show()
+    }
+
+    private fun showServerUrlDialog() {
+        val urlInput = EditText(this).apply {
+            hint = getString(R.string.server_url_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setText(syncManager.getServerUrl() ?: "")
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.maintenance_server)
+            .setView(urlInput)
+            .setPositiveButton(R.string.maintenance_ok) { _, _ ->
+                syncManager.setServerUrl(urlInput.text.toString())
+                syncNow(userTriggered = true)
+            }
+            .setNegativeButton(R.string.maintenance_cancel, null)
             .setOnDismissListener { hideSystemBars() }
             .show()
     }
@@ -230,6 +293,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     override fun onDestroy() {
         super.onDestroy()
+        mainHandler.removeCallbacksAndMessages(null)
+        syncExecutor.shutdownNow()
         slideShowController.stop()
         exoPlayer.release()
     }

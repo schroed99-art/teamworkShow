@@ -11,4 +11,10 @@
     <string name="maintenance_reload">Medien neu laden</string>
     <string name="maintenance_exit">App beenden</string>
     <string name="maintenance_wrong_pin">Falscher PIN</string>
+    <string name="maintenance_server">Server einrichten</string>
+    <string name="maintenance_sync_now">Jetzt synchronisieren</string>
+    <string name="server_url_hint">http://10.0.2.2:8080</string>
+    <string name="sync_no_server">Kein Server konfiguriert</string>
+    <string name="sync_updated">Medien aktualisiert</string>
+    <string name="sync_no_change">Bereits aktuell</string>
 </resources>

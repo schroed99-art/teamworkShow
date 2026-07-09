@@ -6,6 +6,13 @@ The app syncs its media from a server that exposes two endpoints:
 |---|---|
 | `GET {base}/playlist.php` | `{ "items": [ { "name", "hash", "size" }, ... ] }` (`hash` = SHA-256 hex) |
 | `GET {base}/media.php?name=<file>` | raw file bytes |
+| `POST {base}/upload.php` (multipart `file`) | store media (same name = replace, new = add) — PHP backend only |
+| `POST {base}/delete.php` (`name`) | delete a media file — PHP backend only |
+
+The web dashboard (`index.html`) provides upload (drag & drop) and per-item delete
+via these endpoints. The Python mock is **read-only** (GET only); use the PHP
+backend for upload/delete. Note: video upload via the dashboard needs PHP
+`upload_max_filesize`/`post_max_size` raised (default 2M/8M) — planned tweak.
 
 The app polls `playlist.php`, downloads any new/changed files (compared by hash),
 deletes files no longer listed, and reloads the slideshow.

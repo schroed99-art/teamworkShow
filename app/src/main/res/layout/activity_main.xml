@@ -43,4 +43,19 @@
         android:contentDescription="@string/logo_desc"
         android:visibility="gone" />
 
+    <!-- Discreet version label, always on top, bottom edge -->
+    <TextView
+        android:id="@+id/versionLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="6dp"
+        android:textColor="#66FFFFFF"
+        android:textSize="10sp"
+        android:shadowColor="#000000"
+        android:shadowRadius="4"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:contentDescription="@null" />
+
 </FrameLayout>

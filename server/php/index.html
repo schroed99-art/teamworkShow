@@ -102,6 +102,7 @@
 <body>
   <header>
     <h1><span class="magenta">Teamwork</span> Show <span style="color:var(--dim)">·</span> Server</h1>
+    <span class="tag" id="ver" title="Server-Version">v–</span>
     <span class="tag" id="status">verbinde…</span>
   </header>
 
@@ -260,6 +261,17 @@ async function del(name) {
   refresh();
 }
 
+async function loadVersion() {
+  const el = document.getElementById("ver");
+  try {
+    const r = await fetch("version.php", { cache: "no-store" });
+    const j = await r.json();
+    el.textContent = "v" + j.version;
+    el.title = "Server-Version " + j.version + (j.date ? " · " + j.date : "");
+  } catch (e) { el.textContent = ""; }
+}
+
+loadVersion();
 refresh();
 setInterval(refresh, 10000);
 </script>

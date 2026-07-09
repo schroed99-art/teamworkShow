@@ -13,6 +13,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -75,6 +76,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         imageViewB = findViewById(R.id.imageViewB)
         playerView = findViewById(R.id.playerView)
         emptyView = findViewById(R.id.emptyView)
+        findViewById<TextView>(R.id.versionLabel).text = appVersionText()
 
         setupExoPlayer()
 
@@ -290,6 +292,12 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     }
 
     // ---------- Lifecycle ----------
+
+    private fun appVersionText(): String = try {
+        "Teamwork Show v" + packageManager.getPackageInfo(packageName, 0).versionName
+    } catch (e: Exception) {
+        ""
+    }
 
     override fun onDestroy() {
         super.onDestroy()

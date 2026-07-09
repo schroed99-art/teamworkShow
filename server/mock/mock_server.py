@@ -56,10 +56,20 @@ class Handler(BaseHTTPRequestHandler):
             self._send_frontend()
         elif parsed.path.endswith("playlist.php"):
             self._send_json(build_playlist())
+        elif parsed.path.endswith("version.php"):
+            self._send_version()
         elif parsed.path.endswith("media.php"):
             self._send_media(parse_qs(parsed.query).get("name", [""])[0])
         else:
             self.send_error(404, "Not found")
+
+    def _send_version(self):
+        import datetime
+        try:
+            v = open(os.path.join(os.path.dirname(__file__), "..", "..", "VERSION")).read().strip()
+        except OSError:
+            v = "0.0.0"
+        self._send_json({"version": v, "date": datetime.date.today().isoformat()})
 
     def _send_frontend(self):
         # Serve the same index.html that deploys to All-Inkl (lives in server/php/).

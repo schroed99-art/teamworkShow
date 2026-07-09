@@ -1,6 +1,9 @@
 <resources>
-    <string name="app_name">TeamworkShow</string>
+    <string name="app_name">Teamwork Show</string>
+    <string name="brand_title">Teamwork Show</string>
+    <string name="splash_loading">Wird geladen…</string>
     <string name="empty_media">Keine Inhalte vorhanden</string>
+    <string name="logo_desc">Teamwork Show Logo</string>
     <string name="maintenance_title">Wartungsbereich</string>
     <string name="maintenance_pin_hint">PIN eingeben</string>
     <string name="maintenance_ok">OK</string>

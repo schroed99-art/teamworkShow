@@ -1,9 +1,14 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.TeamworkShow" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/brand_magenta</item>
+        <item name="android:colorBackground">@color/brand_background</item>
     </style>
 
     <style name="Theme.TeamworkShow" parent="Base.Theme.TeamworkShow" />
+
+    <!-- Splash / loading screen: black window background to avoid a white flash before content is drawn. -->
+    <style name="Theme.TeamworkShow.Splash" parent="Theme.TeamworkShow">
+        <item name="android:windowBackground">@color/brand_background</item>
+    </style>
 </resources>

@@ -1,0 +1,41 @@
+<!--
+  Placeholder Teamwork-Show logo (vector) in brand colors.
+  Three figures arranged in 120° rotational symmetry.
+  Replace with the real logo asset when available (see project notes).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Figure 1 (magenta) -->
+    <group android:pivotX="256" android:pivotY="256" android:rotation="0">
+        <path
+            android:fillColor="@color/brand_magenta"
+            android:pathData="M256,12 A42,42 0 1 1 255.9,12 Z" />
+        <path
+            android:fillColor="@color/brand_magenta"
+            android:pathData="M256,100 C320,150 320,300 256,372 C192,300 192,150 256,100 Z" />
+    </group>
+
+    <!-- Figure 2 (gray) -->
+    <group android:pivotX="256" android:pivotY="256" android:rotation="120">
+        <path
+            android:fillColor="@color/brand_gray"
+            android:pathData="M256,12 A42,42 0 1 1 255.9,12 Z" />
+        <path
+            android:fillColor="@color/brand_gray"
+            android:pathData="M256,100 C320,150 320,300 256,372 C192,300 192,150 256,100 Z" />
+    </group>
+
+    <!-- Figure 3 (light) -->
+    <group android:pivotX="256" android:pivotY="256" android:rotation="240">
+        <path
+            android:fillColor="@color/brand_on_background_dim"
+            android:pathData="M256,12 A42,42 0 1 1 255.9,12 Z" />
+        <path
+            android:fillColor="@color/brand_on_background_dim"
+            android:pathData="M256,100 C320,150 320,300 256,372 C192,300 192,150 256,100 Z" />
+    </group>
+</vector>

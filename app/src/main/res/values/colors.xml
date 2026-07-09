@@ -2,4 +2,10 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Brand -->
+    <color name="brand_background">#FF000000</color>
+    <color name="brand_magenta">#FFD81B60</color>
+    <color name="brand_gray">#FF8E8E8E</color>
+    <color name="brand_on_background_dim">#FFB0B0B0</color>
 </resources>

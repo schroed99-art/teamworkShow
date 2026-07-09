@@ -1,0 +1,68 @@
+package com.example.teamworkshow.player
+
+import android.os.Handler
+import android.os.Looper
+import com.example.teamworkshow.model.MediaType
+import com.example.teamworkshow.playlist.PlaylistManager
+
+class SlideShowController(
+    private val playlist: PlaylistManager,
+    private val callback: PlayerCallback
+) {
+    private val handler = Handler(Looper.getMainLooper())
+    private var running = false
+
+    companion object {
+        const val IMAGE_DURATION_MS = 10_000L
+    }
+
+    fun start() {
+        running = true
+        playlist.reload()
+        playNext()
+    }
+
+    fun reload() {
+        handler.removeCallbacksAndMessages(null)
+        playlist.reload()
+        if (running) playNext()
+    }
+
+    fun stop() {
+        running = false
+        handler.removeCallbacksAndMessages(null)
+    }
+
+    /** Called by MainActivity when ExoPlayer reports STATE_ENDED. */
+    fun onVideoDone() {
+        if (!running) return
+        playlist.advance()
+        playNext()
+    }
+
+    /** Called by the image timer. */
+    private fun onImageDone() {
+        if (!running) return
+        playlist.advance()
+        playNext()
+    }
+
+    private fun playNext() {
+        if (!running) return
+        if (playlist.isEmpty()) {
+            callback.showEmpty()
+            return
+        }
+        val item = playlist.current() ?: return
+        when (item.type) {
+            MediaType.IMAGE -> {
+                callback.showImage(item)
+                handler.postDelayed(::onImageDone, IMAGE_DURATION_MS)
+            }
+            MediaType.VIDEO -> {
+                callback.showVideo(item)
+                // advance is triggered via onVideoDone() from the ExoPlayer listener
+            }
+        }
+    }
+}

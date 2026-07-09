@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">TeamworkShow</string>
+    <string name="empty_media">Keine Inhalte vorhanden</string>
+    <string name="maintenance_title">Wartungsbereich</string>
+    <string name="maintenance_pin_hint">PIN eingeben</string>
+    <string name="maintenance_ok">OK</string>
+    <string name="maintenance_cancel">Abbrechen</string>
+    <string name="maintenance_reload">Medien neu laden</string>
+    <string name="maintenance_exit">App beenden</string>
+    <string name="maintenance_wrong_pin">Falscher PIN</string>
+</resources>

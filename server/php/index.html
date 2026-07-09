@@ -73,6 +73,30 @@
   .empty { color: var(--dim); padding: 40px 0; text-align: center; }
   footer { padding: 18px 28px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12px; }
   code { background: var(--panel2); padding: 2px 6px; border-radius: 5px; color: #ddd; }
+
+  /* Branded modal (replaces native alert/confirm) */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,.6); backdrop-filter: blur(3px);
+  }
+  .modal-overlay.open { display: flex; animation: fade .12s ease-out; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 24px; max-width: 400px; width: calc(100% - 48px);
+    box-shadow: 0 24px 70px rgba(0,0,0,.7);
+    animation: pop .14s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes pop { from { transform: translateY(10px) scale(.98); } to { transform: none; } }
+  .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .modal-msg { color: var(--dim); font-size: 14px; line-height: 1.5; margin-bottom: 24px; word-break: break-word; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .btn-secondary {
+    background: transparent; color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-secondary:hover { border-color: var(--dim); }
 </style>
 </head>
 <body>
@@ -104,6 +128,17 @@
   <footer>
     API: <code>GET playlist.php</code> · <code>GET media.php?name=…</code> · <code>POST upload.php</code> · <code>POST delete.php</code>
   </footer>
+
+  <div class="modal-overlay" id="modal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-title" id="modalTitle">Bestätigen</div>
+      <div class="modal-msg" id="modalMsg"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="modalCancel">Abbrechen</button>
+        <button class="btn" id="modalOk">OK</button>
+      </div>
+    </div>
+  </div>
 
 <script>
 const VIDEO_EXT = ["mp4"];
@@ -188,8 +223,37 @@ async function uploadFiles(files) {
   setTimeout(() => { status.textContent = ""; }, 4000);
 }
 
+// Branded replacement for the native confirm() — returns a Promise<boolean>.
+function confirmDialog(message, { title = "Bestätigen", okLabel = "OK" } = {}) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById("modal");
+    const ok = document.getElementById("modalOk");
+    const cancel = document.getElementById("modalCancel");
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalMsg").textContent = message;
+    ok.textContent = okLabel;
+    function close(result) {
+      overlay.classList.remove("open");
+      ok.onclick = cancel.onclick = overlay.onclick = null;
+      document.removeEventListener("keydown", onKey);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") close(false);
+      else if (e.key === "Enter") close(true);
+    }
+    ok.onclick = () => close(true);
+    cancel.onclick = () => close(false);
+    overlay.onclick = e => { if (e.target === overlay) close(false); };
+    document.addEventListener("keydown", onKey);
+    overlay.classList.add("open");
+    ok.focus();
+  });
+}
+
 async function del(name) {
-  if (!confirm(name + " löschen?")) return;
+  const ok = await confirmDialog("„" + name + "“ wirklich löschen?", { title: "Medium löschen", okLabel: "Löschen" });
+  if (!ok) return;
   const fd = new FormData();
   fd.append("name", name);
   try { await fetch("delete.php", { method: "POST", body: fd }); } catch (e) {}

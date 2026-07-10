@@ -4,7 +4,7 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 
 ## Repo & Version
 - Pfad: `~/AndroidStudioProjects/TeamworkShow` · Git-Remote: GitHub `schroed99-art/teamworkShow`
-- Branch `main`, letzter Commit **`ab011ca`** (Android-12-Splash-Fix).
+- Branch `main`, letzter Commit **`529c761`** (Backend Teil 2 fertig). Alles zu GitHub **gepusht** (`main` = `origin/main`).
 - Version: Root-Datei `VERSION` (aktuell **1.0.3**). `scripts/deploy.sh` bumpt Patch → baut App → installiert → deployt Server.
 
 ## Umgebung (alles per CLI, keine Studio-Dialoge)
@@ -17,10 +17,11 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 - Server-URL der App (SharedPreferences): aktuell `http://192.168.178.207/teamworkshow` (die VM)
 
 ## Server (Staging-VM)
-- Debian 12 LXC (`CT103`) auf **192.168.178.207**, LAMP (Apache · PHP 8.2 · MariaDB installiert, noch nicht konfiguriert).
-- Deployt unter `/var/www/html/teamworkshow/`: `playlist.php`, `media.php`, `upload.php`, `delete.php`, `version.php`, `index.html`, `media/`.
-- Dashboard (read-only Status + Upload/Löschen + Version-Chip): `http://192.168.178.207/teamworkshow/`
-- Deploy: `scripts/deploy.sh` · SSH-Key `~/.ssh/teamworkshow_deploy` (root, key-basiert).
+- Debian 12 LXC (`CT103`) auf **192.168.178.207**, LAMP (Apache · PHP 8.2 · **MariaDB konfiguriert**: DB+User `teamworkshow`).
+- Deployt unter `/var/www/html/teamworkshow/`: öffentlich `playlist.php`, `media.php`, `upload.php`, `delete.php`, `version.php`, `index.html`, `media/`; Backend `db.php`, `auth.php`, `tenants/devices/presentations/widgets.php`, `weather.php`; Admin `login.php`, `admin.php`; Secrets `config.php` (**nur VM**, gitignored).
+- Status-Dashboard (Upload/Löschen + Version): `http://192.168.178.207/teamworkshow/` · **Admin-Dashboard**: `…/admin.php` (Login `login.php`, Passwort in VM-`config.php`).
+- Deploy: `scripts/deploy.sh` (deployt nur die öffentlichen PHP). Backend-Dateien per `scp` (Runbook). **OPcache**: nach scp ~3 s warten vor dem Curlen (validate_timestamps=On). SSH-Key `~/.ssh/teamworkshow_deploy` (root).
+- Gate: `TW_ADMIN_TOKEN=<admin-pw aus VM-config.php> bash server/tests/integration.sh` → muss `GATE: GREEN` (23 Checks) zeigen. DB: `ssh … "mariadb -e 'show tables' teamworkshow"`.
 - Lokaler Mock (ohne PHP): `python3 server/mock/mock_server.py ./media 8080` · Emulator erreicht den Mac über `10.0.2.2`.
 
 ## App-Politur (`b66dde8`) — am Emulator verifiziert (Session „Phase 2")
@@ -36,16 +37,22 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
   `Theme.TeamworkShow.SplashScreen` (schwarz + `splash_icon.xml` = Teamwork-Logo mit 24dp-Inset + `postSplashScreenTheme`) und `installSplashScreen()` in `SplashActivity`.
 - ➜ **Offen (Politur):** `splash_icon` nutzt den Platzhalter `ic_teamwork_logo` — echtes rundes Logo als Vektor hinterlegen.
 
-## Nächster großer Block: Backend Teil 2 (Loop bereit)
-- **Runbook:** `.claude/plans/backend-mandanten-runbook.md` (sequential, safe, 7 Schritte, curl-Gate, Cap 12, Branch `feature/backend-mandanten`).
-- Entschieden: **Wetter per API + Hinweise manuell** · Geräte-Zuordnung per **Pairing-Code** · Exit über den **vorhandenen Wartungs-PIN**.
-- **Loop starten (frische Session):** „Arbeite `.claude/plans/backend-mandanten-runbook.md` autonom ab: ein Schritt pro Iteration, nach jedem Schritt das Gate ausführen, bei grün committen, sonst nach 2 Fehlversuchen anhalten. Stop bei Gate-grün oder 12 Iterationen."
-- App-Integration (Pairing-Menü, Server-Reihenfolge/Dauer honorieren, Widgets rendern) ist **nach** dem Loop interaktiv (Emulator/Screenshots).
+## Backend Teil 2 (Mandanten/MySQL) — FERTIG & gepusht (`45e51cd`…`529c761`)
+- 8 Runbook-Schritte, Gate nach jedem grün. Endpunkte live auf der VM: `playlist.php?device=<pairing>` → geordnete Slides + `duration_ms` + Widgets + Tenant (ohne `device` = Ordner-Fallback); Admin-CRUD (`tenants/devices/presentations`+slides`/widgets.php`, Auth via `X-Admin-Token` **oder** Session); `weather.php` (Stub ohne Key); `login.php`+`admin.php` (Multi-Tenant-Dashboard, Drag-Reihenfolge + Dauer, Widgets — visuell reviewt).
+- Schema `server/db/schema.sql`, idempotenter `server/db/seed.php`. Seed-Gerät Pairing **`DEMO-01`** (device_id 1). OpenWeather-Key noch leer → Wetter = Stub.
+- Entschieden (umgesetzt): **Wetter per API + Hinweise manuell** · Geräte-Zuordnung per **Pairing-Code** · Exit über den **Wartungs-PIN**.
+
+## Nächster großer Block: App-Integration (interaktiv, Emulator)
+- `MediaItem` um `durationMs`/`position` erweitern; `PlaylistManager`/`SlideShowController` sollen **Server-Reihenfolge + Dauer** aus `playlist.php?device=<pairing>` honorieren.
+- Wartungsmenü um **„Gerät koppeln"** ergänzen (Pairing-Code speichern → an `playlist.php?device=` anhängen).
+- **Wetter-/Hinweis-Widgets** rendern (aus dem `widgets`-Block der playlist-Antwort; Wetter live via `weather.php?device=`).
+- Verifikation per Emulator-Screenshots; danach Version bumpen + deployen (`scripts/deploy.sh`).
 
 ## Offen / Housekeeping
 - 🔐 **Root-Passwort der VM ändern** (wurde früher im Klartext gepostet).
+- 🔑 **Admin-Passwort** (Dashboard-Login) liegt in VM-`config.php` — bei Gelegenheit ändern.
 - 🎬 Video-Upload braucht höhere PHP-Limits auf der VM (`upload_max_filesize`/`post_max_size`).
-- 🌤️ **OpenWeather-API-Key** für das Wetter-Widget besorgen.
+- 🌤️ **OpenWeather-API-Key** besorgen und in VM-`config.php` (`openweather_api_key`) eintragen → Wetter liefert dann live statt Stub.
 - ⏳ Download-Overlay per lokalem Mock-Server verifizieren (einziger noch offener Politur-Screen).
 - 🖼️ Echtes rundes Logo als Vektor für `splash_icon` / `ic_teamwork_logo` hinterlegen.
 

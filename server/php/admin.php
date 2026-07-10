@@ -4,12 +4,14 @@
  * Manages tenants, devices, presentations (drag-order + per-slide duration) and
  * per-device widgets. Talks to the CRUD endpoints via same-origin fetch (session cookie).
  */
-require __DIR__ . '/db.php';
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
-if (empty($_SESSION['tw_admin'])) {
+require __DIR__ . '/auth.php';
+$role = tw_role();
+if ($role === null) {
     header('Location: login.php');
+    exit;
+}
+if (!in_array($role, ['admin', 'koordinator'], true)) {
+    header('Location: overview.php');
     exit;
 }
 $version = '';
@@ -125,6 +127,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?> · Admin</span>
   <span class="spacer"></span>
   <a class="logout" href="overview.php">← Übersicht</a>
+  <a class="logout" href="benutzer.php">Benutzer</a>
   <a class="logout" href="login.php?logout=1">Abmelden</a>
 </header>
 

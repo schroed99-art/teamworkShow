@@ -1,7 +1,7 @@
 <?php
 /** Tenant CRUD. GET list · POST create{name} · PUT update{id,name} · DELETE ?id= (cascades). */
 require __DIR__ . '/auth.php';
-tw_require_admin();
+tw_require_manage();
 
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];

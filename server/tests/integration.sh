@@ -87,6 +87,17 @@ if [ -n "${TW_ADMIN_TOKEN:-}" ]; then
   # cleanup: delete tenant (cascades presentation/device/slides/widgets)
   out="$(areq DELETE "$BASE/tenants.php?id=$tid")"
   printf '%s' "${out##*$'\n'}" | grep -q '200' && pass "delete tenant (cascade cleanup)" || fail "delete tenant"
+
+  # --- Step 5: manual notices mirrored into the device playlist ---
+  # Seed device DEMO-01 is device_id=1 (first seeded device).
+  SEED_DID=1
+  MARK="GATE_NOTICE_$$"
+  areq PUT "$BASE/widgets.php" "{\"device_id\":$SEED_DID,\"notices_enabled\":true,\"notices_text\":\"$MARK\"}" >/dev/null
+  out="$(curl -s -m 15 "$BASE/playlist.php?device=DEMO-01")"
+  printf '%s' "$out" | grep -q "$MARK" && pass "notice mirrored into playlist" || fail "notice mirrored into playlist"
+  printf '%s' "$out" | grep -q '"notices_enabled":true' && pass "notices_enabled reflected" || fail "notices_enabled reflected"
+  # reset seed device notice
+  areq PUT "$BASE/widgets.php" "{\"device_id\":$SEED_DID,\"notices_enabled\":false,\"notices_text\":\"\"}" >/dev/null
 else
   echo "  SKIP admin CRUD roundtrip (set TW_ADMIN_TOKEN to enable)"
 fi

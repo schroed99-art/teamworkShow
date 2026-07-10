@@ -4,8 +4,8 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 
 ## Repo & Version
 - Pfad: `~/AndroidStudioProjects/TeamworkShow` · Git-Remote: GitHub `schroed99-art/teamworkShow`
-- Branch `main`, letzter Commit **`b66dde8`** (App-Politur).
-- Version: Root-Datei `VERSION` (aktuell **1.0.2**). `scripts/deploy.sh` bumpt Patch → baut App → installiert → deployt Server.
+- Branch `main`, letzter Commit **`ab011ca`** (Android-12-Splash-Fix).
+- Version: Root-Datei `VERSION` (aktuell **1.0.3**). `scripts/deploy.sh` bumpt Patch → baut App → installiert → deployt Server.
 
 ## Umgebung (alles per CLI, keine Studio-Dialoge)
 - `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`
@@ -23,13 +23,18 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 - Deploy: `scripts/deploy.sh` · SSH-Key `~/.ssh/teamworkshow_deploy` (root, key-basiert).
 - Lokaler Mock (ohne PHP): `python3 server/mock/mock_server.py ./media 8080` · Emulator erreicht den Mac über `10.0.2.2`.
 
-## Heute erledigt (`b66dde8`) — aber NOCH NICHT visuell verifiziert
-- Splash → `Show_Splashscreen_v3` (`res/drawable-nodpi/splashscreen_v3.png`)
-- Versions-Label → oben rechts, nur noch `vX.Y.Z`
-- Download-Overlay (v3-Hintergrund + Fortschritt) via `SyncManager.SyncListener`
-- Dezente Slide-Fortschrittslinie + Vorladen des nächsten Bildes (`PlaylistManager.peekNext`, `PlayerCallback.onSlideStarted`)
-- „App verlassen" jetzt mit Bestätigungsdialog
-- ➜ **TODO:** am Emulator per Screenshot prüfen (Splash, Version, Download-Screen, Preloader).
+## App-Politur (`b66dde8`) — am Emulator verifiziert (Session „Phase 2")
+- ✅ Splash → `Show_Splashscreen_v3` (gebrandet, ab ~800 ms)
+- ✅ Versions-Label oben rechts, `vX.Y.Z`
+- ✅ Dezente Slide-Fortschrittslinie (Magenta, unten) + Transitions
+- ✅ „App verlassen" mit Bestätigungsdialog („App verlassen?")
+- ⏳ Download-Overlay (`SyncManager.SyncListener`) NICHT verifiziert — braucht laufende Sync (kein Server am Emulator; lokalen Mock nutzen).
+- Preloader (`PlaylistManager.peekNext` / `PlayerCallback.onSlideStarted`) ist Hintergrund-Optimierung, visuell nicht direkt prüfbar.
+
+## Splash-Fix (`ab011ca`, v1.0.3) — deployed
+- Android 12+ zeigte beim Kaltstart das **grüne Default-Launcher-Icon**. Behoben mit `androidx.core:core-splashscreen`:
+  `Theme.TeamworkShow.SplashScreen` (schwarz + `splash_icon.xml` = Teamwork-Logo mit 24dp-Inset + `postSplashScreenTheme`) und `installSplashScreen()` in `SplashActivity`.
+- ➜ **Offen (Politur):** `splash_icon` nutzt den Platzhalter `ic_teamwork_logo` — echtes rundes Logo als Vektor hinterlegen.
 
 ## Nächster großer Block: Backend Teil 2 (Loop bereit)
 - **Runbook:** `.claude/plans/backend-mandanten-runbook.md` (sequential, safe, 7 Schritte, curl-Gate, Cap 12, Branch `feature/backend-mandanten`).
@@ -41,7 +46,8 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 - 🔐 **Root-Passwort der VM ändern** (wurde früher im Klartext gepostet).
 - 🎬 Video-Upload braucht höhere PHP-Limits auf der VM (`upload_max_filesize`/`post_max_size`).
 - 🌤️ **OpenWeather-API-Key** für das Wetter-Widget besorgen.
-- ✅ Heutige App-Politur visuell verifizieren.
+- ⏳ Download-Overlay per lokalem Mock-Server verifizieren (einziger noch offener Politur-Screen).
+- 🖼️ Echtes rundes Logo als Vektor für `splash_icon` / `ic_teamwork_logo` hinterlegen.
 
 ## Konventionen
 - UI: **nie** natives `alert`/`confirm`/`prompt` → gebrandetes Modal (`confirmDialog` im Dashboard). Schwarz + Magenta `#d81b60`.

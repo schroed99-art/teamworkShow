@@ -1,11 +1,19 @@
-# TeamworkShow — Session-Handoff (Stand 2026-07-10)
+# TeamworkShow — Session-Handoff (Stand 2026-07-10, v1.0.15)
 
 Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital-Signage-App** (Kotlin) + **PHP-Medienserver**. Die App spielt eine Endlos-Slideshow aus einem gerätespezifischen Medienordner, der alle 60 s per Hash vom Server synchronisiert wird.
 
 ## Repo & Version
 - Pfad: `~/AndroidStudioProjects/TeamworkShow` · Git-Remote: GitHub `schroed99-art/teamworkShow`
-- Branch `main`, letzter Commit **`529c761`** (Backend Teil 2 fertig). Alles zu GitHub **gepusht** (`main` = `origin/main`).
-- Version: Root-Datei `VERSION` (aktuell **1.0.3**). `scripts/deploy.sh` bumpt Patch → baut App → installiert → deployt Server.
+- Branch `main`, letzter Commit **`6412862`** (Notice-Ticker konfigurierbar, v1.0.15). Alles zu GitHub **gepusht** (`main` = `origin/main`). Working tree clean.
+- Version: Root-Datei `VERSION` (aktuell **1.0.15**, VM meldet 1.0.15). `scripts/deploy.sh` bumpt Patch → baut App → installiert → deployt Server.
+- **Standing deploy-OK** (Memory `teamworkshow-autodeploy`): commit→deploy→migrate→smoke→push ohne Rückfrage. Ad-hoc-DB-Mutationen (außerhalb `deploy.sh` + benannter Migrationen) brauchen weiter explizite Freigabe.
+
+## Zuletzt ausgeliefert (2026-07-10, diese Session)
+- **v1.0.12** Wetter als Zwischenbild-Slide (eigener Slide-Typ in der Präsentation).
+- **v1.0.13** Wetter-Zwischenbild **frei konfigurierbar** (globale Vorlage `weather_layout`-Tabelle): Hintergrund aus Medienpool, Elemente Ort/3-Tage-Vorhersage/Analoguhr/Freitext mit Größe+Position. Editor „🌤 Layout…" im Slide-Editor. Migration `migrate_weather_layout.php` (gelaufen).
+- **v1.0.14** Wetter-Layout **Zeilen-Modell**: 8 feste Zeilen (Header,1–6,Footer) statt 3 Bänder; Element wählt Zeile + H-Ausrichtung + Größe → keine Überlappung. Schema unverändert (keine Migration).
+- **v1.0.15** **Hinweis-Laufschrift konfigurierbar** (pro Gerät): 3 neue `widget_settings`-Spalten `notices_size`(sp)/`notices_bg`(#AARRGGBB)/`notices_height`(dp). Felder im Geräte-Editor (Schriftgröße, Rahmen-Höhe, Farbe+Deckkraft). Migration `migrate_notice_style.php` (gelaufen auf VM). Marquee lief schon rechts→links; nur Styling war vorher hartkodiert.
+- Details je Feature in Memory `teamworkshow-status` (neueste Einträge oben).
 
 ## Umgebung (alles per CLI, keine Studio-Dialoge)
 - `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`
@@ -42,19 +50,15 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 - Schema `server/db/schema.sql`, idempotenter `server/db/seed.php`. Seed-Gerät Pairing **`DEMO-01`** (device_id 1). OpenWeather-Key noch leer → Wetter = Stub.
 - Entschieden (umgesetzt): **Wetter per API + Hinweise manuell** · Geräte-Zuordnung per **Pairing-Code** · Exit über den **Wartungs-PIN**.
 
-## Nächster großer Block: App-Integration (interaktiv, Emulator)
-- `MediaItem` um `durationMs`/`position` erweitern; `PlaylistManager`/`SlideShowController` sollen **Server-Reihenfolge + Dauer** aus `playlist.php?device=<pairing>` honorieren.
-- Wartungsmenü um **„Gerät koppeln"** ergänzen (Pairing-Code speichern → an `playlist.php?device=` anhängen).
-- **Wetter-/Hinweis-Widgets** rendern (aus dem `widgets`-Block der playlist-Antwort; Wetter live via `weather.php?device=`).
-- Verifikation per Emulator-Screenshots; danach Version bumpen + deployen (`scripts/deploy.sh`).
+## App-Integration (Phase 3) — FERTIG (v1.0.4+, alle am Emulator verifiziert)
+- ✅ `MediaItem` mit `durationMs`/`position`; `PlaylistManager`/`SlideShowController` honorieren Server-Reihenfolge + Dauer aus `playlist.php?device=<pairing>`.
+- ✅ Wartungsmenü **„Gerät koppeln"** (Pairing-Code → `?device=`). ✅ Wetter-/Hinweis-Widgets aus dem `widgets`-Block; Wetter live via `weather.php?device=`.
 
 ## Offen / Housekeeping
-- 🔐 **Root-Passwort der VM ändern** (wurde früher im Klartext gepostet).
-- 🔑 **Admin-Passwort** (Dashboard-Login) liegt in VM-`config.php` — bei Gelegenheit ändern.
-- 🎬 Video-Upload braucht höhere PHP-Limits auf der VM (`upload_max_filesize`/`post_max_size`).
-- 🌤️ **OpenWeather-API-Key** besorgen und in VM-`config.php` (`openweather_api_key`) eintragen → Wetter liefert dann live statt Stub.
-- ⏳ Download-Overlay per lokalem Mock-Server verifizieren (einziger noch offener Politur-Screen).
-- 🖼️ Echtes rundes Logo als Vektor für `splash_icon` / `ic_teamwork_logo` hinterlegen.
+- 🔐 **Root-Passwort der VM ändern** (wurde früher im Klartext gepostet) — vom Nutzer bewusst zurückgestellt, nur auf ausdrückliche Freigabe angehen.
+- 🔑 **Admin-Passwort** (Dashboard-Login) liegt in VM-`config.php` (2026-07-10 regeneriert) — bei Gelegenheit rotieren.
+- 🌤️ **OpenWeather-Key** ist in VM-`config.php` eingetragen, gab zuletzt aber HTTP 401 (Neu-Key-Aktivierungs-Lag). Sobald aktiv, geht Wetter automatisch live (kein Deploy nötig). Re-Check: `curl '…/weather.php?device=DEMO-01'` → `stub:false`.
+- ✅ Erledigt: Video-Upload-Limits (VM Apache-ini, 256M), Download-Overlay (Mock verifiziert), echtes Splash-Logo (`splash_logo.png`).
 
 ## Konventionen
 - UI: **nie** natives `alert`/`confirm`/`prompt` → gebrandetes Modal (`confirmDialog` im Dashboard). Schwarz + Magenta `#d81b60`.

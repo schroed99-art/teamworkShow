@@ -277,8 +277,26 @@ function statusPill(d){
     never:{cls:'never',label:'nie gesehen'}
   };
   const m=map[st]||map.never;
-  return `<span class="statuspill ${m.cls}"><span class="dot"></span>${m.label}</span>`;
+  return `<span class="statuspill ${m.cls}" data-dev="${d.id}"><span class="dot"></span>${m.label}</span>`;
 }
+// Live status: refresh the visible device pills from status.php without a reload.
+async function pollDeviceStatus(){
+  const pills=document.querySelectorAll('.statuspill[data-dev]');
+  if(!pills.length) return;
+  try{
+    const r=await fetch('status.php',{cache:'no-store'});
+    if(!r.ok) return;
+    const d=await r.json();
+    const map={}; (d.devices||[]).forEach(x=>map[String(x.id)]=x);
+    pills.forEach(p=>{
+      const x=map[p.getAttribute('data-dev')];
+      if(!x) return;
+      p.outerHTML=statusPill({id:p.getAttribute('data-dev'),status:x.status,seconds_since_seen:x.seconds_since_seen});
+    });
+  }catch(e){}
+}
+setInterval(pollDeviceStatus, 20000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pollDeviceStatus(); });
 
 function eyeSvg(open){
   const stroke='stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';

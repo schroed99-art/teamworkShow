@@ -67,7 +67,7 @@ function h(string $s): string
     return htmlspecialchars($s, ENT_QUOTES);
 }
 // Discreet device status dot for a tenant card (title explains it on hover).
-function tw_status_dot(string $status, int $deviceCount): string
+function tw_status_dot(string $status, int $deviceCount, int $tenantId): string
 {
     $titles = [
         'online'  => 'Gerät online',
@@ -79,7 +79,8 @@ function tw_status_dot(string $status, int $deviceCount): string
     if ($deviceCount > 1) {
         $st .= ' (' . $deviceCount . ' Geräte)';
     }
-    return '<span class="statusdot ' . $status . '" title="' . h($st) . '"></span>';
+    return '<span class="statusdot ' . $status . '" data-tenant="' . $tenantId
+        . '" title="' . h($st) . '"></span>';
 }
 // Inline sun-and-cloud pictogram for file-less weather slides in the collage.
 function tw_weather_pictogram(): string
@@ -201,7 +202,7 @@ function tw_weather_pictogram(): string
         <?php endforeach; endif; ?>
       </div>
       <div class="body">
-        <div class="name"><?= tw_status_dot($t['dev_status'], (int) $t['device_count']) ?><?= h($t['name']) ?></div>
+        <div class="name"><?= tw_status_dot($t['dev_status'], (int) $t['device_count'], (int) $t['id']) ?><?= h($t['name']) ?></div>
         <div class="sub"><?= (int) $t['pres_count'] ?> Präsentation<?= (int) $t['pres_count'] === 1 ? '' : 'en' ?> · <?= (int) $t['media_count'] ?> Medien</div>
         <?php if ($canManage): ?>
           <button onclick="location.href='admin.php?tenant=<?= (int) $t['id'] ?>'">Konfigurieren</button>
@@ -248,6 +249,27 @@ async function create(){
   const j = await r.json().catch(()=>({}));
   if (j.id) location.href = 'admin.php?tenant=' + j.id; else location.reload();
 }
+
+// Live status: poll status.php and update the per-tenant dots without a reload.
+const DOT_TITLES = {online:'Gerät online', offline:'Gerät offline',
+  alarm:'Gerät seit über 30 min offline', none:'Kein Gerät gekoppelt'};
+async function pollStatus(){
+  try {
+    const r = await fetch('status.php', { cache:'no-store' });
+    if (!r.ok) return;
+    const d = await r.json();
+    (d.tenants||[]).forEach(t=>{
+      const dot = document.querySelector('.statusdot[data-tenant="'+t.id+'"]');
+      if (!dot) return;
+      dot.className = 'statusdot ' + t.status;
+      let title = DOT_TITLES[t.status] || DOT_TITLES.none;
+      if (t.device_count > 1) title += ' (' + t.device_count + ' Geräte)';
+      dot.title = title;
+    });
+  } catch(e){}
+}
+setInterval(pollStatus, 20000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pollStatus(); });
 </script>
 </body>
 </html>

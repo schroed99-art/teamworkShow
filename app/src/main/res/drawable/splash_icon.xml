@@ -1,11 +1,9 @@
 <!--
   Splash-screen icon for the Android 12+ SplashScreen API.
-  Wraps the Teamwork Show logo with an inset so it stays inside the
-  circular icon safe-zone (avoids clipping the outer figures).
+  Real Teamwork Show emblem (extracted from splashscreen_v3) on a black ground
+  that matches the splash window; safe-zone padding is baked into the asset, so
+  the system's circular mask never clips the figures.
 -->
-<inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_teamwork_logo"
-    android:insetLeft="24dp"
-    android:insetTop="24dp"
-    android:insetRight="24dp"
-    android:insetBottom="24dp" />
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/splash_logo"
+    android:gravity="fill" />

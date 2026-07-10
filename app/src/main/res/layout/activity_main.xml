@@ -168,4 +168,49 @@
 
     </FrameLayout>
 
+    <LinearLayout
+        android:id="@+id/pairingOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#FF0A0A0A"
+        android:paddingHorizontal="40dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/pairing_title"
+            android:textColor="#FFFFFFFF"
+            android:textSize="22sp"
+            android:layout_marginBottom="18dp" />
+
+        <TextView
+            android:id="@+id/pairingCode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textStyle="bold"
+            android:textColor="@color/brand_magenta"
+            android:textSize="64sp"
+            android:letterSpacing="0.12"
+            android:layout_marginBottom="22dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/pairing_hint_overlay"
+            android:gravity="center"
+            android:textColor="#FFB0B0B0"
+            android:textSize="16sp"
+            android:layout_marginBottom="26dp" />
+
+        <ProgressBar
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:indeterminateTint="@color/brand_magenta" />
+
+    </LinearLayout>
+
 </FrameLayout>

@@ -485,10 +485,22 @@ function renderDetail(t, devices, presentations){
       if(nc('op')) nc('op').value=Math.round(a/255*100);
     }).catch(()=>{});
   });
-  const dAdd=document.createElement('div'); dAdd.className='row'; dAdd.style.marginTop='12px';
-  dAdd.innerHTML=`<input class="grow" id="newDev" placeholder="Neues Gerät (Name)…"><button class="sm">+ Gerät</button>`;
-  dAdd.querySelector('button').onclick=async()=>{ const name=$('#newDev').value.trim();
-    const r=await API.call('devices.php','POST',{tenant_id:t.id,name}); toast('Gerät angelegt · Code '+r.pairing_code); selectTenant(t); };
+  const dAdd=document.createElement('div'); dAdd.className='row wrap2'; dAdd.style.marginTop='12px';
+  const dAddPres=presentations.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  dAdd.innerHTML=`<input id="newDevCode" placeholder="Code vom Gerät (optional)…" style="width:190px;text-transform:uppercase">`+
+    `<input class="grow" id="newDev" placeholder="Gerätename…">`+
+    `<select id="newDevPres" style="width:170px"><option value="">Präsentation…</option>${dAddPres}</select>`+
+    `<button class="sm">+ Gerät</button>`;
+  dAdd.querySelector('button').onclick=async()=>{
+    const name=$('#newDev').value.trim();
+    const code=$('#newDevCode').value.trim().toUpperCase();
+    const pid=$('#newDevPres').value;
+    const body={tenant_id:t.id,name}; if(code) body.pairing_code=code; if(pid) body.presentation_id=pid;
+    try{
+      const r=await API.call('devices.php','POST',body);
+      toast(code?('Gekoppelt · '+r.pairing_code):('Gerät angelegt · Code '+r.pairing_code)); selectTenant(t);
+    }catch(e){ toast('Fehler – Code evtl. schon vergeben'); }
+  };
   dWrap.appendChild(dAdd);
   body.appendChild(dWrap);
 

@@ -1,4 +1,4 @@
-package com.example.teamworkshow
+package de.teamworkshow.app
 
 import android.animation.ObjectAnimator
 import android.app.AlertDialog
@@ -29,12 +29,13 @@ import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.example.teamworkshow.model.MediaItem
-import com.example.teamworkshow.model.MediaType
-import com.example.teamworkshow.network.SyncManager
-import com.example.teamworkshow.player.PlayerCallback
-import com.example.teamworkshow.player.SlideShowController
-import com.example.teamworkshow.playlist.PlaylistManager
+import de.teamworkshow.app.model.MediaItem
+import de.teamworkshow.app.model.MediaType
+import de.teamworkshow.app.network.SyncManager
+import de.teamworkshow.app.update.UpdateManager
+import de.teamworkshow.app.player.PlayerCallback
+import de.teamworkshow.app.player.SlideShowController
+import de.teamworkshow.app.playlist.PlaylistManager
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -59,6 +60,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var downloadOverlay: View
     private lateinit var downloadStatus: TextView
     private lateinit var downloadProgress: ProgressBar
+    private lateinit var pairingOverlay: View
+    private lateinit var pairingCodeLabel: TextView
 
     private var frontImageView: ImageView? = null
     private var preloaded: Pair<File, Bitmap>? = null
@@ -68,6 +71,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var slideShowController: SlideShowController
 
     private lateinit var syncManager: SyncManager
+    private val updateManager = UpdateManager(this)
     private val syncExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val syncRunnable = object : Runnable {
@@ -133,6 +137,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         downloadOverlay = findViewById(R.id.downloadOverlay)
         downloadStatus = findViewById(R.id.downloadStatus)
         downloadProgress = findViewById(R.id.downloadProgress)
+        pairingOverlay = findViewById(R.id.pairingOverlay)
+        pairingCodeLabel = findViewById(R.id.pairingCode)
         findViewById<TextView>(R.id.versionLabel).text = appVersionText()
 
         setupExoPlayer()
@@ -140,6 +146,9 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         val mediaDir = File(getExternalFilesDir(null), "media").also { it.mkdirs() }
         syncManager = SyncManager(this, mediaDir)
         syncManager.listener = downloadListener
+        // Show this device's pairing code until the backend recognises it.
+        pairingCodeLabel.text = syncManager.getOrCreatePairingCode()
+        updatePairingOverlay()
 
         val playlist = PlaylistManager(mediaDir)
         // Honor the server-defined order + per-slide duration when a device is paired.
@@ -183,12 +192,21 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                     slideShowController.reload()
                 }
                 applyWidgets(widgets)
+                updatePairingOverlay()
                 if (userTriggered) {
                     val msg = if (changed) R.string.sync_updated else R.string.sync_no_change
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 }
             }
+            // In-app self-update: offer a newer signed APK if the backend has one.
+            syncManager.getServerUrl()?.let { updateManager.maybeUpdate(this@MainActivity, it) }
         }
+    }
+
+    /** Full-screen pairing code prompt, shown until the backend claims this device. */
+    private fun updatePairingOverlay() {
+        val show = syncManager.pairingStatus == SyncManager.Pairing.UNPAIRED
+        pairingOverlay.visibility = if (show) View.VISIBLE else View.GONE
     }
 
     /** Renders the notices ticker from the device's widget settings. Weather is shown as an interstitial slide. */

@@ -1,4 +1,4 @@
-package com.example.teamworkshow
+package de.teamworkshow.app
 
 import android.content.Intent
 import android.os.Bundle

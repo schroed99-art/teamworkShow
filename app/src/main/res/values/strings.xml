@@ -22,6 +22,8 @@
     <string name="sync_updated">Medien aktualisiert</string>
     <string name="sync_no_change">Bereits aktuell</string>
     <string name="maintenance_pairing">Gerät koppeln</string>
+    <string name="pairing_title">Gerät koppeln</string>
+    <string name="pairing_hint_overlay">Diesen Code im Dashboard beim Mandanten eingeben, um das Gerät freizuschalten.</string>
     <string name="pairing_hint">Pairing-Code (z. B. DEMO-01)</string>
     <string name="pairing_saved">Gerät gekoppelt: %1$s</string>
     <string name="pairing_cleared">Kopplung entfernt (Ordner-Modus)</string>

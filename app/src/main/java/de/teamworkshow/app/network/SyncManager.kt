@@ -1,8 +1,10 @@
-package com.example.teamworkshow.network
+package de.teamworkshow.app.network
 
 import android.content.Context
 import android.util.Log
-import com.example.teamworkshow.model.SlideMeta
+import de.teamworkshow.app.BuildConfig
+import de.teamworkshow.app.model.SlideMeta
+import kotlin.random.Random
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -86,6 +88,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
 
     fun getServerUrl(): String? =
         prefs.getString(KEY_URL, null)?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() }
+            ?: BuildConfig.SERVER_URL.trim().trimEnd('/').takeIf { it.isNotEmpty() }
 
     fun setServerUrl(url: String) {
         prefs.edit().putString(KEY_URL, url.trim().trimEnd('/')).apply()
@@ -100,6 +103,28 @@ class SyncManager(context: Context, private val mediaDir: File) {
         prefs.edit().apply {
             if (clean.isEmpty()) remove(KEY_PAIRING) else putString(KEY_PAIRING, clean)
         }.apply()
+    }
+
+    /** Returns the device's pairing code, generating + persisting one on first use. */
+    fun getOrCreatePairingCode(): String =
+        getPairingCode() ?: generatePairingCode().also { setPairingCode(it) }
+
+    private fun generatePairingCode(): String {
+        val hex = (0 until 3).joinToString("") { "%02X".format(Random.nextInt(256)) }
+        return hex.substring(0, 3) + "-" + hex.substring(3, 6)
+    }
+
+    /** Whether the backend recognises this device; driven by the playlist pull. */
+    enum class Pairing { UNKNOWN, PAIRED, UNPAIRED }
+
+    @Volatile
+    var pairingStatus: Pairing =
+        if (prefs.getBoolean(KEY_PAIRED, false)) Pairing.PAIRED else Pairing.UNKNOWN
+        private set
+
+    private fun updatePairing(paired: Boolean) {
+        pairingStatus = if (paired) Pairing.PAIRED else Pairing.UNPAIRED
+        prefs.edit().putBoolean(KEY_PAIRED, paired).apply()
     }
 
     /** Persisted ordering/timing from the last device playlist (name -> [SlideMeta]). */
@@ -335,8 +360,16 @@ class SyncManager(context: Context, private val mediaDir: File) {
         }
         val conn = openGet(url)
         try {
-            if (conn.responseCode != HttpURLConnection.HTTP_OK) {
-                throw IllegalStateException("HTTP ${conn.responseCode}")
+            val rc = conn.responseCode
+            if (code != null) {
+                // 200 = backend knows this device; 404 unknown_device = not yet claimed.
+                when (rc) {
+                    HttpURLConnection.HTTP_OK -> updatePairing(true)
+                    HttpURLConnection.HTTP_NOT_FOUND -> updatePairing(false)
+                }
+            }
+            if (rc != HttpURLConnection.HTTP_OK) {
+                throw IllegalStateException("HTTP $rc")
             }
             val body = conn.inputStream.bufferedReader().use { it.readText() }
             val root = JSONObject(body)
@@ -430,6 +463,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val PREFS = "teamworkshow_settings"
         private const val KEY_URL = "server_url"
         private const val KEY_PAIRING = "pairing_code"
+        private const val KEY_PAIRED = "device_paired"
         private const val KEY_META = "playlist_meta"
         private const val KEY_WEATHER = "weather_slides"
         private const val KEY_WEATHER_LAYOUT = "weather_layout"

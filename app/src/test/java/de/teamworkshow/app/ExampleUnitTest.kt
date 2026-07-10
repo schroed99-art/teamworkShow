@@ -1,4 +1,4 @@
-package com.example.teamworkshow
+package de.teamworkshow.app
 
 import org.junit.Test
 

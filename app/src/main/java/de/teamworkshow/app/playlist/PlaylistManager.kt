@@ -1,8 +1,8 @@
-package com.example.teamworkshow.playlist
+package de.teamworkshow.app.playlist
 
-import com.example.teamworkshow.model.MediaItem
-import com.example.teamworkshow.model.MediaType
-import com.example.teamworkshow.model.SlideMeta
+import de.teamworkshow.app.model.MediaItem
+import de.teamworkshow.app.model.MediaType
+import de.teamworkshow.app.model.SlideMeta
 import java.io.File
 
 class PlaylistManager(private val mediaDir: File) {

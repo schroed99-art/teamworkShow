@@ -1,6 +1,6 @@
-package com.example.teamworkshow.player
+package de.teamworkshow.app.player
 
-import com.example.teamworkshow.model.MediaItem
+import de.teamworkshow.app.model.MediaItem
 
 interface PlayerCallback {
     fun showImage(item: MediaItem)

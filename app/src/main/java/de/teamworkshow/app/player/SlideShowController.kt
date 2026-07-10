@@ -1,9 +1,9 @@
-package com.example.teamworkshow.player
+package de.teamworkshow.app.player
 
 import android.os.Handler
 import android.os.Looper
-import com.example.teamworkshow.model.MediaType
-import com.example.teamworkshow.playlist.PlaylistManager
+import de.teamworkshow.app.model.MediaType
+import de.teamworkshow.app.playlist.PlaylistManager
 
 class SlideShowController(
     private val playlist: PlaylistManager,

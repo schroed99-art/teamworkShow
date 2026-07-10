@@ -1,4 +1,4 @@
-package com.example.teamworkshow.model
+package de.teamworkshow.app.model
 
 import java.io.File
 

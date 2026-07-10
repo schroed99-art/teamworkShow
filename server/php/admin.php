@@ -144,7 +144,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   </div>
 </div>
 
-<div class="panel" id="media" style="margin:0 18px 18px">
+<div class="panel" id="media" style="display:none; margin:18px">
   <h2>Medienpool <span class="muted" id="poolCount"></span></h2>
   <p class="muted" style="margin:-6px 0 10px">Von allen Mandanten geteilt. Präsentationen wählen aus diesem Pool.</p>
   <div class="drop" id="drop">
@@ -452,8 +452,17 @@ fileInput.onchange=()=>{ uploadFiles(fileInput.files); fileInput.value=''; };
 drop.addEventListener('drop',ev=>{ev.preventDefault();drop.classList.remove('over');uploadFiles(ev.dataTransfer.files);});
 
 (async()=>{
+  // Media-pool is its own focused view, reached via the overview's "Medienpool"
+  // link (admin.php#media). It is never shown alongside the tenant config.
+  if (location.hash === '#media') {
+    document.querySelector('.wrap').style.display = 'none';
+    $('#media').style.display = '';
+    $('#detailTitle') && ($('#detailTitle').textContent = '');
+    await loadPool();
+    return;
+  }
   await loadTenants();
-  await loadPool();
+  await loadMedia();
   if (DEEP_TENANT) {
     const t = tenants.find(x => x.id == DEEP_TENANT);
     if (t) await selectTenant(t);

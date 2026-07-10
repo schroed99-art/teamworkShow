@@ -44,12 +44,15 @@ echo ">> Building app…"
 ./gradlew installDebug --console=plain -q
 
 # ---- deploy server to VM ----
+# Push every PHP endpoint (public + admin/CRUD). config.php is VM-only and not in
+# the repo, so this never clobbers the live secrets; media/ uploads are untouched.
 echo ">> Deploying server to $VM_USER@$VM_IP…"
 scp -i "$KEY" -o BatchMode=yes \
-  server/php/playlist.php server/php/media.php server/php/upload.php \
-  server/php/delete.php server/php/version.php server/php/index.html \
+  server/php/*.php \
   "$VM_USER@$VM_IP:$VM_PATH/"
-ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" "chown -R www-data:www-data $VM_PATH"
+# Retire the old public folder-scan page so index.php becomes the directory index.
+ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" \
+  "rm -f $VM_PATH/index.html; chown -R www-data:www-data $VM_PATH"
 
 echo ""
 echo "==================================================="

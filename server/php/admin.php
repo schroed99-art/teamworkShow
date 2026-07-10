@@ -70,6 +70,21 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .slides .handle { cursor:grab; color:var(--dim); user-select:none; }
   .slides .mname { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .slides input.dur { width:92px; }
+  .slides .thumb { position:relative; flex:none; width:64px; height:40px; border-radius:6px; overflow:hidden;
+                   border:1px solid var(--line); background:#000; cursor:pointer; }
+  .slides .thumb img, .slides .thumb video { width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+  .slides .thumb:hover { border-color:var(--magenta); }
+  .slides .thumb .play { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+                         color:#fff; font-size:15px; text-shadow:0 1px 3px #000; background:rgba(0,0,0,.25); }
+  /* lightbox for slide previews */
+  .lb-bg { position:fixed; inset:0; background:rgba(0,0,0,.85); display:none; align-items:center; justify-content:center;
+           z-index:70; padding:24px; }
+  .lb-bg.show { display:flex; }
+  .lb-box { position:relative; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .lb-box img, .lb-box video { max-width:92vw; max-height:80vh; border-radius:10px; border:1px solid var(--line); background:#000; }
+  .lb-cap { color:var(--dim); font-size:12px; }
+  .lb-close { position:absolute; top:-14px; right:-14px; width:34px; height:34px; border-radius:50%;
+              background:var(--magenta); color:#fff; font-size:18px; line-height:34px; text-align:center; cursor:pointer; border:0; }
   .tag { font-size:11px; color:var(--dim); }
   .pair { font-family:ui-monospace,monospace; color:var(--magenta); }
   /* branded confirm modal */
@@ -82,6 +97,25 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel2);
            border:1px solid var(--magenta); color:var(--text); padding:10px 16px; border-radius:10px; display:none; z-index:60; }
   .toast.show { display:block; }
+  /* media pool */
+  .drop { margin-top:6px; padding:16px; border:2px dashed var(--line); border-radius:10px;
+          display:flex; align-items:center; gap:14px; flex-wrap:wrap; transition:border-color .15s, background .15s; }
+  .drop.over { border-color:var(--magenta); background:rgba(216,27,96,.08); }
+  #upStatus { margin-left:auto; color:var(--magenta); font-size:13px; }
+  .poolGrid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); margin-top:14px; }
+  .pcard { position:relative; background:#0e0e0e; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .pthumb { aspect-ratio:9/16; background:#000; cursor:pointer; position:relative; display:flex; align-items:center; justify-content:center; }
+  .pthumb img, .pthumb video { width:100%; height:100%; object-fit:contain; }
+  .pthumb:hover { outline:1px solid var(--magenta); outline-offset:-1px; }
+  .pthumb .play { position:absolute; color:#fff; font-size:30px; text-shadow:0 1px 4px #000; }
+  .pdel { position:absolute; top:6px; right:6px; width:28px; height:28px; border:0; border-radius:50%;
+          background:rgba(0,0,0,.65); color:#fff; font-size:15px; cursor:pointer; opacity:0; transition:opacity .15s; }
+  .pcard:hover .pdel { opacity:1; }
+  .pdel:hover { background:var(--magenta); }
+  .pmeta { padding:8px 10px; }
+  .pmeta .pn { font-size:12px; word-break:break-all; }
+  .pmeta .psub { font-size:11px; color:var(--dim); margin-top:3px; display:flex; gap:8px; }
+  .pill { border:1px solid var(--line); border-radius:6px; padding:1px 6px; }
 </style>
 </head>
 <body>
@@ -89,6 +123,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <h1>Teamwork<span>Show</span></h1>
   <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?> · Admin</span>
   <span class="spacer"></span>
+  <a class="logout" href="overview.php">← Übersicht</a>
   <a class="logout" href="login.php?logout=1">Abmelden</a>
 </header>
 
@@ -108,6 +143,18 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   </div>
 </div>
 
+<div class="panel" id="media" style="margin:0 18px 18px">
+  <h2>Medienpool <span class="muted" id="poolCount"></span></h2>
+  <p class="muted" style="margin:-6px 0 10px">Von allen Mandanten geteilt. Präsentationen wählen aus diesem Pool.</p>
+  <div class="drop" id="drop">
+    <button class="sm" id="pickBtn">Dateien wählen</button>
+    <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.webp,.mp4" multiple hidden>
+    <span class="muted">Dateien hierher ziehen oder wählen — <b style="color:var(--text)">gleicher Name = austauschen</b>, neuer Name = hinzufügen. (jpg, jpeg, png, webp, mp4)</span>
+    <span id="upStatus"></span>
+  </div>
+  <div class="poolGrid" id="poolGrid"></div>
+</div>
+
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <h3 id="modalTitle">Bestätigen</h3>
@@ -119,6 +166,14 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   </div>
 </div>
 <div class="toast" id="toast"></div>
+
+<div class="lb-bg" id="lbBg">
+  <div class="lb-box">
+    <button class="lb-close" id="lbClose" title="Schließen">✕</button>
+    <div id="lbStage"></div>
+    <div class="lb-cap" id="lbCap"></div>
+  </div>
+</div>
 
 <script>
 const API = {
@@ -134,6 +189,8 @@ const API = {
 };
 const $ = s => document.querySelector(s);
 let tenants = [], activeTenant = null, media = [];
+const DEEP_TENANT = <?= (int) ($_GET['tenant'] ?? 0) ?>;
+function fmtSize(b){ if(b==null||b<0)return '–'; if(b<1024)return b+' B'; if(b<1048576)return (b/1024).toFixed(0)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
 function confirmDialog(title, text){
@@ -145,6 +202,38 @@ function confirmDialog(title, text){
   });
 }
 const esc = s => (s??'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Media preview helpers (thumbnails + lightbox popup) --------------------------
+const VIDEO_EXT = ['mp4','webm','mov','m4v'];
+const isVideo = name => VIDEO_EXT.includes((name.split('.').pop()||'').toLowerCase());
+const mediaUrl = name => 'media.php?name=' + encodeURIComponent(name);
+
+function thumbHtml(name){
+  if (isVideo(name)) {
+    // preload=metadata + a time fragment renders the first frame as a poster.
+    return `<span class="thumb" data-preview="${esc(name)}" title="${esc(name)} – Vorschau">
+              <video muted preload="metadata" src="${mediaUrl(name)}#t=0.1"></video>
+              <span class="play">▶</span></span>`;
+  }
+  return `<span class="thumb" data-preview="${esc(name)}" title="${esc(name)} – Vorschau">
+            <img loading="lazy" src="${mediaUrl(name)}" alt=""></span>`;
+}
+
+function openLightbox(name){
+  const stage=$('#lbStage'), cap=$('#lbCap');
+  stage.innerHTML = isVideo(name)
+    ? `<video src="${mediaUrl(name)}" controls autoplay playsinline></video>`
+    : `<img src="${mediaUrl(name)}" alt="">`;
+  cap.textContent = name;
+  $('#lbBg').classList.add('show');
+}
+function closeLightbox(){
+  $('#lbBg').classList.remove('show');
+  $('#lbStage').innerHTML=''; // stop any playing video
+}
+$('#lbClose').onclick = closeLightbox;
+$('#lbBg').onclick = e => { if (e.target === $('#lbBg')) closeLightbox(); };
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeLightbox(); });
 
 async function loadTenants(){
   tenants = (await API.call('tenants.php')).tenants || [];
@@ -291,9 +380,10 @@ async function editPresentation(p){
     const ul=card.querySelector('#slideList'); ul.innerHTML='';
     slides.forEach((s,i)=>{
       const li=document.createElement('li'); li.draggable=true;
-      li.innerHTML=`<span class="handle">⠿</span><span class="mname">${esc(s.media_name)}</span>
+      li.innerHTML=`<span class="handle">⠿</span>${thumbHtml(s.media_name)}<span class="mname">${esc(s.media_name)}</span>
         <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>
         <button class="ghost sm" data-up>↑</button><button class="ghost sm" data-down>↓</button><button class="ghost sm" data-rm>✕</button>`;
+      li.querySelector('.thumb').onclick=()=>openLightbox(s.media_name);
       li.querySelector('.dur').onchange=e=>{ s.duration_ms=Math.max(250,parseInt(e.target.value)||8000); };
       li.querySelector('[data-up]').onclick=()=>{ if(i>0){ [slides[i-1],slides[i]]=[slides[i],slides[i-1]]; render(); } };
       li.querySelector('[data-down]').onclick=()=>{ if(i<slides.length-1){ [slides[i+1],slides[i]]=[slides[i],slides[i+1]]; render(); } };
@@ -315,7 +405,59 @@ async function editPresentation(p){
 $('#addTenant').onclick=async()=>{ const name=$('#newTenant').value.trim(); if(!name)return;
   await API.call('tenants.php','POST',{name}); $('#newTenant').value=''; toast('Mandant erstellt'); loadTenants(); };
 
-(async()=>{ await loadMedia(); await loadTenants(); })();
+// ---- Medienpool (shared media folder: upload / preview / delete) ----
+async function loadPool(){
+  let items=[];
+  try { items=(await API.call('playlist.php')).items||[]; } catch(e){ items=[]; }
+  media = items.map(i=>i.name); // keep the slide-editor picker in sync
+  const grid=$('#poolGrid'); grid.innerHTML='';
+  let img=0, vid=0;
+  items.forEach(it=>{
+    const v=isVideo(it.name); v?vid++:img++;
+    const card=document.createElement('div'); card.className='pcard';
+    const inner = v
+      ? `<video muted preload="metadata" src="${mediaUrl(it.name)}#t=0.1"></video><span class="play">▶</span>`
+      : `<img loading="lazy" src="${mediaUrl(it.name)}" alt="">`;
+    card.innerHTML=`<button class="pdel" title="Löschen">✕</button>
+      <div class="pthumb">${inner}</div>
+      <div class="pmeta"><div class="pn">${esc(it.name)}</div>
+        <div class="psub"><span class="pill">${v?'VIDEO':'BILD'}</span><span>${fmtSize(it.size)}</span></div></div>`;
+    card.querySelector('.pthumb').onclick=()=>openLightbox(it.name);
+    card.querySelector('.pdel').onclick=()=>delMedia(it.name);
+    grid.appendChild(card);
+  });
+  $('#poolCount').textContent = items.length ? `· ${items.length} Dateien (${img} Bilder, ${vid} Videos)` : '· leer';
+}
+async function delMedia(name){
+  if(!(await confirmDialog('Medium löschen', '„'+name+'“ wirklich aus dem Pool löschen?'))) return;
+  const fd=new FormData(); fd.append('name',name);
+  try { await fetch('delete.php',{method:'POST',body:fd}); } catch(e){}
+  toast('Gelöscht'); loadPool();
+}
+async function uploadFiles(files){
+  if(!files||!files.length) return;
+  const st=$('#upStatus'); st.textContent='lädt hoch…';
+  let ok=0, fail=0;
+  for(const f of files){ const fd=new FormData(); fd.append('file',f);
+    try { const r=await fetch('upload.php',{method:'POST',body:fd}); const j=await r.json(); j.ok?ok++:fail++; } catch(e){ fail++; } }
+  st.textContent=`${ok} hochgeladen${fail?', '+fail+' fehlgeschlagen':''}`;
+  loadPool(); setTimeout(()=>st.textContent='',4000);
+}
+const drop=$('#drop'), fileInput=$('#fileInput');
+$('#pickBtn').onclick=()=>fileInput.click();
+fileInput.onchange=()=>{ uploadFiles(fileInput.files); fileInput.value=''; };
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over');}));
+['dragleave','dragend'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',ev=>{ev.preventDefault();drop.classList.remove('over');uploadFiles(ev.dataTransfer.files);});
+
+(async()=>{
+  await loadTenants();
+  await loadPool();
+  if (DEEP_TENANT) {
+    const t = tenants.find(x => x.id == DEEP_TENANT);
+    if (t) await selectTenant(t);
+  }
+})();
 </script>
 </body>
 </html>

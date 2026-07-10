@@ -56,7 +56,26 @@ if ($method === 'PUT') {
         tw_json(['error' => 'id_required'], 422);
     }
     if (array_key_exists('name', $b)) {
-        $pdo->prepare('UPDATE presentations SET name = ? WHERE id = ?')->execute([(string) $b['name'], $id]);
+        $newName = trim((string) $b['name']);
+        if ($newName === '') {
+            tw_json(['error' => 'name_required'], 422);
+        }
+        $pdo->prepare('UPDATE presentations SET name = ? WHERE id = ?')->execute([$newName, $id]);
+    }
+    // Toggle which presentation the tenant's device(s) show. active=true routes all
+    // of the tenant's devices to this presentation; active=false switches off only
+    // the devices currently showing it (-> NULL = folder fallback).
+    if (array_key_exists('active', $b)) {
+        $tenantId = (int) ($pdo->query('SELECT tenant_id FROM presentations WHERE id = ' . $id)->fetchColumn() ?: 0);
+        if ($tenantId > 0) {
+            if ($b['active']) {
+                $pdo->prepare('UPDATE devices SET presentation_id = ? WHERE tenant_id = ?')
+                    ->execute([$id, $tenantId]);
+            } else {
+                $pdo->prepare('UPDATE devices SET presentation_id = NULL WHERE tenant_id = ? AND presentation_id = ?')
+                    ->execute([$tenantId, $id]);
+            }
+        }
     }
     if (array_key_exists('slides', $b) && is_array($b['slides'])) {
         $pdo->beginTransaction();

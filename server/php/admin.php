@@ -60,6 +60,13 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
   button.ghost:hover { border-color:var(--magenta); }
   button.sm { padding:5px 9px; font-size:12px; }
+  button.eye { background:transparent; border:1px solid var(--line); color:var(--dim);
+    padding:4px 8px; border-radius:8px; display:inline-flex; align-items:center; cursor:pointer; }
+  button.eye:hover:not(:disabled) { border-color:var(--magenta); color:var(--text); }
+  button.eye.on { color:var(--magenta); border-color:var(--magenta); }
+  button.eye:disabled { opacity:.4; cursor:not-allowed; }
+  .badge-on { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--magenta); border:1px solid var(--magenta); border-radius:6px; padding:1px 6px; margin-left:6px; }
   button:hover { filter:brightness(1.08); }
   .card { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
   .card h3 { margin:0 0 10px; font-size:14px; }
@@ -241,6 +248,14 @@ function confirmDialog(title, text){
 }
 const esc = s => (s??'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+// Eye (open = active/shown) / eye-off (crossed = hidden) icon for presentation toggle.
+function eyeSvg(open){
+  const stroke='stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+  return open
+    ? `<svg width="17" height="17" viewBox="0 0 24 24" ${stroke}><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`
+    : `<svg width="17" height="17" viewBox="0 0 24 24" ${stroke}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20C5 20 1 12 1 12a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+}
+
 // Media preview helpers (thumbnails + lightbox popup) --------------------------
 const VIDEO_EXT = ['mp4','webm','mov','m4v'];
 const isVideo = name => VIDEO_EXT.includes((name.split('.').pop()||'').toLowerCase());
@@ -320,11 +335,26 @@ function renderDetail(t, devices, presentations){
   // Presentations
   const pWrap=document.createElement('div'); pWrap.className='card';
   pWrap.innerHTML=`<h3>Präsentationen</h3>`;
+  const activePresIds=new Set(devices.map(d=>String(d.presentation_id)).filter(v=>v&&v!=='null'));
+  const hasDevices=devices.length>0;
   presentations.forEach(p=>{
+    const active=activePresIds.has(String(p.id));
     const row=document.createElement('div'); row.className='row wrap2'; row.style.marginBottom='8px';
-    row.innerHTML=`<span class="grow">${esc(p.name)}</span>
+    const eyeTitle=!hasDevices?'Kein Gerät verknüpft'
+      :active?'Läuft auf dem Gerät – klicken zum Ausblenden'
+      :'Auf dem Gerät anzeigen';
+    row.innerHTML=`<span class="grow">${esc(p.name)}${active?' <span class="badge-on">aktiv</span>':''}</span>
+      <button class="eye${active?' on':''}" data-eye title="${eyeTitle}"${hasDevices?'':' disabled'}>${eyeSvg(active)}</button>
+      <button class="ghost sm" data-ren title="Umbenennen">✎</button>
       <button class="ghost sm" data-edit>Slides</button>
       <button class="ghost sm" data-del>Löschen</button>`;
+    row.querySelector('[data-eye]').onclick=async()=>{
+      await API.call('presentations.php','PUT',{id:p.id,active:!active});
+      toast(!active?'Auf dem Gerät aktiviert':'Ausgeblendet'); selectTenant(t); };
+    row.querySelector('[data-ren]').onclick=async()=>{
+      const name=await promptInline('Präsentation umbenennen', p.name);
+      if(name===null||name===''||name===p.name) return;
+      await API.call('presentations.php','PUT',{id:p.id,name}); toast('Umbenannt'); selectTenant(t); };
     row.querySelector('[data-edit]').onclick=()=>editPresentation(p);
     row.querySelector('[data-del]').onclick=async()=>{ if(await confirmDialog('Präsentation löschen?', p.name)){
       await API.call('presentations.php?id='+p.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } };

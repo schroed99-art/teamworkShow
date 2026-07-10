@@ -2,9 +2,10 @@
 -- Idempotent: safe to re-apply. Charset utf8mb4 throughout.
 
 CREATE TABLE IF NOT EXISTS tenants (
-    id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    name       VARCHAR(120) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name          VARCHAR(120) NOT NULL,
+    projektnummer VARCHAR(32) NOT NULL DEFAULT '',  -- Projekt-/Mandantennummer (identisch)
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -25,7 +25,7 @@ if ($method === 'GET') {
         $it['tenant_id'] = $it['tenant_id'] !== null ? (int) $it['tenant_id'] : null;
     }
     unset($it);
-    $tenants = $pdo->query('SELECT id, name FROM tenants ORDER BY id')->fetchAll();
+    $tenants = $pdo->query('SELECT id, name, projektnummer FROM tenants ORDER BY id')->fetchAll();
     foreach ($tenants as &$t) {
         $t['id'] = (int) $t['id'];
     }

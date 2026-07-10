@@ -6,7 +6,7 @@
  *            -> upsert, returns the stored row
  */
 require __DIR__ . '/auth.php';
-tw_require_admin();
+tw_require_manage();
 
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];

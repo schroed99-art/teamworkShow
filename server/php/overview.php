@@ -5,14 +5,14 @@
  * "Konfigurieren" deep-link into admin.php?tenant=<id>. Media management
  * lives in the admin; this page is view + create + navigate only.
  */
-require __DIR__ . '/db.php';
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
-if (empty($_SESSION['tw_admin'])) {
+require __DIR__ . '/auth.php';
+$role = tw_role();
+if ($role === null) {
     header('Location: login.php');
     exit;
 }
+// Betrachter may view the tenant list but not configure anything.
+$canManage = in_array($role, ['admin', 'koordinator'], true);
 
 $version = '';
 $vfile = __DIR__ . '/version.php';
@@ -104,7 +104,11 @@ function h(string $s): string
   <h1>Teamwork<span>Show</span></h1>
   <?php if ($version !== ''): ?><span class="ver">v<?= h($version) ?></span><?php endif; ?>
   <span class="stat"><?= count($tenants) ?> Mandanten · <?= $totalMedia ?> Medien</span>
-  <a class="pool" href="admin.php#media" title="Medienpool im Admin">Medienpool</a>
+  <?php if ($canManage): ?>
+    <a class="pool" href="benutzer.php" title="Benutzerverwaltung">Benutzer</a>
+    <a class="pool" href="admin.php#media" title="Medienpool im Admin">Medienpool</a>
+  <?php endif; ?>
+  <a class="logout" href="change_password.php" title="Eigenes Passwort ändern">Passwort</a>
   <a class="logout" href="login.php?logout=1">Abmelden</a>
 </header>
 
@@ -140,15 +144,19 @@ function h(string $s): string
       <div class="body">
         <div class="name"><?= h($t['name']) ?></div>
         <div class="sub"><?= (int) $t['pres_count'] ?> Präsentation<?= (int) $t['pres_count'] === 1 ? '' : 'en' ?> · <?= count($t['media']) ?> Medien</div>
-        <button onclick="location.href='admin.php?tenant=<?= (int) $t['id'] ?>'">Konfigurieren</button>
+        <?php if ($canManage): ?>
+          <button onclick="location.href='admin.php?tenant=<?= (int) $t['id'] ?>'">Konfigurieren</button>
+        <?php endif; ?>
       </div>
     </div>
   <?php endforeach; ?>
 
+  <?php if ($canManage): ?>
   <div class="card add" id="addTenant">
     <div class="plus">+</div>
     <div>Neuer Mandant</div>
   </div>
+  <?php endif; ?>
 </div>
 
 <div class="modal-bg" id="modalBg">
@@ -167,7 +175,8 @@ const bg = document.getElementById('modalBg');
 const nameIn = document.getElementById('tName');
 function openModal(){ bg.classList.add('show'); nameIn.value=''; setTimeout(()=>nameIn.focus(),30); }
 function closeModal(){ bg.classList.remove('show'); }
-document.getElementById('addTenant').onclick = openModal;
+const addBtn = document.getElementById('addTenant');
+if (addBtn) addBtn.onclick = openModal;
 document.getElementById('mCancel').onclick = closeModal;
 bg.onclick = e => { if (e.target === bg) closeModal(); };
 nameIn.onkeydown = e => { if (e.key==='Enter') create(); if (e.key==='Escape') closeModal(); };

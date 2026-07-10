@@ -48,6 +48,15 @@ check_get "tenants.php without token is 401" "$BASE/tenants.php" 401 'unauthoriz
 # --- Step 4: weather (stub without API key) ---
 check_get "weather?device=DEMO-01 responds (stub/live)" "$BASE/weather.php?device=DEMO-01" 200 '"stub"'
 
+# --- Step 6: dashboard login + session guard ---
+check_get "login.php renders form" "$BASE/login.php" 200 'Anmelden'
+# admin.php without a session redirects to login (302)
+adm_status="$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/admin.php")"
+[ "$adm_status" = "302" ] && pass "admin.php redirects when unauthenticated" || fail "admin.php redirect (got $adm_status)"
+# wrong password is rejected (401)
+wrong_status="$(curl -s -m 15 -o /dev/null -w '%{http_code}' -d 'password=definitely-wrong' "$BASE/login.php")"
+[ "$wrong_status" = "401" ] && pass "login rejects wrong password (401)" || fail "login wrong-password (got $wrong_status)"
+
 # Authed request: METHOD URL [json-body]. Echoes "<status>\n<body>".
 areq() {
   local method="$1" url="$2" body="${3:-}"
@@ -98,6 +107,14 @@ if [ -n "${TW_ADMIN_TOKEN:-}" ]; then
   printf '%s' "$out" | grep -q '"notices_enabled":true' && pass "notices_enabled reflected" || fail "notices_enabled reflected"
   # reset seed device notice
   areq PUT "$BASE/widgets.php" "{\"device_id\":$SEED_DID,\"notices_enabled\":false,\"notices_text\":\"\"}" >/dev/null
+
+  # --- Step 6: full login session -> admin.php reachable ---
+  JAR="$(mktemp)"
+  login_status="$(curl -s -m 15 -c "$JAR" -o /dev/null -w '%{http_code}' -d "password=$TW_ADMIN_TOKEN" "$BASE/login.php")"
+  [ "$login_status" = "302" ] && pass "login accepts correct password (302)" || fail "login correct-password (got $login_status)"
+  admin_ok="$(curl -s -m 15 -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE/admin.php")"
+  [ "$admin_ok" = "200" ] && pass "admin.php reachable with session (200)" || fail "admin.php with session (got $admin_ok)"
+  rm -f "$JAR"
 else
   echo "  SKIP admin CRUD roundtrip (set TW_ADMIN_TOKEN to enable)"
 fi

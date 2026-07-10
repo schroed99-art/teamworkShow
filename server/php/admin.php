@@ -83,8 +83,9 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .lb-box { position:relative; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; gap:10px; align-items:center; }
   .lb-box img, .lb-box video { max-width:92vw; max-height:80vh; border-radius:10px; border:1px solid var(--line); background:#000; }
   .lb-cap { color:var(--dim); font-size:12px; }
-  .lb-close { position:absolute; top:-14px; right:-14px; width:34px; height:34px; border-radius:50%;
-              background:var(--magenta); color:#fff; font-size:18px; line-height:34px; text-align:center; cursor:pointer; border:0; }
+  .lb-close { position:absolute; top:18px; right:18px; z-index:1; width:38px; height:38px; border-radius:50%;
+              background:var(--magenta); color:#fff; font-size:18px; line-height:38px; text-align:center; cursor:pointer; border:0; }
+  .lb-close:hover { filter:brightness(1.1); }
   .tag { font-size:11px; color:var(--dim); }
   .pair { font-family:ui-monospace,monospace; color:var(--magenta); }
   /* branded confirm modal */
@@ -168,8 +169,8 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 <div class="toast" id="toast"></div>
 
 <div class="lb-bg" id="lbBg">
+  <button class="lb-close" id="lbClose" title="Schließen">✕</button>
   <div class="lb-box">
-    <button class="lb-close" id="lbClose" title="Schließen">✕</button>
     <div id="lbStage"></div>
     <div class="lb-cap" id="lbCap"></div>
   </div>

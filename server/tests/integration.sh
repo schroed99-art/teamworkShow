@@ -35,6 +35,11 @@ echo "base: $BASE"
 # --- Step 0/baseline ---
 check_get "version.php returns version" "$BASE/version.php" 200 '"version"'
 check_get "playlist.php (folder fallback) returns items" "$BASE/playlist.php" 200 '"items"'
+# media.php: serves an existing seed file, rejects path traversal
+media_ok="$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/media.php?name=poster_2.png")"
+[ "$media_ok" = "200" ] && pass "media.php serves seed file" || fail "media.php serve (got $media_ok)"
+media_bad="$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE/media.php?name=../config.php")"
+[ "$media_bad" = "400" ] && pass "media.php rejects path traversal (400)" || fail "media.php traversal (got $media_bad)"
 
 # --- Step 2: device-specific playlist ---
 check_get "playlist?device=DEMO-01 has duration_ms" "$BASE/playlist.php?device=DEMO-01" 200 '"duration_ms"'

@@ -36,6 +36,12 @@ echo "base: $BASE"
 check_get "version.php returns version" "$BASE/version.php" 200 '"version"'
 check_get "playlist.php (folder fallback) returns items" "$BASE/playlist.php" 200 '"items"'
 
+# --- Step 2: device-specific playlist ---
+check_get "playlist?device=DEMO-01 has duration_ms" "$BASE/playlist.php?device=DEMO-01" 200 '"duration_ms"'
+check_get "playlist?device=DEMO-01 has widgets"     "$BASE/playlist.php?device=DEMO-01" 200 '"widgets"'
+check_get "playlist?device=DEMO-01 has tenant"      "$BASE/playlist.php?device=DEMO-01" 200 '"tenant"'
+check_get "playlist?device=BOGUS is 404"            "$BASE/playlist.php?device=BOGUS_XYZ" 404 'unknown_device'
+
 echo ""
 if [ "$FAILED" -eq 0 ]; then
   echo "GATE: GREEN"; exit 0

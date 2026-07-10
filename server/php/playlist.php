@@ -1,36 +1,128 @@
 <?php
 /**
- * Returns the current playlist as JSON by scanning the media/ folder.
+ * Playlist endpoint.
  *
- * Response: { "items": [ { "name": string, "hash": sha256-hex, "size": int }, ... ] }
+ *  - GET playlist.php                     -> folder scan (backwards compatible):
+ *        { "items": [ { name, hash, size }, ... ] }
+ *  - GET playlist.php?device=<pairing>    -> device-specific, DB-backed:
+ *        { "items": [ { name, hash, size, position, duration_ms }, ... ],
+ *          "device": { pairing_code, name, standort, anzeige_info },
+ *          "tenant": { id, name },
+ *          "widgets": { weather_enabled, weather_location, notices_enabled, notices_text, schedule } }
  *
- * Deploy alongside media.php on All-Inkl; put media files into ./media.
+ * Slides whose media file is missing on disk are skipped so the app's hash sync stays consistent.
  */
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+require __DIR__ . '/db.php';
 
 $dir = __DIR__ . '/media';
 $allowed = ['jpg', 'jpeg', 'png', 'webp', 'mp4'];
-$items = [];
 
-if (is_dir($dir)) {
-    foreach (scandir($dir) as $name) {
-        $path = $dir . '/' . $name;
-        if (!is_file($path)) {
-            continue;
-        }
-        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-        if (!in_array($ext, $allowed, true)) {
-            continue;
-        }
-        $items[] = [
-            'name' => $name,
-            'hash' => hash_file('sha256', $path),
-            'size' => filesize($path),
-        ];
+/** Return [hash, size] for a media file, or null when it is not on disk. */
+function tw_media_meta(string $dir, string $name): ?array
+{
+    $path = $dir . '/' . $name;
+    if (!is_file($path)) {
+        return null;
     }
+    return ['hash' => hash_file('sha256', $path), 'size' => filesize($path)];
 }
 
-usort($items, static fn($a, $b) => strcasecmp($a['name'], $b['name']));
+$device = isset($_GET['device']) ? trim((string) $_GET['device']) : '';
 
-echo json_encode(['items' => $items], JSON_UNESCAPED_SLASHES);
+// --- Folder-scan fallback (no device): unchanged legacy contract. ---
+if ($device === '') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $items = [];
+    if (is_dir($dir)) {
+        foreach (scandir($dir) as $name) {
+            $path = $dir . '/' . $name;
+            if (!is_file($path)) {
+                continue;
+            }
+            $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed, true)) {
+                continue;
+            }
+            $items[] = [
+                'name' => $name,
+                'hash' => hash_file('sha256', $path),
+                'size' => filesize($path),
+            ];
+        }
+    }
+    usort($items, static fn($a, $b) => strcasecmp($a['name'], $b['name']));
+    echo json_encode(['items' => $items], JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+// --- Device-specific playlist. ---
+try {
+    $pdo = tw_db();
+    $stmt = $pdo->prepare(
+        'SELECT d.id, d.pairing_code, d.name, d.standort, d.anzeige_info, d.presentation_id,
+                t.id AS tenant_id, t.name AS tenant_name
+         FROM devices d JOIN tenants t ON t.id = d.tenant_id
+         WHERE d.pairing_code = ?'
+    );
+    $stmt->execute([$device]);
+    $dev = $stmt->fetch();
+
+    if (!$dev) {
+        tw_json(['error' => 'unknown_device', 'items' => []], 404);
+    }
+
+    $pdo->prepare('UPDATE devices SET last_seen = NOW() WHERE id = ?')->execute([$dev['id']]);
+
+    $items = [];
+    if (!empty($dev['presentation_id'])) {
+        $ss = $pdo->prepare(
+            'SELECT media_name, position, duration_ms FROM slides
+             WHERE presentation_id = ? ORDER BY position, id'
+        );
+        $ss->execute([$dev['presentation_id']]);
+        foreach ($ss as $row) {
+            $meta = tw_media_meta($dir, $row['media_name']);
+            if ($meta === null) {
+                continue;
+            }
+            $items[] = [
+                'name'        => $row['media_name'],
+                'hash'        => $meta['hash'],
+                'size'        => $meta['size'],
+                'position'    => (int) $row['position'],
+                'duration_ms' => (int) $row['duration_ms'],
+            ];
+        }
+    }
+
+    $ws = $pdo->prepare(
+        'SELECT weather_enabled, weather_location, notices_enabled, notices_text, schedule
+         FROM widget_settings WHERE device_id = ?'
+    );
+    $ws->execute([$dev['id']]);
+    $w = $ws->fetch() ?: [];
+
+    tw_json([
+        'items'  => $items,
+        'device' => [
+            'pairing_code' => $dev['pairing_code'],
+            'name'         => $dev['name'],
+            'standort'     => $dev['standort'],
+            'anzeige_info' => $dev['anzeige_info'],
+        ],
+        'tenant' => [
+            'id'   => (int) $dev['tenant_id'],
+            'name' => $dev['tenant_name'],
+        ],
+        'widgets' => [
+            'weather_enabled'  => (bool) ($w['weather_enabled'] ?? false),
+            'weather_location' => (string) ($w['weather_location'] ?? ''),
+            'notices_enabled'  => (bool) ($w['notices_enabled'] ?? false),
+            'notices_text'     => (string) ($w['notices_text'] ?? ''),
+            'schedule'         => $w['schedule'] ?? null,
+        ],
+    ]);
+} catch (Throwable $e) {
+    tw_json(['error' => 'server_error', 'items' => []], 500);
+}

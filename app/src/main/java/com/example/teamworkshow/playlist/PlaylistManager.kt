@@ -2,6 +2,7 @@ package com.example.teamworkshow.playlist
 
 import com.example.teamworkshow.model.MediaItem
 import com.example.teamworkshow.model.MediaType
+import com.example.teamworkshow.model.SlideMeta
 import java.io.File
 
 class PlaylistManager(private val mediaDir: File) {
@@ -9,15 +10,28 @@ class PlaylistManager(private val mediaDir: File) {
     private var items: List<MediaItem> = emptyList()
     private var index = 0
 
+    /**
+     * Supplies server-provided ordering/timing (name -> [SlideMeta]) for the current media.
+     * Defaults to empty, i.e. folder-scan behaviour (name sort, default durations).
+     */
+    var metaProvider: () -> Map<String, SlideMeta> = { emptyMap() }
+
     fun reload() {
+        val meta = metaProvider()
         items = if (mediaDir.exists() && mediaDir.isDirectory) {
             mediaDir.listFiles()
                 ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
-                ?.sortedBy { it.name.lowercase() }
                 ?.map { file ->
                     val type = if (file.extension.lowercase() == "mp4") MediaType.VIDEO else MediaType.IMAGE
-                    MediaItem(file, type)
+                    val m = meta[file.name]
+                    MediaItem(
+                        file = file,
+                        type = type,
+                        durationMs = m?.durationMs ?: 0L,
+                        position = m?.position ?: Int.MAX_VALUE
+                    )
                 }
+                ?.sortedWith(compareBy({ it.position }, { it.file.name.lowercase() }))
                 ?: emptyList()
         } else {
             emptyList()

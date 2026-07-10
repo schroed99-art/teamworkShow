@@ -57,9 +57,11 @@ class SlideShowController(
         val next = playlist.peekNext()
         when (item.type) {
             MediaType.IMAGE -> {
+                // Honor the server-defined duration; fall back to the default when unset.
+                val duration = if (item.durationMs > 0) item.durationMs else IMAGE_DURATION_MS
                 callback.showImage(item)
-                callback.onSlideStarted(IMAGE_DURATION_MS, next)
-                handler.postDelayed(::onImageDone, IMAGE_DURATION_MS)
+                callback.onSlideStarted(duration, next)
+                handler.postDelayed(::onImageDone, duration)
             }
             MediaType.VIDEO -> {
                 callback.showVideo(item)

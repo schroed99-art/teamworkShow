@@ -21,4 +21,10 @@
     <string name="sync_no_server">Kein Server konfiguriert</string>
     <string name="sync_updated">Medien aktualisiert</string>
     <string name="sync_no_change">Bereits aktuell</string>
+    <string name="maintenance_pairing">Gerät koppeln</string>
+    <string name="pairing_hint">Pairing-Code (z. B. DEMO-01)</string>
+    <string name="pairing_saved">Gerät gekoppelt: %1$s</string>
+    <string name="pairing_cleared">Kopplung entfernt (Ordner-Modus)</string>
+    <!-- %1$s = temperature, %2$s = description -->
+    <string name="weather_chip">%1$s°C · %2$s</string>
 </resources>

@@ -33,6 +33,7 @@ import com.example.teamworkshow.player.PlayerCallback
 import com.example.teamworkshow.player.SlideShowController
 import com.example.teamworkshow.playlist.PlaylistManager
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), PlayerCallback {
@@ -42,6 +43,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var playerView: PlayerView
     private lateinit var emptyView: View
     private lateinit var slideProgress: ProgressBar
+    private lateinit var weatherChip: TextView
+    private lateinit var noticesBar: TextView
     private lateinit var downloadOverlay: View
     private lateinit var downloadStatus: TextView
     private lateinit var downloadProgress: ProgressBar
@@ -110,6 +113,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         playerView = findViewById(R.id.playerView)
         emptyView = findViewById(R.id.emptyView)
         slideProgress = findViewById(R.id.slideProgress)
+        weatherChip = findViewById(R.id.weatherChip)
+        noticesBar = findViewById(R.id.noticesBar)
         downloadOverlay = findViewById(R.id.downloadOverlay)
         downloadStatus = findViewById(R.id.downloadStatus)
         downloadProgress = findViewById(R.id.downloadProgress)
@@ -118,12 +123,15 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         setupExoPlayer()
 
         val mediaDir = File(getExternalFilesDir(null), "media").also { it.mkdirs() }
+        syncManager = SyncManager(this, mediaDir)
+        syncManager.listener = downloadListener
+
         val playlist = PlaylistManager(mediaDir)
+        // Honor the server-defined order + per-slide duration when a device is paired.
+        playlist.metaProvider = { syncManager.getPlaylistMeta() }
         slideShowController = SlideShowController(playlist, this)
         slideShowController.start()
 
-        syncManager = SyncManager(this, mediaDir)
-        syncManager.listener = downloadListener
         // Immediate sync on launch, then poll periodically.
         mainHandler.post(syncRunnable)
     }
@@ -140,13 +148,38 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         }
         syncExecutor.execute {
             val changed = syncManager.sync()
+            // Widget settings arrive with the playlist; weather is a separate live call.
+            val widgets = syncManager.getWidgetSettings()
+            val weather = if (widgets.weatherEnabled) syncManager.fetchWeather() else null
             mainHandler.post {
                 if (changed) slideShowController.reload()
+                applyWidgets(widgets, weather)
                 if (userTriggered) {
                     val msg = if (changed) R.string.sync_updated else R.string.sync_no_change
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    /** Renders the weather chip and notices ticker from the device's widget settings. */
+    private fun applyWidgets(widgets: SyncManager.WidgetSettings, weather: SyncManager.WeatherInfo?) {
+        // Weather: only shown when enabled and live data (non-stub) is available.
+        if (widgets.weatherEnabled && weather != null && !weather.stub && weather.tempC != null) {
+            val temp = String.format(Locale.GERMAN, "%.1f", weather.tempC)
+            weatherChip.text = getString(R.string.weather_chip, temp, weather.description)
+            weatherChip.visibility = View.VISIBLE
+        } else {
+            weatherChip.visibility = View.GONE
+        }
+
+        // Notices: single-line marquee ticker at the bottom.
+        if (widgets.noticesEnabled && widgets.noticesText.isNotBlank()) {
+            noticesBar.text = widgets.noticesText
+            noticesBar.visibility = View.VISIBLE
+            noticesBar.isSelected = true // required to start the marquee
+        } else {
+            noticesBar.visibility = View.GONE
         }
     }
 
@@ -305,6 +338,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private fun showMaintenanceMenu() {
         val options = arrayOf(
             getString(R.string.maintenance_server),
+            getString(R.string.maintenance_pairing),
             getString(R.string.maintenance_sync_now),
             getString(R.string.maintenance_reload),
             getString(R.string.maintenance_exit)
@@ -314,9 +348,10 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> showServerUrlDialog()
-                    1 -> syncNow(userTriggered = true)
-                    2 -> slideShowController.reload()
-                    3 -> confirmExit()
+                    1 -> showPairingDialog()
+                    2 -> syncNow(userTriggered = true)
+                    3 -> slideShowController.reload()
+                    4 -> confirmExit()
                 }
             }
             .setOnDismissListener { hideSystemBars() }
@@ -344,6 +379,31 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             .setView(urlInput)
             .setPositiveButton(R.string.maintenance_ok) { _, _ ->
                 syncManager.setServerUrl(urlInput.text.toString())
+                syncNow(userTriggered = true)
+            }
+            .setNegativeButton(R.string.maintenance_cancel, null)
+            .setOnDismissListener { hideSystemBars() }
+            .show()
+    }
+
+    private fun showPairingDialog() {
+        val codeInput = EditText(this).apply {
+            hint = getString(R.string.pairing_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+            setText(syncManager.getPairingCode() ?: "")
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.maintenance_pairing)
+            .setView(codeInput)
+            .setPositiveButton(R.string.maintenance_ok) { _, _ ->
+                val code = codeInput.text.toString().trim()
+                syncManager.setPairingCode(code)
+                val msg = if (code.isEmpty()) {
+                    getString(R.string.pairing_cleared)
+                } else {
+                    getString(R.string.pairing_saved, code)
+                }
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 syncNow(userTriggered = true)
             }
             .setNegativeButton(R.string.maintenance_cancel, null)

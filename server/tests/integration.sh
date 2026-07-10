@@ -45,6 +45,9 @@ check_get "playlist?device=BOGUS is 404"            "$BASE/playlist.php?device=B
 # --- Step 3: admin CRUD ---
 check_get "tenants.php without token is 401" "$BASE/tenants.php" 401 'unauthorized'
 
+# --- Step 4: weather (stub without API key) ---
+check_get "weather?device=DEMO-01 responds (stub/live)" "$BASE/weather.php?device=DEMO-01" 200 '"stub"'
+
 # Authed request: METHOD URL [json-body]. Echoes "<status>\n<body>".
 areq() {
   local method="$1" url="$2" body="${3:-}"

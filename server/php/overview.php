@@ -27,17 +27,21 @@ $tenants = $pdo->query(
        FROM tenants t ORDER BY t.id'
 )->fetchAll();
 
-// Per tenant: distinct media referenced by its presentations' slides.
+// Per tenant: distinct slides (media files + file-less weather slides).
 $mediaStmt = $pdo->prepare(
-    'SELECT DISTINCT s.media_name
+    'SELECT DISTINCT s.media_name, s.kind
        FROM slides s JOIN presentations p ON s.presentation_id = p.id
       WHERE p.tenant_id = ? ORDER BY s.position, s.id'
 );
 $totalMedia = 0;
 foreach ($tenants as &$t) {
     $mediaStmt->execute([$t['id']]);
-    $t['media'] = array_column($mediaStmt->fetchAll(), 'media_name');
-    $totalMedia += count($t['media']);
+    $t['slides'] = array_map(static function (array $r): array {
+        return ['name' => (string) $r['media_name'], 'kind' => (string) ($r['kind'] ?? 'media')];
+    }, $mediaStmt->fetchAll());
+    // Only real media files count as "Medien"; weather slides are file-less.
+    $t['media_count'] = count(array_filter($t['slides'], static fn(array $s): bool => $s['kind'] !== 'weather'));
+    $totalMedia += $t['media_count'];
 }
 unset($t);
 
@@ -48,6 +52,19 @@ function tw_is_video(string $name): bool
 function h(string $s): string
 {
     return htmlspecialchars($s, ENT_QUOTES);
+}
+// Inline sun-and-cloud pictogram for file-less weather slides in the collage.
+function tw_weather_pictogram(): string
+{
+    return '<svg class="wx-pic" viewBox="0 0 64 64" role="img" aria-label="Wetter" xmlns="http://www.w3.org/2000/svg">'
+        . '<circle cx="26" cy="24" r="10" fill="#ffb300"/>'
+        . '<g stroke="#ffb300" stroke-width="2.4" stroke-linecap="round">'
+        . '<path d="M26 6v5"/><path d="M26 37v5"/><path d="M8 24h5"/><path d="M39 24h5"/>'
+        . '<path d="M13.2 11.2l3.5 3.5"/><path d="M35.3 33.3l3.5 3.5"/>'
+        . '<path d="M38.8 11.2l-3.5 3.5"/><path d="M16.7 33.3l-3.5 3.5"/></g>'
+        . '<path d="M22 48a9 9 0 0 1 8.9-9 11 11 0 0 1 21 3.2A8 8 0 0 1 50 58H30a9 9 0 0 1-8-10z" '
+        . 'fill="#eceff4" stroke="#c9ced8" stroke-width="1.5"/>'
+        . '</svg>';
 }
 ?><!doctype html>
 <html lang="de">
@@ -79,6 +96,9 @@ function h(string $s): string
   .collage .more { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
                    color:#fff; font-size:14px; background:rgba(0,0,0,.5); }
   .collage .empty { flex:1; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:12px; }
+  .collage .cell.weather { display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(120% 120% at 50% 0%, #1b2740 0%, #0c1220 100%); }
+  .collage .cell.weather .wx-pic { width:66%; height:66%; }
   .body { padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
   .body .name { font-size:15px; font-weight:600; }
   .body .sub { font-size:12px; color:var(--dim); margin-bottom:10px; }
@@ -120,18 +140,22 @@ function h(string $s): string
   <?php foreach ($tenants as $t): ?>
     <div class="card">
       <div class="collage">
-        <?php if (!$t['media']): ?>
+        <?php if (!$t['slides']): ?>
           <div class="empty">Noch keine Medien</div>
         <?php else:
-          $preview = array_slice($t['media'], 0, 4);
-          $extra = count($t['media']) - count($preview);
-          foreach ($preview as $idx => $name):
-            $isVid = tw_is_video($name);
+          $preview = array_slice($t['slides'], 0, 4);
+          $extra = count($t['slides']) - count($preview);
+          foreach ($preview as $idx => $slide):
+            $name = $slide['name'];
+            $isWeather = $slide['kind'] === 'weather';
+            $isVid = !$isWeather && tw_is_video($name);
             $lead = $idx === 0 ? ' lead' : '';
             $showMore = ($idx === count($preview) - 1 && $extra > 0);
         ?>
-          <div class="cell<?= $lead ?>">
-            <?php if ($isVid): ?>
+          <div class="cell<?= $lead ?><?= $isWeather ? ' weather' : '' ?>">
+            <?php if ($isWeather): ?>
+              <?= tw_weather_pictogram() ?>
+            <?php elseif ($isVid): ?>
               <video muted preload="metadata" src="media.php?name=<?= rawurlencode($name) ?>#t=0.1"></video>
               <span class="play">▶</span>
             <?php else: ?>
@@ -143,7 +167,7 @@ function h(string $s): string
       </div>
       <div class="body">
         <div class="name"><?= h($t['name']) ?></div>
-        <div class="sub"><?= (int) $t['pres_count'] ?> Präsentation<?= (int) $t['pres_count'] === 1 ? '' : 'en' ?> · <?= count($t['media']) ?> Medien</div>
+        <div class="sub"><?= (int) $t['pres_count'] ?> Präsentation<?= (int) $t['pres_count'] === 1 ? '' : 'en' ?> · <?= (int) $t['media_count'] ?> Medien</div>
         <?php if ($canManage): ?>
           <button onclick="location.href='admin.php?tenant=<?= (int) $t['id'] ?>'">Konfigurieren</button>
         <?php endif; ?>

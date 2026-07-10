@@ -119,6 +119,13 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .pmeta .pn { font-size:12px; word-break:break-all; }
   .pmeta .psub { font-size:11px; color:var(--dim); margin-top:3px; display:flex; gap:8px; }
   .pill { border:1px solid var(--line); border-radius:6px; padding:1px 6px; }
+  .poolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:16px 0 4px; }
+  .poolbar .grow { flex:1; min-width:180px; }
+  .poolbar select { min-width:150px; }
+  .pgroup { margin-top:16px; }
+  .pgroup h3 { font-size:12px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em;
+               margin:0 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .passign { width:100%; margin-top:7px; font-size:12px; padding:5px 7px; }
 </style>
 </head>
 <body>
@@ -156,7 +163,12 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
     <span class="muted">Dateien hierher ziehen oder wählen — <b style="color:var(--text)">gleicher Name = austauschen</b>, neuer Name = hinzufügen. (jpg, jpeg, png, webp, mp4)</span>
     <span id="upStatus"></span>
   </div>
-  <div class="poolGrid" id="poolGrid"></div>
+  <div class="poolbar">
+    <input class="grow" id="poolSearch" placeholder="Bildname suchen…">
+    <select id="poolTenant"></select>
+    <select id="poolStand"></select>
+  </div>
+  <div id="poolGroups"></div>
 </div>
 
 <div class="modal-bg" id="modalBg">
@@ -410,27 +422,79 @@ $('#addTenant').onclick=async()=>{ const name=$('#newTenant').value.trim(); if(!
   await API.call('tenants.php','POST',{name}); $('#newTenant').value=''; toast('Mandant erstellt'); loadTenants(); };
 
 // ---- Medienpool (shared media folder: upload / preview / delete) ----
+let poolItems=[], poolMeta={}, poolTenants=[], tenantStand={};
 async function loadPool(){
-  let items=[];
-  try { items=(await API.call('playlist.php')).items||[]; } catch(e){ items=[]; }
-  media = items.map(i=>i.name); // keep the slide-editor picker in sync
-  const grid=$('#poolGrid'); grid.innerHTML='';
-  let img=0, vid=0;
-  items.forEach(it=>{
-    const v=isVideo(it.name); v?vid++:img++;
-    const card=document.createElement('div'); card.className='pcard';
-    const inner = v
-      ? `<video muted preload="metadata" src="${mediaUrl(it.name)}#t=0.1"></video><span class="play">▶</span>`
-      : `<img loading="lazy" src="${mediaUrl(it.name)}" alt="">`;
-    card.innerHTML=`<button class="pdel" title="Löschen">✕</button>
-      <div class="pthumb">${inner}</div>
-      <div class="pmeta"><div class="pn">${esc(it.name)}</div>
-        <div class="psub"><span class="pill">${v?'VIDEO':'BILD'}</span><span>${fmtSize(it.size)}</span></div></div>`;
-    card.querySelector('.pthumb').onclick=()=>openLightbox(it.name);
-    card.querySelector('.pdel').onclick=()=>delMedia(it.name);
-    grid.appendChild(card);
+  let items=[]; try { items=(await API.call('playlist.php')).items||[]; } catch(e){}
+  let meta={items:[],tenants:[],standorte:[]}; try { meta=await API.call('media_meta.php'); } catch(e){}
+  poolItems=items; media=items.map(i=>i.name); // keep the slide-editor picker in sync
+  poolMeta={}; (meta.items||[]).forEach(m=>poolMeta[m.filename]={tenant_id:m.tenant_id, tenant_name:m.tenant_name, note:m.note});
+  poolTenants=meta.tenants||[];
+  tenantStand={}; (meta.standorte||[]).forEach(s=>{ (tenantStand[s.tenant_id]=tenantStand[s.tenant_id]||[]).push(s.standort); });
+  buildPoolFilters(meta.standorte||[]);
+  renderPool();
+}
+function buildPoolFilters(standorte){
+  const tSel=$('#poolTenant'), sSel=$('#poolStand'); const tv=tSel.value, sv=sSel.value;
+  tSel.innerHTML = `<option value="">Alle Mandanten</option>`
+    + poolTenants.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')
+    + `<option value="none">— Nicht zugeordnet</option>`;
+  const uniq=[...new Set((standorte||[]).map(s=>s.standort))];
+  sSel.innerHTML = `<option value="">Alle Standorte</option>` + uniq.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  tSel.value=tv; sSel.value=sv;
+  tSel.onchange=renderPool; sSel.onchange=renderPool; $('#poolSearch').oninput=renderPool;
+}
+function poolTenantOf(name){ const m=poolMeta[name]; return (m && m.tenant_id!=null) ? m.tenant_id : null; }
+function poolMatch(it){
+  const q=$('#poolSearch').value.trim().toLowerCase();
+  if(q && !it.name.toLowerCase().includes(q)) return false;
+  const tid=poolTenantOf(it.name), mSel=$('#poolTenant').value;
+  if(mSel==='none'){ if(tid!==null) return false; }
+  else if(mSel){ if(String(tid)!==mSel) return false; }
+  const sSel=$('#poolStand').value;
+  if(sSel){ const st=(tid!=null)?(tenantStand[tid]||[]):[]; if(!st.includes(sSel)) return false; }
+  return true;
+}
+function poolCard(it){
+  const v=isVideo(it.name);
+  const inner = v ? `<video muted preload="metadata" src="${mediaUrl(it.name)}#t=0.1"></video><span class="play">▶</span>`
+                  : `<img loading="lazy" src="${mediaUrl(it.name)}" alt="">`;
+  const tid=poolTenantOf(it.name);
+  const opts = `<option value="">— nicht zugeordnet</option>`
+    + poolTenants.map(t=>`<option value="${t.id}" ${t.id===tid?'selected':''}>${esc(t.name)}</option>`).join('');
+  const card=document.createElement('div'); card.className='pcard';
+  card.innerHTML=`<button class="pdel" title="Löschen">✕</button>
+    <div class="pthumb">${inner}</div>
+    <div class="pmeta"><div class="pn">${esc(it.name)}</div>
+      <div class="psub"><span class="pill">${v?'VIDEO':'BILD'}</span><span>${fmtSize(it.size)}</span></div>
+      <select class="passign">${opts}</select></div>`;
+  card.querySelector('.pthumb').onclick=()=>openLightbox(it.name);
+  card.querySelector('.pdel').onclick=()=>delMedia(it.name);
+  card.querySelector('.passign').onchange=e=>assignTenant(it.name, e.target.value);
+  return card;
+}
+function renderPool(){
+  const box=$('#poolGroups'); box.innerHTML='';
+  const shown=poolItems.filter(poolMatch);
+  $('#poolCount').textContent = `· ${shown.length}/${poolItems.length} Dateien`;
+  const groups=[...poolTenants.map(t=>({id:t.id,name:t.name})), {id:null,name:'Nicht zugeordnet'}];
+  let any=false;
+  groups.forEach(g=>{
+    const files=shown.filter(it=>poolTenantOf(it.name)===g.id);
+    if(!files.length) return;
+    any=true;
+    const sec=document.createElement('div'); sec.className='pgroup';
+    const h=document.createElement('h3'); h.textContent=`${g.name} · ${files.length}`; sec.appendChild(h);
+    const grid=document.createElement('div'); grid.className='poolGrid';
+    files.forEach(it=>grid.appendChild(poolCard(it)));
+    sec.appendChild(grid); box.appendChild(sec);
   });
-  $('#poolCount').textContent = items.length ? `· ${items.length} Dateien (${img} Bilder, ${vid} Videos)` : '· leer';
+  if(!any) box.innerHTML='<div class="muted" style="padding:20px 0">Keine Medien für diese Auswahl.</div>';
+}
+async function assignTenant(name, val){
+  const tid = val===''? null : parseInt(val);
+  try{ await API.call('media_meta.php','PUT',{filename:name, tenant_id:tid});
+    poolMeta[name]={...(poolMeta[name]||{}), tenant_id:tid}; toast('Zugeordnet'); renderPool(); }
+  catch(e){ toast('Fehler: '+e.message); }
 }
 async function delMedia(name){
   if(!(await confirmDialog('Medium löschen', '„'+name+'“ wirklich aus dem Pool löschen?'))) return;

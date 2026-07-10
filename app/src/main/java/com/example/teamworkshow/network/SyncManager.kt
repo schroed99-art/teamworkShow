@@ -46,10 +46,13 @@ class SyncManager(context: Context, private val mediaDir: File) {
         val weatherEnabled: Boolean,
         val weatherLocation: String,
         val noticesEnabled: Boolean,
-        val noticesText: String
+        val noticesText: String,
+        val noticesSize: Int,
+        val noticesBg: String,
+        val noticesHeight: Int
     ) {
         companion object {
-            val EMPTY = WidgetSettings(false, "", false, "")
+            val EMPTY = WidgetSettings(false, "", false, "", 15, "#66000000", 0)
         }
     }
 
@@ -186,7 +189,10 @@ class SyncManager(context: Context, private val mediaDir: File) {
                 weatherEnabled = o.optBoolean("we", false),
                 weatherLocation = o.optString("wl", ""),
                 noticesEnabled = o.optBoolean("ne", false),
-                noticesText = o.optString("nt", "")
+                noticesText = o.optString("nt", ""),
+                noticesSize = o.optInt("ns", 15),
+                noticesBg = o.optString("nb", "#66000000"),
+                noticesHeight = o.optInt("nh", 0)
             )
         } catch (e: Exception) {
             WidgetSettings.EMPTY
@@ -199,6 +205,9 @@ class SyncManager(context: Context, private val mediaDir: File) {
             .put("wl", w?.optString("weather_location", "") ?: "")
             .put("ne", w?.optBoolean("notices_enabled", false) ?: false)
             .put("nt", w?.optString("notices_text", "") ?: "")
+            .put("ns", w?.optInt("notices_size", 15) ?: 15)
+            .put("nb", w?.optString("notices_bg", "#66000000") ?: "#66000000")
+            .put("nh", w?.optInt("notices_height", 0) ?: 0)
         prefs.edit().putString(KEY_WIDGETS, out.toString()).apply()
     }
 

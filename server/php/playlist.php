@@ -110,7 +110,8 @@ try {
     }
 
     $ws = $pdo->prepare(
-        'SELECT weather_enabled, weather_location, notices_enabled, notices_text, schedule
+        'SELECT weather_enabled, weather_location, notices_enabled, notices_text,
+                notices_size, notices_bg, notices_height, schedule
          FROM widget_settings WHERE device_id = ?'
     );
     $ws->execute([$dev['id']]);
@@ -155,6 +156,9 @@ try {
             'weather_location' => (string) ($w['weather_location'] ?? ''),
             'notices_enabled'  => (bool) ($w['notices_enabled'] ?? false),
             'notices_text'     => (string) ($w['notices_text'] ?? ''),
+            'notices_size'     => (int) ($w['notices_size'] ?? 15),
+            'notices_bg'       => (string) ($w['notices_bg'] ?? '#66000000'),
+            'notices_height'   => (int) ($w['notices_height'] ?? 0),
             'schedule'         => $w['schedule'] ?? null,
         ],
         'weather_layout' => $weatherLayout,

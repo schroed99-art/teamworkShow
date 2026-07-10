@@ -193,9 +193,21 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     /** Renders the notices ticker from the device's widget settings. Weather is shown as an interstitial slide. */
     private fun applyWidgets(widgets: SyncManager.WidgetSettings) {
-        // Notices: single-line marquee ticker at the bottom.
+        // Notices: single-line marquee ticker at the bottom, styled per device.
         if (widgets.noticesEnabled && widgets.noticesText.isNotBlank()) {
+            val density = resources.displayMetrics.density
             noticesBar.text = widgets.noticesText
+            noticesBar.setTextSize(TypedValue.COMPLEX_UNIT_SP, widgets.noticesSize.toFloat())
+            noticesBar.setBackgroundColor(parseColor(widgets.noticesBg, 0x66000000))
+            // Fixed box height (dp) with vertically centred text; 0 = auto (wrap).
+            val lp = noticesBar.layoutParams
+            lp.height = if (widgets.noticesHeight > 0) {
+                (widgets.noticesHeight * density).toInt()
+            } else {
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            noticesBar.layoutParams = lp
+            noticesBar.gravity = if (widgets.noticesHeight > 0) Gravity.CENTER_VERTICAL else Gravity.NO_GRAVITY
             noticesBar.visibility = View.VISIBLE
             noticesBar.isSelected = true // required to start the marquee
         } else {

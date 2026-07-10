@@ -363,15 +363,28 @@ function renderDetail(t, devices, presentations){
         <div><label class="f"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> Wetter aktiv</label>
              <label class="f"><input type="checkbox" data-w="notices_enabled" ${d._n_en?'checked':''}> Hinweis aktiv</label></div>
         <div style="grid-column:1/3"><label class="f">Hinweis-Text</label><textarea data-w="notices_text" style="width:100%" rows="2">${esc(d._n_txt||'')}</textarea></div>
+        <div style="grid-column:1/3"><label class="f">Hinweis-Laufschrift (Kasten unten, rechts→links)</label>
+          <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <div><label class="f">Schriftgröße (sp)</label><input type="number" min="8" max="80" data-w="notices_size" style="width:90px" value="15"></div>
+            <div><label class="f">Rahmen-Höhe (dp, 0=auto)</label><input type="number" min="0" max="300" data-w="notices_height" style="width:110px" value="0"></div>
+            <div><label class="f">Rahmen-Farbe</label><input type="color" data-nc="rgb" style="width:56px;height:34px;padding:2px" value="#000000"></div>
+            <div><label class="f">Deckkraft (%)</label><input type="number" min="0" max="100" data-nc="op" style="width:80px" value="40"></div>
+          </div>
+        </div>
       </div>
       <div class="row" style="margin-top:8px"><button class="sm" data-savedev>Gerät speichern</button></div>`;
     c.querySelector('[data-savedev]').onclick=async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
       await API.call('devices.php','PUT',{id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null});
       const w=f=>c.querySelector(`[data-w="${f}"]`);
+      const nc=k=>c.querySelector(`[data-nc="${k}"]`);
+      const op=Math.max(0,Math.min(100,parseInt(nc('op').value||'0',10)||0));
+      const aHex=Math.round(op/100*255).toString(16).padStart(2,'0');
+      const nbg='#'+aHex+(nc('rgb').value||'#000000').slice(1);
       await API.call('widgets.php','PUT',{device_id:d.id,
         weather_enabled:w('weather_enabled').checked, weather_location:w('weather_location').value,
-        notices_enabled:w('notices_enabled').checked, notices_text:w('notices_text').value});
+        notices_enabled:w('notices_enabled').checked, notices_text:w('notices_text').value,
+        notices_size:+w('notices_size').value||15, notices_height:+w('notices_height').value||0, notices_bg:nbg});
       toast('Gerät gespeichert');
     };
     c.querySelector('[data-deldev]').onclick=async()=>{ if(await confirmDialog('Gerät löschen?', d.name||d.pairing_code)){
@@ -382,6 +395,14 @@ function renderDetail(t, devices, presentations){
       const set=(f,v)=>{ const el=c.querySelector(`[data-w="${f}"]`); if(!el)return; if(el.type==='checkbox') el.checked=!!(+v); else el.value=v??''; };
       set('weather_location',w.weather_location); set('weather_enabled',w.weather_enabled);
       set('notices_enabled',w.notices_enabled); set('notices_text',w.notices_text);
+      set('notices_size',w.notices_size??15); set('notices_height',w.notices_height??0);
+      // Split stored #AARRGGBB (or #RRGGBB) into colour + opacity% for the two inputs.
+      const nc=k=>c.querySelector(`[data-nc="${k}"]`);
+      let bg=(w.notices_bg||'#66000000').trim(), a=255, rgb='#000000';
+      if(/^#[0-9a-fA-F]{8}$/.test(bg)){ a=parseInt(bg.slice(1,3),16); rgb='#'+bg.slice(3); }
+      else if(/^#[0-9a-fA-F]{6}$/.test(bg)){ a=255; rgb=bg; }
+      if(nc('rgb')) nc('rgb').value=rgb;
+      if(nc('op')) nc('op').value=Math.round(a/255*100);
     }).catch(()=>{});
   });
   const dAdd=document.createElement('div'); dAdd.className='row'; dAdd.style.marginTop='12px';

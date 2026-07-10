@@ -27,6 +27,12 @@ class SyncManager(context: Context, private val mediaDir: File) {
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /** Weather-interstitial background lives here, out of the rotating media scan. */
+    private val assetDir = File(mediaDir, ".assets")
+
+    /** Background hinted by the last playlist response (name/hash/size), or null. */
+    private var pendingWeatherAsset: RemoteItem? = null
+
     data class RemoteItem(
         val name: String,
         val hash: String,
@@ -141,9 +147,35 @@ class SyncManager(context: Context, private val mediaDir: File) {
         prefs.edit().putString(KEY_WEATHER, arr.toString()).apply()
     }
 
-    /** Fingerprint of the current slide structure (order/timing + weather slides). */
+    /** Global weather-interstitial template config, or null when unset (app uses defaults). */
+    fun getWeatherLayout(): JSONObject? {
+        val raw = prefs.getString(KEY_WEATHER_LAYOUT, null) ?: return null
+        return try {
+            JSONObject(raw)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun saveWeatherLayout(layout: JSONObject?) {
+        prefs.edit().apply {
+            if (layout == null) remove(KEY_WEATHER_LAYOUT) else putString(KEY_WEATHER_LAYOUT, layout.toString())
+        }.apply()
+    }
+
+    /** The downloaded weather background file, or null when unset/not yet on disk. */
+    fun getWeatherBackgroundFile(): File? {
+        val name = getWeatherLayout()?.optString("background", "").orEmpty()
+        if (name.isEmpty()) return null
+        val f = File(assetDir, name)
+        return if (f.isFile) f else null
+    }
+
+    /** Fingerprint of the current slide structure (order/timing + weather slides + layout). */
     fun playlistSignature(): String =
-        (prefs.getString(KEY_META, "") ?: "") + "|" + (prefs.getString(KEY_WEATHER, "") ?: "")
+        (prefs.getString(KEY_META, "") ?: "") + "|" +
+            (prefs.getString(KEY_WEATHER, "") ?: "") + "|" +
+            (prefs.getString(KEY_WEATHER_LAYOUT, "") ?: "")
 
     /** Widget settings from the last device playlist (empty in folder mode). */
     fun getWidgetSettings(): WidgetSettings {
@@ -257,8 +289,32 @@ class SyncManager(context: Context, private val mediaDir: File) {
             done++
             listener?.onProgress(done, toDownload.size, item.name)
         }
+
+        // Weather-interstitial background: fetched into a hidden asset dir so it never
+        // becomes a rotating slide, and pruned when unset/replaced.
+        syncWeatherAsset(base)
+
         listener?.onFinish(changed)
         return changed
+    }
+
+    /** Downloads the hinted weather background into [assetDir] and prunes stale files. */
+    private fun syncWeatherAsset(base: String) {
+        val want = pendingWeatherAsset
+        assetDir.listFiles()?.forEach { f ->
+            if (f.isFile && (want == null || f.name != want.name)) f.delete()
+        }
+        if (want == null) return
+        if (!assetDir.exists()) assetDir.mkdirs()
+        val local = File(assetDir, want.name)
+        val fresh = local.exists() && sha256(local).equals(want.hash, ignoreCase = true)
+        if (!fresh) {
+            try {
+                downloadTo(base, want.name, local)
+            } catch (e: Exception) {
+                Log.w(TAG, "Weather background download failed for ${want.name}: ${e.message}")
+            }
+        }
     }
 
     private fun fetchPlaylist(base: String): List<RemoteItem> {
@@ -302,6 +358,16 @@ class SyncManager(context: Context, private val mediaDir: File) {
             saveWeatherSlides(weather)
             // `widgets` is present only in device mode; folder mode clears it to defaults.
             saveWidgetSettings(root.optJSONObject("widgets"))
+            // Global weather-interstitial template + its background download hint.
+            saveWeatherLayout(root.optJSONObject("weather_layout"))
+            pendingWeatherAsset = root.optJSONObject("weather_asset")?.let { a ->
+                val name = a.optString("name", "")
+                if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) {
+                    null
+                } else {
+                    RemoteItem(name = name, hash = a.optString("hash", ""), size = a.optLong("size", -1))
+                }
+            }
             return out
         } finally {
             conn.disconnect()
@@ -357,6 +423,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val KEY_PAIRING = "pairing_code"
         private const val KEY_META = "playlist_meta"
         private const val KEY_WEATHER = "weather_slides"
+        private const val KEY_WEATHER_LAYOUT = "weather_layout"
         private const val KEY_WIDGETS = "widget_settings"
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 30_000

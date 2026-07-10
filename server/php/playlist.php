@@ -75,6 +75,7 @@ try {
     $pdo->prepare('UPDATE devices SET last_seen = NOW() WHERE id = ?')->execute([$dev['id']]);
 
     $items = [];
+    $hasWeather = false;
     if (!empty($dev['presentation_id'])) {
         $ss = $pdo->prepare(
             'SELECT media_name, kind, position, duration_ms FROM slides
@@ -84,6 +85,7 @@ try {
         foreach ($ss as $row) {
             // Weather interstitial: file-less slide, kept in order with its duration.
             if (($row['kind'] ?? 'media') === 'weather') {
+                $hasWeather = true;
                 $items[] = [
                     'name'        => '',
                     'kind'        => 'weather',
@@ -114,6 +116,28 @@ try {
     $ws->execute([$dev['id']]);
     $w = $ws->fetch() ?: [];
 
+    // Global weather-interstitial template (shared). Delivered raw; the app renders it.
+    // The background is a pool file downloaded separately from the slide set so it never
+    // rotates as its own slide — only hinted when a weather slide is actually present.
+    $weatherLayout = null;
+    $weatherAsset = null;
+    try {
+        $lc = $pdo->query('SELECT config FROM weather_layout WHERE id = 1')->fetchColumn();
+        $cfg = is_string($lc) ? json_decode($lc, true) : null;
+        if (is_array($cfg)) {
+            $weatherLayout = $cfg;
+            $bg = is_string($cfg['background'] ?? null) ? $cfg['background'] : '';
+            if ($hasWeather && $bg !== '' && strpbrk($bg, "/\\") === false && strpos($bg, '..') === false) {
+                $meta = tw_media_meta($dir, $bg);
+                if ($meta !== null) {
+                    $weatherAsset = ['name' => $bg, 'hash' => $meta['hash'], 'size' => $meta['size']];
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // weather_layout table may not exist yet (pre-migration): degrade silently.
+    }
+
     tw_json([
         'items'  => $items,
         'device' => [
@@ -133,6 +157,8 @@ try {
             'notices_text'     => (string) ($w['notices_text'] ?? ''),
             'schedule'         => $w['schedule'] ?? null,
         ],
+        'weather_layout' => $weatherLayout,
+        'weather_asset'  => $weatherAsset,
     ]);
 } catch (Throwable $e) {
     tw_json(['error' => 'server_error', 'items' => []], 500);

@@ -126,6 +126,28 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .pgroup h3 { font-size:12px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em;
                margin:0 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
   .passign { width:100%; margin-top:7px; font-size:12px; padding:5px 7px; }
+  /* weather-layout editor */
+  .wx-bg { position:fixed; inset:0; background:rgba(0,0,0,.78); display:none; align-items:center; justify-content:center; z-index:80; padding:20px; }
+  .wx-bg.show { display:flex; }
+  .wx-panel { background:var(--panel); border:1px solid var(--line); border-radius:16px; width:min(960px,96vw);
+              max-height:92vh; overflow:auto; padding:20px; display:grid; grid-template-columns:1fr 300px; gap:22px; }
+  .wx-panel h3 { margin:0 0 2px; }
+  .wx-sec { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:10px; }
+  .wx-sec .hd { display:flex; align-items:center; gap:8px; font-weight:600; }
+  .wx-sec .ctl { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:8px; }
+  .wx-sec .ctl label { font-size:11px; color:var(--dim); display:flex; flex-direction:column; gap:3px; }
+  .wx-sec input[type=number] { width:78px; }
+  .wx-sec input[type=color] { width:44px; height:34px; padding:2px; }
+  .wx-side { position:sticky; top:0; align-self:start; }
+  .wx-prev { position:relative; width:100%; aspect-ratio:9/16; background:#000; border:1px solid var(--line);
+             border-radius:12px; overflow:hidden; }
+  .wx-prev.land { aspect-ratio:16/9; }
+  .wx-prev .bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .wx-prev .scrim { position:absolute; inset:0; background:#000; }
+  .wx-prev .el { position:absolute; color:#fff; white-space:nowrap; text-shadow:0 1px 5px #000; font-weight:600; line-height:1.1; }
+  .wx-prev .clock { border-radius:50%; background:rgba(232,232,232,.92); display:flex; align-items:center; justify-content:center; text-shadow:none; }
+  .wx-txtrow { display:flex; gap:6px; align-items:center; margin-top:6px; flex-wrap:wrap; }
+  @media (max-width:760px) { .wx-panel { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -388,6 +410,7 @@ async function editPresentation(p){
     <div class="row" style="margin-top:8px">
       <select id="mediaPick" class="grow"></select><button class="sm" id="addSlide">+ Slide</button>
       <button class="sm" id="addWeather" title="Wetter-Zwischenbild einfügen">+ 🌤 Wetter</button>
+      <button class="sm ghost" id="editWxLayout" title="Wetter-Layout gestalten">🌤 Layout…</button>
     </div>
     <div class="row" style="margin-top:12px"><button id="saveSlides">Reihenfolge speichern</button>
       <button class="ghost" id="closeSlides">Schließen</button></div>`;
@@ -420,8 +443,143 @@ async function editPresentation(p){
   render();
   card.querySelector('#addSlide').onclick=()=>{ const m=mp.value; if(m){ slides.push({media_name:m,duration_ms:8000,kind:'media'}); render(); } };
   card.querySelector('#addWeather').onclick=()=>{ slides.push({kind:'weather',media_name:'',duration_ms:8000}); render(); };
+  card.querySelector('#editWxLayout').onclick=openWeatherLayout;
   card.querySelector('#saveSlides').onclick=async()=>{ await API.call('presentations.php','PUT',{id:p.id,slides}); toast('Slides gespeichert'); };
   card.querySelector('#closeSlides').onclick=()=>card.remove();
+}
+
+// ---- Wetter-Layout (global shared template for all weather interstitials) ----
+async function openWeatherLayout(){
+  let L; try{ L=(await API.call('weather_layout.php')).config||{}; }catch(e){ toast('Layout laden fehlgeschlagen'); return; }
+  L.city=L.city||{show:true,h:'center',v:'top',size:34,color:'#FFFFFF'};
+  L.forecast=L.forecast||{show:true,h:'center',v:'middle',size:100};
+  L.clock=L.clock||{show:true,h:'right',v:'middle',size:150};
+  L.texts=L.texts||[]; if(L.background==null)L.background=''; if(L.scrim==null)L.scrim=20;
+  let orient='port';
+
+  const hOpts=[['left','links'],['center','mitte'],['right','rechts']];
+  const vOpts=[['top','oben'],['middle','mitte'],['bottom','unten']];
+  const sel=(val,opts)=>opts.map(o=>`<option value="${o[0]}" ${o[0]===val?'selected':''}>${o[1]}</option>`).join('');
+  const mediaOpts=`<option value="">(kein Hintergrund)</option>`
+    +media.map(m=>`<option value="${esc(m)}" ${m===L.background?'selected':''}>${esc(m)}</option>`).join('');
+
+  const bg=document.createElement('div'); bg.className='wx-bg show';
+  bg.innerHTML=`<div class="wx-panel">
+    <div class="wx-main">
+      <h3>🌤 Wetter-Layout</h3>
+      <p class="muted" style="margin:2px 0 10px">Gemeinsame Vorlage für alle Wetter-Zwischenbilder. Ort &amp; Vorhersage kommen je Gerät automatisch.</p>
+      <label class="f">Hintergrund (aus Medienpool)</label>
+      <select id="wxBgSel" style="width:100%">${mediaOpts}</select>
+      <label class="f">Abdunklung: <span id="wxScrimV">${L.scrim}</span>%</label>
+      <input id="wxScrim" type="range" min="0" max="100" value="${L.scrim}" style="width:100%">
+      <div class="wx-sec" data-k="city">
+        <div class="hd"><input type="checkbox" data-x="show" ${L.city.show?'checked':''}> Ort-Name</div>
+        <div class="ctl">
+          <label>Horizontal<select data-x="h">${sel(L.city.h,hOpts)}</select></label>
+          <label>Vertikal<select data-x="v">${sel(L.city.v,vOpts)}</select></label>
+          <label>Größe (sp)<input type="number" data-x="size" value="${L.city.size}" min="8" max="200"></label>
+          <label>Farbe<input type="color" data-x="color" value="${L.city.color||'#FFFFFF'}"></label>
+        </div>
+      </div>
+      <div class="wx-sec" data-k="forecast">
+        <div class="hd"><input type="checkbox" data-x="show" ${L.forecast.show?'checked':''}> 3-Tage-Vorhersage</div>
+        <div class="ctl">
+          <label>Horizontal<select data-x="h">${sel(L.forecast.h,hOpts)}</select></label>
+          <label>Vertikal<select data-x="v">${sel(L.forecast.v,vOpts)}</select></label>
+          <label>Größe (%)<input type="number" data-x="size" value="${L.forecast.size}" min="20" max="300" step="10"></label>
+        </div>
+      </div>
+      <div class="wx-sec" data-k="clock">
+        <div class="hd"><input type="checkbox" data-x="show" ${L.clock.show?'checked':''}> Analoge Uhr</div>
+        <div class="ctl">
+          <label>Horizontal<select data-x="h">${sel(L.clock.h,hOpts)}</select></label>
+          <label>Vertikal<select data-x="v">${sel(L.clock.v,vOpts)}</select></label>
+          <label>Größe (dp)<input type="number" data-x="size" value="${L.clock.size}" min="40" max="600" step="10"></label>
+        </div>
+      </div>
+      <div class="wx-sec" data-k="texts">
+        <div class="hd">Freier Text <button class="sm" id="wxAddText" style="margin-left:auto">+ Text</button></div>
+        <div id="wxTexts"></div>
+      </div>
+      <div class="row" style="margin-top:16px">
+        <button id="wxSave">Speichern</button>
+        <button class="ghost" id="wxClose">Schließen</button>
+      </div>
+    </div>
+    <div class="wx-side">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <span class="muted">Vorschau</span>
+        <button class="ghost sm" id="wxOrient">Querformat</button>
+      </div>
+      <div class="wx-prev" id="wxPrev"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+
+  function bindSec(k){
+    bg.querySelectorAll(`.wx-sec[data-k="${k}"] [data-x]`).forEach(inp=>{
+      inp.oninput=()=>{ const x=inp.dataset.x;
+        L[k][x] = inp.type==='checkbox'?inp.checked : (inp.type==='number'?(parseInt(inp.value)||0):inp.value);
+        preview(); };
+    });
+  }
+  ['city','forecast','clock'].forEach(bindSec);
+
+  function renderTexts(){
+    const box=bg.querySelector('#wxTexts'); box.innerHTML='';
+    L.texts.forEach((t,i)=>{
+      const row=document.createElement('div'); row.className='wx-txtrow';
+      row.innerHTML=`<input type="text" placeholder="Text…" value="${esc(t.text||'')}" data-x="text" style="flex:1;min-width:130px">
+        <select data-x="h">${sel(t.h||'center',hOpts)}</select>
+        <select data-x="v">${sel(t.v||'bottom',vOpts)}</select>
+        <input type="number" data-x="size" value="${t.size||20}" min="8" max="200" style="width:66px" title="Größe (sp)">
+        <input type="color" data-x="color" value="${t.color||'#FFFFFF'}">
+        <button class="ghost sm" data-rm title="Entfernen">✕</button>`;
+      row.querySelectorAll('[data-x]').forEach(inp=>{ inp.oninput=()=>{ const x=inp.dataset.x;
+        t[x]= inp.type==='number'?(parseInt(inp.value)||0):inp.value; preview(); }; });
+      row.querySelector('[data-rm]').onclick=()=>{ L.texts.splice(i,1); renderTexts(); preview(); };
+      box.appendChild(row);
+    });
+  }
+  bg.querySelector('#wxAddText').onclick=()=>{ if(L.texts.length>=5){ toast('Max. 5 Texte'); return; }
+    L.texts.push({text:'',h:'center',v:'bottom',size:20,color:'#FFFFFF'}); renderTexts(); preview(); };
+
+  bg.querySelector('#wxBgSel').onchange=e=>{ L.background=e.target.value; preview(); };
+  const scr=bg.querySelector('#wxScrim'); scr.oninput=()=>{ L.scrim=parseInt(scr.value)||0;
+    bg.querySelector('#wxScrimV').textContent=L.scrim; preview(); };
+  bg.querySelector('#wxOrient').onclick=()=>{ orient=orient==='port'?'land':'port';
+    bg.querySelector('#wxOrient').textContent=orient==='port'?'Querformat':'Hochformat';
+    bg.querySelector('#wxPrev').classList.toggle('land',orient==='land'); preview(); };
+
+  function posStyle(h,v){ let s='position:absolute;',tx='0',ty='0';
+    if(h==='left')s+='left:6%;'; else if(h==='right')s+='right:6%;'; else { s+='left:50%;'; tx='-50%'; }
+    if(v==='top')s+='top:6%;'; else if(v==='bottom')s+='bottom:6%;'; else { s+='top:50%;'; ty='-50%'; }
+    return s+`transform:translate(${tx},${ty});`; }
+  function preview(){
+    const prev=bg.querySelector('#wxPrev'); const W=prev.clientWidth||260; const f=W/411; // ~dp width of a phone
+    let html='';
+    if(L.background) html+=`<img class="bg" src="${mediaUrl(L.background)}" alt="">`;
+    html+=`<div class="scrim" style="opacity:${(L.scrim||0)/100}"></div>`;
+    if(L.city.show){ const fs=Math.max(8,(L.city.size||34)*f);
+      html+=`<div class="el" style="${posStyle(L.city.h,L.city.v)}font-size:${fs}px;color:${L.city.color||'#fff'};font-weight:700">Ort</div>`; }
+    if(L.forecast.show){ const sc=(L.forecast.size||100)/100; const base=Math.max(7,30*f*sc);
+      const day=(d,e,t)=>`<div style="text-align:center"><div style="font-weight:700">${d}</div><div>${e}</div><div style="font-weight:700">${t}°</div></div>`;
+      html+=`<div class="el" style="${posStyle(L.forecast.h,L.forecast.v)}font-size:${base}px;display:flex;gap:${base*0.6}px">
+        ${day('Mo','☀️',26)}${day('Di','⛅',19)}${day('Mi','☁️',27)}</div>`; }
+    if(L.clock.show){ const d=Math.max(16,(L.clock.size||150)*f);
+      html+=`<div class="el clock" style="${posStyle(L.clock.h,L.clock.v)}width:${d}px;height:${d}px;font-size:${d*0.5}px">🕐</div>`; }
+    L.texts.forEach(t=>{ if(!t.text)return; const fs=Math.max(7,(t.size||20)*f);
+      html+=`<div class="el" style="${posStyle(t.h||'center',t.v||'bottom')}font-size:${fs}px;color:${t.color||'#fff'}">${esc(t.text)}</div>`; });
+    prev.innerHTML=html;
+  }
+
+  bg.querySelector('#wxSave').onclick=async()=>{
+    try{ const r=await API.call('weather_layout.php','PUT',{config:L}); if(r&&r.config)L=r.config; toast('Layout gespeichert'); }
+    catch(e){ toast('Speichern fehlgeschlagen'); } };
+  bg.querySelector('#wxClose').onclick=()=>bg.remove();
+  bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
+
+  renderTexts(); preview();
 }
 
 $('#addTenant').onclick=async()=>{ const name=$('#newTenant').value.trim(); if(!name)return;

@@ -53,6 +53,15 @@ CREATE TABLE IF NOT EXISTS slides (
         REFERENCES presentations (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Single global template for the weather interstitial (shared by all weather slides).
+-- One row (id = 1); `config` is a JSON blob: background, scrim, and per-element
+-- grid position/size for city / forecast / clock plus free-text blocks.
+CREATE TABLE IF NOT EXISTS weather_layout (
+    id     TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    config TEXT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS widget_settings (
     id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
     device_id        INT UNSIGNED NOT NULL,

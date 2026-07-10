@@ -47,10 +47,12 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var slideProgress: ProgressBar
     private lateinit var noticesBar: TextView
 
-    // Weather forecast interstitial (a file-less slide)
+    // Weather forecast interstitial (a file-less slide); its contents are built at
+    // runtime from the global layout config (background + grid-positioned elements).
     private lateinit var weatherView: View
-    private lateinit var wxCity: TextView
-    private lateinit var wxForecast: LinearLayout
+    private lateinit var wxBg: ImageView
+    private lateinit var wxScrim: View
+    private lateinit var wxLayer: android.widget.FrameLayout
     private var latestWeather: SyncManager.WeatherInfo? = null
     private var lastStructSig: String? = null
     private lateinit var downloadOverlay: View
@@ -124,8 +126,9 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         slideProgress = findViewById(R.id.slideProgress)
         noticesBar = findViewById(R.id.noticesBar)
         weatherView = findViewById(R.id.weatherView)
-        wxCity = findViewById(R.id.wxCity)
-        wxForecast = findViewById(R.id.wxForecast)
+        wxBg = findViewById(R.id.wxBg)
+        wxScrim = findViewById(R.id.wxScrim)
+        wxLayer = findViewById(R.id.wxLayer)
         downloadOverlay = findViewById(R.id.downloadOverlay)
         downloadStatus = findViewById(R.id.downloadStatus)
         downloadProgress = findViewById(R.id.downloadProgress)
@@ -299,40 +302,130 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     // ---------- Weather interstitial ----------
 
-    /** Populates the interstitial's city + 3-day forecast; the clock ticks on its own. */
+    /**
+     * Builds the interstitial from the global layout config: background + scrim, and the
+     * enabled elements (city, 3-day forecast, analog clock, free texts) each placed by its
+     * grid cell. Falls back to sensible defaults when no config is present.
+     */
     private fun populateWeather(w: SyncManager.WeatherInfo?) {
-        val city = (w?.location ?: syncManager.getWidgetSettings().weatherLocation)
-            .substringBefore(',').trim()
-        wxCity.text = if (city.isNotEmpty()) city else getString(R.string.weather_title)
-
-        wxForecast.removeAllViews()
-        val days = w?.forecast ?: emptyList()
+        val cfg = syncManager.getWeatherLayout()
         val dm = resources.displayMetrics
         fun dp(v: Float) = (v * dm.density).toInt()
-        for (day in days) {
-            val col = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(dp(10f), 0, dp(10f), 0)
+
+        // Background (downloaded pool image) + readability scrim.
+        val bg = syncManager.getWeatherBackgroundFile()
+        wxBg.setImageBitmap(bg?.let { BitmapFactory.decodeFile(it.absolutePath) })
+        wxScrim.alpha = (cfg?.optInt("scrim", 20) ?: 20).coerceIn(0, 100) / 100f
+
+        wxLayer.removeAllViews()
+
+        // City name (from device Wetter-Ort / live weather).
+        val cityCfg = cfg?.optJSONObject("city")
+        if (cityCfg == null || cityCfg.optBoolean("show", true)) {
+            val city = (w?.location ?: syncManager.getWidgetSettings().weatherLocation)
+                .substringBefore(',').trim()
+            val tv = TextView(this).apply {
+                text = if (city.isNotEmpty()) city else getString(R.string.weather_title)
+                setTextColor(parseColor(cityCfg?.optString("color"), 0xFFFFFFFF.toInt()))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, (cityCfg?.optInt("size", 34) ?: 34).toFloat())
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setShadowLayer(8f, 0f, 0f, 0xFF000000.toInt())
             }
-            fun label(text: String, sizeSp: Float, bold: Boolean) = TextView(this).apply {
-                this.text = text
-                setTextColor(0xFFFFFFFF.toInt())
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
-                if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+            addWxElement(tv, cityCfg)
+        }
+
+        // 3-day forecast row, scaled by the configured percentage.
+        val fcCfg = cfg?.optJSONObject("forecast")
+        if (fcCfg == null || fcCfg.optBoolean("show", true)) {
+            val scale = (fcCfg?.optInt("size", 100) ?: 100).coerceIn(20, 300) / 100f
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
-                setShadowLayer(6f, 0f, 0f, 0xFF000000.toInt())
             }
-            col.addView(label(day.weekday, 20f, true))
-            col.addView(label(day.date, 15f, false))
-            col.addView(label(weatherEmoji(day.icon), 40f, false).apply {
-                setPadding(0, dp(4f), 0, dp(4f))
-                setShadowLayer(0f, 0f, 0f, 0)
-            })
-            col.addView(label(day.tempC?.let { "$it°" } ?: "–", 22f, true))
-            wxForecast.addView(col)
+            for (day in (w?.forecast ?: emptyList())) {
+                val col = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    setPadding(dp(10f), 0, dp(10f), 0)
+                }
+                fun label(text: String, sizeSp: Float, bold: Boolean) = TextView(this).apply {
+                    this.text = text
+                    setTextColor(0xFFFFFFFF.toInt())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp * scale)
+                    if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    gravity = Gravity.CENTER
+                    setShadowLayer(6f, 0f, 0f, 0xFF000000.toInt())
+                }
+                col.addView(label(day.weekday, 20f, true))
+                col.addView(label(day.date, 15f, false))
+                col.addView(label(weatherEmoji(day.icon), 40f, false).apply {
+                    setPadding(0, dp(4f), 0, dp(4f))
+                    setShadowLayer(0f, 0f, 0f, 0)
+                })
+                col.addView(label(day.tempC?.let { "$it°" } ?: "–", 22f, true))
+                row.addView(col)
+            }
+            addWxElement(row, fcCfg)
+        }
+
+        // Analog clock (ticks on its own once attached).
+        val clkCfg = cfg?.optJSONObject("clock")
+        if (clkCfg == null || clkCfg.optBoolean("show", true)) {
+            val sizeDp = (clkCfg?.optInt("size", 150) ?: 150).coerceIn(40, 600)
+            val lp = android.widget.FrameLayout.LayoutParams(dp(sizeDp.toFloat()), dp(sizeDp.toFloat()))
+            lp.gravity = wxGravity(clkCfg)
+            wxLayer.addView(android.widget.AnalogClock(this), lp)
+        }
+
+        // Free-text blocks.
+        cfg?.optJSONArray("texts")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val t = arr.optJSONObject(i) ?: continue
+                val txt = t.optString("text", "").trim()
+                if (txt.isEmpty()) continue
+                val tv = TextView(this).apply {
+                    text = txt
+                    setTextColor(parseColor(t.optString("color"), 0xFFFFFFFF.toInt()))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, t.optInt("size", 20).toFloat())
+                    setShadowLayer(6f, 0f, 0f, 0xFF000000.toInt())
+                }
+                addWxElement(tv, t)
+            }
         }
     }
+
+    /** Adds a view to the interstitial layer, positioned by its grid config (h/v). */
+    private fun addWxElement(view: View, cfg: org.json.JSONObject?) {
+        val lp = android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+        )
+        lp.gravity = wxGravity(cfg)
+        wxLayer.addView(view, lp)
+    }
+
+    /** Maps an element's {h,v} grid cell to a FrameLayout gravity. */
+    private fun wxGravity(cfg: org.json.JSONObject?): Int {
+        val h = when (cfg?.optString("h", "center")) {
+            "left" -> Gravity.START
+            "right" -> Gravity.END
+            else -> Gravity.CENTER_HORIZONTAL
+        }
+        val v = when (cfg?.optString("v", "middle")) {
+            "top" -> Gravity.TOP
+            "bottom" -> Gravity.BOTTOM
+            else -> Gravity.CENTER_VERTICAL
+        }
+        return h or v
+    }
+
+    /** Parses a #rgb/#rrggbb color, or returns [fallback]. */
+    private fun parseColor(s: String?, fallback: Int): Int =
+        try {
+            if (s.isNullOrBlank()) fallback else android.graphics.Color.parseColor(s)
+        } catch (e: Exception) {
+            fallback
+        }
 
     /** Maps an OpenWeather icon code (e.g. "04d") to a weather emoji. */
     private fun weatherEmoji(icon: String): String = when (icon.take(2)) {

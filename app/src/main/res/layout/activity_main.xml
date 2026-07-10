@@ -43,66 +43,34 @@
         android:contentDescription="@string/logo_desc"
         android:visibility="gone" />
 
-    <!-- Weather forecast interstitial: branded background + city + 3-day outlook + analog clock -->
+    <!-- Weather interstitial: configurable background + scrim + a container whose children
+         (city / forecast / clock / free texts) are built at runtime from the layout config. -->
     <FrameLayout
         android:id="@+id/weatherView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="#000000"
         android:alpha="0">
 
         <ImageView
+            android:id="@+id/wxBg"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:src="@drawable/splashscreen_v3"
             android:scaleType="centerCrop"
             android:contentDescription="@null" />
 
         <View
+            android:id="@+id/wxScrim"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="#33000000" />
+            android:background="#000000"
+            android:alpha="0" />
 
-        <LinearLayout
+        <FrameLayout
+            android:id="@+id/wxLayer"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="24dp">
-
-            <TextView
-                android:id="@+id/wxCity"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFFFFFFF"
-                android:textSize="34sp"
-                android:textStyle="bold"
-                android:shadowColor="#000000"
-                android:shadowRadius="8"
-                android:layout_marginBottom="24dp"
-                android:contentDescription="@null" />
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <LinearLayout
-                    android:id="@+id/wxForecast"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center" />
-
-                <AnalogClock
-                    android:id="@+id/wxClock"
-                    android:layout_width="150dp"
-                    android:layout_height="150dp"
-                    android:layout_marginStart="28dp" />
-
-            </LinearLayout>
-
-        </LinearLayout>
+            android:padding="24dp" />
 
     </FrameLayout>
 

@@ -52,14 +52,15 @@ if ($method === 'POST') {
     $presId = !empty($b['presentation_id']) ? (int) $b['presentation_id'] : null;
     try {
         $pdo->prepare(
-            'INSERT INTO devices (tenant_id, presentation_id, pairing_code, name, standort, anzeige_info)
-             VALUES (?,?,?,?,?,?)'
+            'INSERT INTO devices (tenant_id, presentation_id, pairing_code, name, standort, projektnummer, anzeige_info)
+             VALUES (?,?,?,?,?,?,?)'
         )->execute([
             $tenantId,
             $presId,
             $code,
             (string) ($b['name'] ?? ''),
             (string) ($b['standort'] ?? ''),
+            (string) ($b['projektnummer'] ?? ''),
             (string) ($b['anzeige_info'] ?? ''),
         ]);
     } catch (PDOException $e) {
@@ -78,7 +79,7 @@ if ($method === 'PUT') {
     }
     $set = [];
     $vals = [];
-    foreach (['name', 'standort', 'anzeige_info'] as $f) {
+    foreach (['name', 'standort', 'projektnummer', 'anzeige_info'] as $f) {
         if (array_key_exists($f, $b)) {
             $set[] = "$f = ?";
             $vals[] = (string) $b[$f];

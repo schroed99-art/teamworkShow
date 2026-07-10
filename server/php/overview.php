@@ -22,7 +22,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 
 $pdo = tw_db();
 $tenants = $pdo->query(
-    'SELECT t.id, t.name, t.projektnummer,
+    'SELECT t.id, t.name,
             (SELECT COUNT(*) FROM presentations p WHERE p.tenant_id = t.id) AS pres_count
        FROM tenants t ORDER BY t.id'
 )->fetchAll();
@@ -81,7 +81,6 @@ function h(string $s): string
   .collage .empty { flex:1; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:12px; }
   .body { padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
   .body .name { font-size:15px; font-weight:600; }
-  .body .name .tnr { color:var(--magenta); font-weight:600; font-size:.82em; }
   .body .sub { font-size:12px; color:var(--dim); margin-bottom:10px; }
   .body button { background:var(--magenta); color:#fff; border:0; border-radius:8px; padding:9px; font-size:13px; font-weight:600; cursor:pointer; }
   .body button:hover { filter:brightness(1.08); }
@@ -143,7 +142,7 @@ function h(string $s): string
         <?php endforeach; endif; ?>
       </div>
       <div class="body">
-        <div class="name"><?= h($t['name']) ?><?php if ($t['projektnummer'] !== ''): ?> <span class="tnr">· <?= h($t['projektnummer']) ?></span><?php endif; ?></div>
+        <div class="name"><?= h($t['name']) ?></div>
         <div class="sub"><?= (int) $t['pres_count'] ?> Präsentation<?= (int) $t['pres_count'] === 1 ? '' : 'en' ?> · <?= count($t['media']) ?> Medien</div>
         <?php if ($canManage): ?>
           <button onclick="location.href='admin.php?tenant=<?= (int) $t['id'] ?>'">Konfigurieren</button>
@@ -164,7 +163,6 @@ function h(string $s): string
   <div class="modal">
     <h3>Neuer Mandant</h3>
     <input id="tName" placeholder="Name des Mandanten" autocomplete="off">
-    <input id="tNr" placeholder="Projektnummer / Mandantennummer" autocomplete="off" style="margin-top:10px">
     <div class="row">
       <button class="ghost" id="mCancel">Abbrechen</button>
       <button id="mOk">Anlegen</button>
@@ -175,7 +173,7 @@ function h(string $s): string
 <script>
 const bg = document.getElementById('modalBg');
 const nameIn = document.getElementById('tName');
-function openModal(){ bg.classList.add('show'); nameIn.value=''; document.getElementById('tNr').value=''; setTimeout(()=>nameIn.focus(),30); }
+function openModal(){ bg.classList.add('show'); nameIn.value=''; setTimeout(()=>nameIn.focus(),30); }
 function closeModal(){ bg.classList.remove('show'); }
 const addBtn = document.getElementById('addTenant');
 if (addBtn) addBtn.onclick = openModal;
@@ -186,8 +184,7 @@ document.getElementById('mOk').onclick = create;
 async function create(){
   const name = nameIn.value.trim();
   if (!name) return;
-  const projektnummer = (document.getElementById('tNr').value || '').trim();
-  const r = await fetch('tenants.php', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, projektnummer}) });
+  const r = await fetch('tenants.php', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name}) });
   if (r.status === 401) { location.href='login.php'; return; }
   const j = await r.json().catch(()=>({}));
   if (j.id) location.href = 'admin.php?tenant=' + j.id; else location.reload();

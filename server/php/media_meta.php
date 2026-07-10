@@ -25,7 +25,7 @@ if ($method === 'GET') {
         $it['tenant_id'] = $it['tenant_id'] !== null ? (int) $it['tenant_id'] : null;
     }
     unset($it);
-    $tenants = $pdo->query('SELECT id, name, projektnummer FROM tenants ORDER BY id')->fetchAll();
+    $tenants = $pdo->query('SELECT id, name FROM tenants ORDER BY id')->fetchAll();
     foreach ($tenants as &$t) {
         $t['id'] = (int) $t['id'];
     }
@@ -37,7 +37,15 @@ if ($method === 'GET') {
         $s['tenant_id'] = (int) $s['tenant_id'];
     }
     unset($s);
-    tw_json(['items' => $items, 'tenants' => $tenants, 'standorte' => $standorte]);
+    // Projektnummer lives on the device; expose per-tenant so the pool can search by it.
+    $projekte = $pdo->query(
+        "SELECT DISTINCT tenant_id, projektnummer FROM devices WHERE projektnummer <> '' ORDER BY projektnummer"
+    )->fetchAll();
+    foreach ($projekte as &$p) {
+        $p['tenant_id'] = (int) $p['tenant_id'];
+    }
+    unset($p);
+    tw_json(['items' => $items, 'tenants' => $tenants, 'standorte' => $standorte, 'projekte' => $projekte]);
 }
 
 if ($method === 'PUT') {

@@ -142,9 +142,8 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <div class="panel">
     <h2>Mandanten</h2>
     <ul class="list" id="tenantList"></ul>
-    <div class="row" style="margin-top:12px; flex-wrap:wrap">
+    <div class="row" style="margin-top:12px">
       <input class="grow" id="newTenant" placeholder="Neuer Mandant…">
-      <input id="newTenantNr" placeholder="Projekt-/Mandantennr." style="width:150px">
       <button class="sm" id="addTenant">+</button>
     </div>
   </div>
@@ -165,7 +164,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
     <span id="upStatus"></span>
   </div>
   <div class="poolbar">
-    <input class="grow" id="poolSearch" placeholder="Bild-, Mandantenname oder -nummer…">
+    <input class="grow" id="poolSearch" placeholder="Bildname, Mandant oder Projektnummer…">
     <select id="poolTenant"></select>
     <select id="poolStand"></select>
   </div>
@@ -252,41 +251,18 @@ $('#lbClose').onclick = closeLightbox;
 $('#lbBg').onclick = e => { if (e.target === $('#lbBg')) closeLightbox(); };
 document.addEventListener('keydown', e => { if (e.key==='Escape') closeLightbox(); });
 
-function tenantLabel(t){
-  return t.projektnummer ? `${esc(t.name)} <span class="muted">· ${esc(t.projektnummer)}</span>` : esc(t.name);
-}
 async function loadTenants(){
   tenants = (await API.call('tenants.php')).tenants || [];
   const ul=$('#tenantList'); ul.innerHTML='';
   tenants.forEach(t=>{
     const li=document.createElement('li');
     if (activeTenant && t.id===activeTenant.id) li.className='active';
-    li.innerHTML = `<span class="name">${tenantLabel(t)}</span><button class="ghost sm" data-x="1">✎</button>`;
+    li.innerHTML = `<span class="name">${esc(t.name)}</span><button class="ghost sm" data-x="1">✎</button>`;
     li.querySelector('.name').onclick=()=>selectTenant(t);
     li.querySelector('[data-x]').onclick=async(e)=>{ e.stopPropagation();
-      const res=await editTenantInline(t); if(res===null)return;
-      await API.call('tenants.php','PUT',{id:t.id,name:res.name,projektnummer:res.projektnummer}); toast('Gespeichert');
-      if(activeTenant && activeTenant.id===t.id){ activeTenant={...activeTenant,...res}; $('#detailTitle').innerHTML=tenantLabel(activeTenant); }
-      await loadTenants(); };
+      const name=await promptInline('Mandant umbenennen', t.name); if(name===null)return;
+      await API.call('tenants.php','PUT',{id:t.id,name}); toast('Gespeichert'); await loadTenants(); };
     ul.appendChild(li);
-  });
-}
-
-// two-field branded editor for a tenant (name + Projekt-/Mandantennummer)
-function editTenantInline(t){
-  return new Promise(res=>{
-    $('#modalTitle').textContent='Mandant bearbeiten';
-    $('#modalText').innerHTML =
-      `<label style="display:block;margin-bottom:4px">Name</label>
-       <input id="etName" class="grow" style="width:100%" value="${esc(t.name)}">
-       <label style="display:block;margin:12px 0 4px">Projektnummer / Mandantennummer</label>
-       <input id="etNr" class="grow" style="width:100%" value="${esc(t.projektnummer||'')}">`;
-    const bg=$('#modalBg'); bg.classList.add('show');
-    setTimeout(()=>{ const i=$('#etName'); if(i){i.focus(); i.select();} },30);
-    const done=v=>{ bg.classList.remove('show'); $('#modalText').textContent=''; $('#modalOk').onclick=null; $('#modalCancel').onclick=null; res(v); };
-    $('#modalOk').onclick=()=>{ const name=($('#etName').value||'').trim(); if(!name)return;
-      done({name, projektnummer:($('#etNr').value||'').trim()}); };
-    $('#modalCancel').onclick=()=>done(null);
   });
 }
 
@@ -307,7 +283,7 @@ async function loadMedia(){ try { media = (await API.call('playlist.php')).items
 
 async function selectTenant(t){
   activeTenant=t; await loadTenants();
-  $('#detailTitle').innerHTML = tenantLabel(t);
+  $('#detailTitle').textContent = t.name;
   const [devs, pres] = await Promise.all([
     API.call('devices.php?tenant_id='+t.id),
     API.call('presentations.php?tenant_id='+t.id),
@@ -356,6 +332,7 @@ function renderDetail(t, devices, presentations){
       <div class="grid2" style="margin-top:8px">
         <div><label class="f">Name</label><input value="${esc(d.name)}" data-f="name" style="width:100%"></div>
         <div><label class="f">Standort</label><input value="${esc(d.standort)}" data-f="standort" style="width:100%"></div>
+        <div><label class="f">Projektnummer</label><input value="${esc(d.projektnummer||'')}" data-f="projektnummer" style="width:100%" placeholder="z.B. 2723"></div>
         <div><label class="f">Anzeige-Info</label><input value="${esc(d.anzeige_info)}" data-f="anzeige_info" style="width:100%"></div>
         <div><label class="f">Präsentation</label><select data-f="presentation_id" style="width:100%"><option value="">—</option>${presOpts}</select></div>
       </div>
@@ -368,7 +345,7 @@ function renderDetail(t, devices, presentations){
       <div class="row" style="margin-top:8px"><button class="sm" data-savedev>Gerät speichern</button></div>`;
     c.querySelector('[data-savedev]').onclick=async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
-      await API.call('devices.php','PUT',{id:d.id,name:g('name'),standort:g('standort'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null});
+      await API.call('devices.php','PUT',{id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null});
       const w=f=>c.querySelector(`[data-w="${f}"]`);
       await API.call('widgets.php','PUT',{device_id:d.id,
         weather_enabled:w('weather_enabled').checked, weather_location:w('weather_location').value,
@@ -443,11 +420,10 @@ async function editPresentation(p){
 }
 
 $('#addTenant').onclick=async()=>{ const name=$('#newTenant').value.trim(); if(!name)return;
-  const projektnummer=$('#newTenantNr').value.trim();
-  await API.call('tenants.php','POST',{name,projektnummer}); $('#newTenant').value=''; $('#newTenantNr').value=''; toast('Mandant erstellt'); loadTenants(); };
+  await API.call('tenants.php','POST',{name}); $('#newTenant').value=''; toast('Mandant erstellt'); loadTenants(); };
 
 // ---- Medienpool (shared media folder: upload / preview / delete) ----
-let poolItems=[], poolMeta={}, poolTenants=[], poolById={}, tenantStand={};
+let poolItems=[], poolMeta={}, poolTenants=[], poolById={}, tenantStand={}, tenantProj={};
 async function loadPool(){
   let items=[]; try { items=(await API.call('playlist.php')).items||[]; } catch(e){}
   let meta={items:[],tenants:[],standorte:[]}; try { meta=await API.call('media_meta.php'); } catch(e){}
@@ -456,13 +432,14 @@ async function loadPool(){
   poolTenants=meta.tenants||[];
   poolById={}; poolTenants.forEach(t=>poolById[t.id]=t);
   tenantStand={}; (meta.standorte||[]).forEach(s=>{ (tenantStand[s.tenant_id]=tenantStand[s.tenant_id]||[]).push(s.standort); });
+  tenantProj={}; (meta.projekte||[]).forEach(p=>{ (tenantProj[p.tenant_id]=tenantProj[p.tenant_id]||[]).push(p.projektnummer); });
   buildPoolFilters(meta.standorte||[]);
   renderPool();
 }
 function buildPoolFilters(standorte){
   const tSel=$('#poolTenant'), sSel=$('#poolStand'); const tv=tSel.value, sv=sSel.value;
   tSel.innerHTML = `<option value="">Alle Mandanten</option>`
-    + poolTenants.map(t=>`<option value="${t.id}">${esc(t.name)}${t.projektnummer?' ('+esc(t.projektnummer)+')':''}</option>`).join('')
+    + poolTenants.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')
     + `<option value="none">— Nicht zugeordnet</option>`;
   const uniq=[...new Set((standorte||[]).map(s=>s.standort))];
   sSel.innerHTML = `<option value="">Alle Standorte</option>` + uniq.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
@@ -475,7 +452,8 @@ function poolMatch(it){
   const tid=poolTenantOf(it.name);
   if(q){
     const t = tid!=null ? poolById[tid] : null;
-    const hay = (it.name + ' ' + (t ? (t.name+' '+(t.projektnummer||'')) : '')).toLowerCase();
+    const proj = tid!=null ? (tenantProj[tid]||[]).join(' ') : '';
+    const hay = (it.name + ' ' + (t ? t.name : '') + ' ' + proj).toLowerCase();
     if(!hay.includes(q)) return false;
   }
   const mSel=$('#poolTenant').value;
@@ -491,7 +469,7 @@ function poolCard(it){
                   : `<img loading="lazy" src="${mediaUrl(it.name)}" alt="">`;
   const tid=poolTenantOf(it.name);
   const opts = `<option value="">— nicht zugeordnet</option>`
-    + poolTenants.map(t=>`<option value="${t.id}" ${t.id===tid?'selected':''}>${esc(t.name)}${t.projektnummer?' ('+esc(t.projektnummer)+')':''}</option>`).join('');
+    + poolTenants.map(t=>`<option value="${t.id}" ${t.id===tid?'selected':''}>${esc(t.name)}</option>`).join('');
   const card=document.createElement('div'); card.className='pcard';
   card.innerHTML=`<button class="pdel" title="Löschen">✕</button>
     <div class="pthumb">${inner}</div>

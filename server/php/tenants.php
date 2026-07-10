@@ -7,30 +7,27 @@ $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
-    tw_json(['tenants' => $pdo->query('SELECT id, name, projektnummer, created_at FROM tenants ORDER BY id')->fetchAll()]);
+    tw_json(['tenants' => $pdo->query('SELECT id, name, created_at FROM tenants ORDER BY id')->fetchAll()]);
 }
 
 if ($method === 'POST') {
-    $b = tw_body();
-    $name = trim((string) ($b['name'] ?? ''));
-    $projektnummer = trim((string) ($b['projektnummer'] ?? ''));
+    $name = trim((string) (tw_body()['name'] ?? ''));
     if ($name === '') {
         tw_json(['error' => 'name_required'], 422);
     }
-    $pdo->prepare('INSERT INTO tenants (name, projektnummer) VALUES (?, ?)')->execute([$name, $projektnummer]);
-    tw_json(['id' => (int) $pdo->lastInsertId(), 'name' => $name, 'projektnummer' => $projektnummer], 201);
+    $pdo->prepare('INSERT INTO tenants (name) VALUES (?)')->execute([$name]);
+    tw_json(['id' => (int) $pdo->lastInsertId(), 'name' => $name], 201);
 }
 
 if ($method === 'PUT') {
     $b = tw_body();
     $id = (int) ($b['id'] ?? 0);
     $name = trim((string) ($b['name'] ?? ''));
-    $projektnummer = trim((string) ($b['projektnummer'] ?? ''));
     if ($id <= 0 || $name === '') {
         tw_json(['error' => 'id_and_name_required'], 422);
     }
-    $pdo->prepare('UPDATE tenants SET name = ?, projektnummer = ? WHERE id = ?')->execute([$name, $projektnummer, $id]);
-    tw_json(['id' => $id, 'name' => $name, 'projektnummer' => $projektnummer]);
+    $pdo->prepare('UPDATE tenants SET name = ? WHERE id = ?')->execute([$name, $id]);
+    tw_json(['id' => $id, 'name' => $name]);
 }
 
 if ($method === 'DELETE') {

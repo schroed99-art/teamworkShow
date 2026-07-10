@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Teamwork Show</string>
+    <string name="app_name">TeamworkShow</string>
     <string name="brand_title">Teamwork Show</string>
     <string name="splash_loading">Wird geladen…</string>
     <string name="empty_media">Keine Inhalte vorhanden</string>

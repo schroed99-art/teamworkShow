@@ -29,6 +29,12 @@ class PlaylistManager(private val mediaDir: File) {
 
     fun current(): MediaItem? = items.getOrNull(index)
 
+    /** The item that will play next, without advancing (used for preloading). */
+    fun peekNext(): MediaItem? {
+        if (items.isEmpty()) return null
+        return items[(index + 1) % items.size]
+    }
+
     fun advance(): MediaItem? {
         if (items.isEmpty()) return null
         index = (index + 1) % items.size

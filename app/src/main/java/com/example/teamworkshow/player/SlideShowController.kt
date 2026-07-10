@@ -54,13 +54,16 @@ class SlideShowController(
             return
         }
         val item = playlist.current() ?: return
+        val next = playlist.peekNext()
         when (item.type) {
             MediaType.IMAGE -> {
                 callback.showImage(item)
+                callback.onSlideStarted(IMAGE_DURATION_MS, next)
                 handler.postDelayed(::onImageDone, IMAGE_DURATION_MS)
             }
             MediaType.VIDEO -> {
                 callback.showVideo(item)
+                callback.onSlideStarted(0L, next)
                 // advance is triggered via onVideoDone() from the ExoPlayer listener
             }
         }

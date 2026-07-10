@@ -25,6 +25,15 @@ class SyncManager(context: Context, private val mediaDir: File) {
 
     data class RemoteItem(val name: String, val hash: String, val size: Long)
 
+    /** Download progress callbacks. Invoked on the calling (background) thread. */
+    interface SyncListener {
+        fun onStart(total: Int)
+        fun onProgress(done: Int, total: Int, name: String)
+        fun onFinish(changed: Boolean)
+    }
+
+    var listener: SyncListener? = null
+
     fun getServerUrl(): String? =
         prefs.getString(KEY_URL, null)?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() }
 
@@ -56,18 +65,24 @@ class SyncManager(context: Context, private val mediaDir: File) {
             }
         }
 
-        // Download new or changed files.
-        for (item in remote) {
+        // Determine which files actually need downloading (new or changed by hash).
+        val toDownload = remote.filter { item ->
             val local = File(mediaDir, item.name)
-            val upToDate = local.exists() && sha256(local).equals(item.hash, ignoreCase = true)
-            if (upToDate) continue
+            !(local.exists() && sha256(local).equals(item.hash, ignoreCase = true))
+        }
+        if (toDownload.isNotEmpty()) listener?.onStart(toDownload.size)
+        var done = 0
+        for (item in toDownload) {
             try {
-                downloadTo(base, item.name, local)
+                downloadTo(base, item.name, File(mediaDir, item.name))
                 changed = true
             } catch (e: Exception) {
                 Log.w(TAG, "Download failed for ${item.name}: ${e.message}")
             }
+            done++
+            listener?.onProgress(done, toDownload.size, item.name)
         }
+        listener?.onFinish(changed)
         return changed
     }
 

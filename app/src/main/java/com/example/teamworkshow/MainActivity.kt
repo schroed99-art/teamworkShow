@@ -1,5 +1,6 @@
 package com.example.teamworkshow
 
+import android.animation.ObjectAnimator
 import android.app.AlertDialog
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -11,8 +12,10 @@ import android.text.InputType
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -24,6 +27,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.teamworkshow.model.MediaItem
+import com.example.teamworkshow.model.MediaType
 import com.example.teamworkshow.network.SyncManager
 import com.example.teamworkshow.player.PlayerCallback
 import com.example.teamworkshow.player.SlideShowController
@@ -37,8 +41,14 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var imageViewB: ImageView
     private lateinit var playerView: PlayerView
     private lateinit var emptyView: View
+    private lateinit var slideProgress: ProgressBar
+    private lateinit var downloadOverlay: View
+    private lateinit var downloadStatus: TextView
+    private lateinit var downloadProgress: ProgressBar
 
     private var frontImageView: ImageView? = null
+    private var preloaded: Pair<File, Bitmap>? = null
+    private var slideAnimator: ObjectAnimator? = null
 
     private lateinit var exoPlayer: ExoPlayer
     private lateinit var slideShowController: SlideShowController
@@ -50,6 +60,29 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         override fun run() {
             syncNow(userTriggered = false)
             mainHandler.postDelayed(this, SYNC_INTERVAL_MS)
+        }
+    }
+
+    /** Shows the download overlay while media is being fetched from the server. */
+    private val downloadListener = object : SyncManager.SyncListener {
+        override fun onStart(total: Int) {
+            mainHandler.post {
+                downloadProgress.progress = 0
+                downloadStatus.text = getString(R.string.download_status, 0, total, 0)
+                downloadOverlay.visibility = View.VISIBLE
+            }
+        }
+
+        override fun onProgress(done: Int, total: Int, name: String) {
+            mainHandler.post {
+                val pct = if (total > 0) done * 100 / total else 0
+                downloadProgress.progress = pct
+                downloadStatus.text = getString(R.string.download_status, done, total, pct)
+            }
+        }
+
+        override fun onFinish(changed: Boolean) {
+            mainHandler.post { downloadOverlay.visibility = View.GONE }
         }
     }
 
@@ -76,6 +109,10 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         imageViewB = findViewById(R.id.imageViewB)
         playerView = findViewById(R.id.playerView)
         emptyView = findViewById(R.id.emptyView)
+        slideProgress = findViewById(R.id.slideProgress)
+        downloadOverlay = findViewById(R.id.downloadOverlay)
+        downloadStatus = findViewById(R.id.downloadStatus)
+        downloadProgress = findViewById(R.id.downloadProgress)
         findViewById<TextView>(R.id.versionLabel).text = appVersionText()
 
         setupExoPlayer()
@@ -86,6 +123,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         slideShowController.start()
 
         syncManager = SyncManager(this, mediaDir)
+        syncManager.listener = downloadListener
         // Immediate sync on launch, then poll periodically.
         mainHandler.post(syncRunnable)
     }
@@ -148,7 +186,9 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     // ---------- PlayerCallback ----------
 
     override fun showImage(item: MediaItem) {
-        val bitmap = loadScaledBitmap(item.file) ?: return
+        val bitmap = preloaded?.takeIf { it.first == item.file }?.second
+            ?: loadScaledBitmap(item.file) ?: return
+        preloaded = null
 
         val backView = if (frontImageView == imageViewA) imageViewB else imageViewA
         backView.setImageBitmap(bitmap)
@@ -189,6 +229,31 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         }.start()
         frontImageView = null
         emptyView.visibility = View.VISIBLE
+    }
+
+    override fun onSlideStarted(durationMs: Long, next: MediaItem?) {
+        // Discreet progress line for image slides (videos have an unknown duration).
+        slideAnimator?.cancel()
+        if (durationMs > 0) {
+            slideProgress.visibility = View.VISIBLE
+            slideProgress.progress = 0
+            slideAnimator = ObjectAnimator.ofInt(slideProgress, "progress", 0, slideProgress.max)
+                .apply {
+                    duration = durationMs
+                    interpolator = LinearInterpolator()
+                    start()
+                }
+        } else {
+            slideProgress.visibility = View.GONE
+        }
+        // Preload the next image so the upcoming crossfade is instant.
+        if (next != null && next.type == MediaType.IMAGE) {
+            val file = next.file
+            syncExecutor.execute {
+                val bmp = loadScaledBitmap(file)
+                if (bmp != null) mainHandler.post { preloaded = file to bmp }
+            }
+        }
     }
 
     // ---------- Touch handling ----------
@@ -251,9 +316,19 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                     0 -> showServerUrlDialog()
                     1 -> syncNow(userTriggered = true)
                     2 -> slideShowController.reload()
-                    3 -> finishAndRemoveTask()
+                    3 -> confirmExit()
                 }
             }
+            .setOnDismissListener { hideSystemBars() }
+            .show()
+    }
+
+    private fun confirmExit() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.exit_confirm_title)
+            .setMessage(R.string.exit_confirm_msg)
+            .setPositiveButton(R.string.exit_confirm_ok) { _, _ -> finishAndRemoveTask() }
+            .setNegativeButton(R.string.maintenance_cancel, null)
             .setOnDismissListener { hideSystemBars() }
             .show()
     }
@@ -294,13 +369,14 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     // ---------- Lifecycle ----------
 
     private fun appVersionText(): String = try {
-        "Teamwork Show v" + packageManager.getPackageInfo(packageName, 0).versionName
+        "v" + packageManager.getPackageInfo(packageName, 0).versionName
     } catch (e: Exception) {
         ""
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        slideAnimator?.cancel()
         mainHandler.removeCallbacksAndMessages(null)
         syncExecutor.shutdownNow()
         slideShowController.stop()

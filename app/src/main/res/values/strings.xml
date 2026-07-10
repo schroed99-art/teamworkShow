@@ -9,8 +9,12 @@
     <string name="maintenance_ok">OK</string>
     <string name="maintenance_cancel">Abbrechen</string>
     <string name="maintenance_reload">Medien neu laden</string>
-    <string name="maintenance_exit">App beenden</string>
+    <string name="maintenance_exit">App verlassen (Exit)</string>
     <string name="maintenance_wrong_pin">Falscher PIN</string>
+    <string name="exit_confirm_title">App verlassen?</string>
+    <string name="exit_confirm_msg">Die Anzeige wird beendet. Für Wartungsarbeiten kannst du die App danach neu starten.</string>
+    <string name="exit_confirm_ok">Verlassen</string>
+    <string name="download_status">Medien werden geladen … %1$d / %2$d · %3$d%%</string>
     <string name="maintenance_server">Server einrichten</string>
     <string name="maintenance_sync_now">Jetzt synchronisieren</string>
     <string name="server_url_hint">http://10.0.2.2:8080</string>

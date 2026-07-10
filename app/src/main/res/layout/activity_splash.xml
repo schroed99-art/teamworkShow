@@ -4,21 +4,12 @@
     android:layout_height="match_parent"
     android:background="@color/brand_background">
 
-    <!-- Full-bleed branded start image (logo + title baked in) -->
+    <!-- Full-bleed branded start screen -->
     <ImageView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:src="@drawable/startbild"
+        android:src="@drawable/splashscreen_v3"
         android:scaleType="centerCrop"
         android:contentDescription="@string/logo_desc" />
-
-    <ProgressBar
-        android:id="@+id/splashProgress"
-        style="?android:attr/progressBarStyle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="72dp"
-        android:indeterminateTint="@color/brand_magenta" />
 
 </FrameLayout>

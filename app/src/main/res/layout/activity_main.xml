@@ -43,6 +43,69 @@
         android:contentDescription="@string/logo_desc"
         android:visibility="gone" />
 
+    <!-- Weather forecast interstitial: branded background + city + 3-day outlook + analog clock -->
+    <FrameLayout
+        android:id="@+id/weatherView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0">
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/splashscreen_v3"
+            android:scaleType="centerCrop"
+            android:contentDescription="@null" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#33000000" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="24dp">
+
+            <TextView
+                android:id="@+id/wxCity"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFFFFFF"
+                android:textSize="34sp"
+                android:textStyle="bold"
+                android:shadowColor="#000000"
+                android:shadowRadius="8"
+                android:layout_marginBottom="24dp"
+                android:contentDescription="@null" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:id="@+id/wxForecast"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center" />
+
+                <AnalogClock
+                    android:id="@+id/wxClock"
+                    android:layout_width="150dp"
+                    android:layout_height="150dp"
+                    android:layout_marginStart="28dp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </FrameLayout>
+
     <!-- Discreet preloader line: shows elapsed time of the current slide -->
     <ProgressBar
         android:id="@+id/slideProgress"
@@ -70,24 +133,6 @@
         android:shadowRadius="4"
         android:shadowDx="0"
         android:shadowDy="0"
-        android:contentDescription="@null" />
-
-    <!-- Weather widget chip, top-left (from the device's widget settings) -->
-    <TextView
-        android:id="@+id/weatherChip"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
-        android:layout_marginTop="6dp"
-        android:layout_marginStart="10dp"
-        android:background="#55000000"
-        android:paddingHorizontal="10dp"
-        android:paddingVertical="4dp"
-        android:textColor="#EEFFFFFF"
-        android:textSize="13sp"
-        android:shadowColor="#000000"
-        android:shadowRadius="4"
-        android:visibility="gone"
         android:contentDescription="@null" />
 
     <!-- Notices ticker, bottom (from the device's widget settings) -->

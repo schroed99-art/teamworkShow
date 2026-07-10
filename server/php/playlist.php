@@ -77,17 +77,28 @@ try {
     $items = [];
     if (!empty($dev['presentation_id'])) {
         $ss = $pdo->prepare(
-            'SELECT media_name, position, duration_ms FROM slides
+            'SELECT media_name, kind, position, duration_ms FROM slides
              WHERE presentation_id = ? ORDER BY position, id'
         );
         $ss->execute([$dev['presentation_id']]);
         foreach ($ss as $row) {
+            // Weather interstitial: file-less slide, kept in order with its duration.
+            if (($row['kind'] ?? 'media') === 'weather') {
+                $items[] = [
+                    'name'        => '',
+                    'kind'        => 'weather',
+                    'position'    => (int) $row['position'],
+                    'duration_ms' => (int) $row['duration_ms'],
+                ];
+                continue;
+            }
             $meta = tw_media_meta($dir, $row['media_name']);
             if ($meta === null) {
                 continue;
             }
             $items[] = [
                 'name'        => $row['media_name'],
+                'kind'        => 'media',
                 'hash'        => $meta['hash'],
                 'size'        => $meta['size'],
                 'position'    => (int) $row['position'],

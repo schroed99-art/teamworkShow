@@ -47,6 +47,14 @@ class SyncManager(context: Context, private val mediaDir: File) {
         }
     }
 
+    /** One day of the 3-day outlook shown on the weather interstitial. */
+    data class ForecastDay(
+        val weekday: String,
+        val date: String,
+        val tempC: Int?,
+        val icon: String
+    )
+
     /** Live weather from `weather.php?device=`. `stub` = no API key / location on the server. */
     data class WeatherInfo(
         val enabled: Boolean,
@@ -54,7 +62,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
         val location: String,
         val tempC: Double?,
         val description: String,
-        val icon: String
+        val icon: String,
+        val forecast: List<ForecastDay> = emptyList()
     )
 
     /** Download progress callbacks. Invoked on the calling (background) thread. */
@@ -108,6 +117,34 @@ class SyncManager(context: Context, private val mediaDir: File) {
         prefs.edit().putString(KEY_META, obj.toString()).apply()
     }
 
+    /** File-less weather interstitial slides (position + duration) from the last device playlist. */
+    fun getWeatherSlides(): List<SlideMeta> {
+        val raw = prefs.getString(KEY_WEATHER, null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(raw)
+            val out = ArrayList<SlideMeta>(arr.length())
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                out.add(SlideMeta(o.optInt("p", Int.MAX_VALUE), o.optLong("d", 0L)))
+            }
+            out
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun saveWeatherSlides(slides: List<SlideMeta>) {
+        val arr = org.json.JSONArray()
+        for (s in slides) {
+            arr.put(JSONObject().put("p", s.position).put("d", s.durationMs))
+        }
+        prefs.edit().putString(KEY_WEATHER, arr.toString()).apply()
+    }
+
+    /** Fingerprint of the current slide structure (order/timing + weather slides). */
+    fun playlistSignature(): String =
+        (prefs.getString(KEY_META, "") ?: "") + "|" + (prefs.getString(KEY_WEATHER, "") ?: "")
+
     /** Widget settings from the last device playlist (empty in folder mode). */
     fun getWidgetSettings(): WidgetSettings {
         val raw = prefs.getString(KEY_WIDGETS, null) ?: return WidgetSettings.EMPTY
@@ -146,13 +183,29 @@ class SyncManager(context: Context, private val mediaDir: File) {
                 if (conn.responseCode != HttpURLConnection.HTTP_OK) return null
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
                 val o = JSONObject(body)
+                val fc = o.optJSONArray("forecast")
+                val days = ArrayList<ForecastDay>(fc?.length() ?: 0)
+                if (fc != null) {
+                    for (i in 0 until fc.length()) {
+                        val d = fc.getJSONObject(i)
+                        days.add(
+                            ForecastDay(
+                                weekday = d.optString("weekday", ""),
+                                date = d.optString("date", ""),
+                                tempC = if (d.has("temp_c") && !d.isNull("temp_c")) d.optInt("temp_c") else null,
+                                icon = d.optString("icon", "")
+                            )
+                        )
+                    }
+                }
                 WeatherInfo(
                     enabled = o.optBoolean("enabled", false),
                     stub = o.optBoolean("stub", true),
                     location = o.optString("location", ""),
                     tempC = if (o.has("temp_c") && !o.isNull("temp_c")) o.optDouble("temp_c") else null,
                     description = o.optString("description", ""),
-                    icon = o.optString("icon", "")
+                    icon = o.optString("icon", ""),
+                    forecast = days
                 )
             } finally {
                 conn.disconnect()
@@ -224,8 +277,14 @@ class SyncManager(context: Context, private val mediaDir: File) {
             val root = JSONObject(body)
             val arr = root.getJSONArray("items")
             val out = ArrayList<RemoteItem>(arr.length())
+            val weather = ArrayList<SlideMeta>()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
+                // File-less weather interstitials carry ordering/timing but no media file.
+                if (o.optString("kind", "media") == "weather") {
+                    weather.add(SlideMeta(o.optInt("position", Int.MAX_VALUE), o.optLong("duration_ms", 0L)))
+                    continue
+                }
                 val name = o.getString("name")
                 // Ignore anything that would escape the media directory.
                 if (name.contains('/') || name.contains('\\') || name.contains("..")) continue
@@ -240,6 +299,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
                 )
             }
             savePlaylistMeta(out)
+            saveWeatherSlides(weather)
             // `widgets` is present only in device mode; folder mode clears it to defaults.
             saveWidgetSettings(root.optJSONObject("widgets"))
             return out
@@ -296,6 +356,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val KEY_URL = "server_url"
         private const val KEY_PAIRING = "pairing_code"
         private const val KEY_META = "playlist_meta"
+        private const val KEY_WEATHER = "weather_slides"
         private const val KEY_WIDGETS = "widget_settings"
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 30_000

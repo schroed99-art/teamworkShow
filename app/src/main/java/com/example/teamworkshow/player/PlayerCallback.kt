@@ -5,6 +5,8 @@ import com.example.teamworkshow.model.MediaItem
 interface PlayerCallback {
     fun showImage(item: MediaItem)
     fun showVideo(item: MediaItem)
+    /** Renders the file-less weather forecast interstitial. */
+    fun showWeather(item: MediaItem)
     fun showEmpty()
 
     /**

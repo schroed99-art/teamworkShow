@@ -68,6 +68,13 @@ class SlideShowController(
                 callback.onSlideStarted(0L, next)
                 // advance is triggered via onVideoDone() from the ExoPlayer listener
             }
+            MediaType.WEATHER -> {
+                // File-less interstitial: timed exactly like an image slide.
+                val duration = if (item.durationMs > 0) item.durationMs else IMAGE_DURATION_MS
+                callback.showWeather(item)
+                callback.onSlideStarted(duration, next)
+                handler.postDelayed(::onImageDone, duration)
+            }
         }
     }
 }

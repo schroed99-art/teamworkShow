@@ -16,9 +16,15 @@ class PlaylistManager(private val mediaDir: File) {
      */
     var metaProvider: () -> Map<String, SlideMeta> = { emptyMap() }
 
+    /**
+     * Supplies file-less weather interstitial slides (kind='weather') with their
+     * server-defined position/duration. Merged into the playlist and ordered by position.
+     */
+    var weatherProvider: () -> List<MediaItem> = { emptyList() }
+
     fun reload() {
         val meta = metaProvider()
-        items = if (mediaDir.exists() && mediaDir.isDirectory) {
+        val fileItems = if (mediaDir.exists() && mediaDir.isDirectory) {
             mediaDir.listFiles()
                 ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
                 ?.map { file ->
@@ -31,11 +37,12 @@ class PlaylistManager(private val mediaDir: File) {
                         position = m?.position ?: Int.MAX_VALUE
                     )
                 }
-                ?.sortedWith(compareBy({ it.position }, { it.file.name.lowercase() }))
                 ?: emptyList()
         } else {
             emptyList()
         }
+        items = (fileItems + weatherProvider())
+            .sortedWith(compareBy({ it.position }, { it.file.name.lowercase() }))
         index = 0
     }
 

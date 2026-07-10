@@ -2,7 +2,7 @@ package com.example.teamworkshow.model
 
 import java.io.File
 
-enum class MediaType { IMAGE, VIDEO }
+enum class MediaType { IMAGE, VIDEO, WEATHER }
 
 /** Server-provided ordering/timing for a slide, keyed by media file name. */
 data class SlideMeta(val position: Int, val durationMs: Long)

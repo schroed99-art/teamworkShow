@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS slides (
     id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
     presentation_id INT UNSIGNED NOT NULL,
     media_name      VARCHAR(255) NOT NULL,
+    kind            ENUM('media','weather') NOT NULL DEFAULT 'media',
     position        INT NOT NULL DEFAULT 0,
     duration_ms     INT NOT NULL DEFAULT 8000,
     PRIMARY KEY (id),

@@ -9,12 +9,15 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.LinearInterpolator
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -33,7 +36,6 @@ import com.example.teamworkshow.player.PlayerCallback
 import com.example.teamworkshow.player.SlideShowController
 import com.example.teamworkshow.playlist.PlaylistManager
 import java.io.File
-import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), PlayerCallback {
@@ -43,8 +45,14 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var playerView: PlayerView
     private lateinit var emptyView: View
     private lateinit var slideProgress: ProgressBar
-    private lateinit var weatherChip: TextView
     private lateinit var noticesBar: TextView
+
+    // Weather forecast interstitial (a file-less slide)
+    private lateinit var weatherView: View
+    private lateinit var wxCity: TextView
+    private lateinit var wxForecast: LinearLayout
+    private var latestWeather: SyncManager.WeatherInfo? = null
+    private var lastStructSig: String? = null
     private lateinit var downloadOverlay: View
     private lateinit var downloadStatus: TextView
     private lateinit var downloadProgress: ProgressBar
@@ -98,6 +106,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         private const val TAP_WINDOW_MS = 2_000L
         private const val CORNER_DP = 150f
         private const val SYNC_INTERVAL_MS = 60_000L
+        private const val WEATHER_PLACEHOLDER = "__weather__"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -113,8 +122,10 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         playerView = findViewById(R.id.playerView)
         emptyView = findViewById(R.id.emptyView)
         slideProgress = findViewById(R.id.slideProgress)
-        weatherChip = findViewById(R.id.weatherChip)
         noticesBar = findViewById(R.id.noticesBar)
+        weatherView = findViewById(R.id.weatherView)
+        wxCity = findViewById(R.id.wxCity)
+        wxForecast = findViewById(R.id.wxForecast)
         downloadOverlay = findViewById(R.id.downloadOverlay)
         downloadStatus = findViewById(R.id.downloadStatus)
         downloadProgress = findViewById(R.id.downloadProgress)
@@ -129,6 +140,12 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         val playlist = PlaylistManager(mediaDir)
         // Honor the server-defined order + per-slide duration when a device is paired.
         playlist.metaProvider = { syncManager.getPlaylistMeta() }
+        // Weave in file-less weather interstitials at their server-defined positions.
+        playlist.weatherProvider = {
+            syncManager.getWeatherSlides().map {
+                MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, it.durationMs, it.position)
+            }
+        }
         slideShowController = SlideShowController(playlist, this)
         slideShowController.start()
 
@@ -150,10 +167,18 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             val changed = syncManager.sync()
             // Widget settings arrive with the playlist; weather is a separate live call.
             val widgets = syncManager.getWidgetSettings()
-            val weather = if (widgets.weatherEnabled) syncManager.fetchWeather() else null
+            // Fetch the forecast when weather is enabled OR a weather interstitial is in the playlist.
+            val wantWeather = widgets.weatherEnabled || syncManager.getWeatherSlides().isNotEmpty()
+            val weather = if (wantWeather) syncManager.fetchWeather() else null
+            // Reload when media changed OR the slide structure (order/duration/weather) changed.
+            val sig = syncManager.playlistSignature()
             mainHandler.post {
-                if (changed) slideShowController.reload()
-                applyWidgets(widgets, weather)
+                latestWeather = weather
+                if (changed || sig != lastStructSig) {
+                    lastStructSig = sig
+                    slideShowController.reload()
+                }
+                applyWidgets(widgets)
                 if (userTriggered) {
                     val msg = if (changed) R.string.sync_updated else R.string.sync_no_change
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
@@ -162,17 +187,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         }
     }
 
-    /** Renders the weather chip and notices ticker from the device's widget settings. */
-    private fun applyWidgets(widgets: SyncManager.WidgetSettings, weather: SyncManager.WeatherInfo?) {
-        // Weather: only shown when enabled and live data (non-stub) is available.
-        if (widgets.weatherEnabled && weather != null && !weather.stub && weather.tempC != null) {
-            val temp = String.format(Locale.GERMAN, "%.1f", weather.tempC)
-            weatherChip.text = getString(R.string.weather_chip, temp, weather.description)
-            weatherChip.visibility = View.VISIBLE
-        } else {
-            weatherChip.visibility = View.GONE
-        }
-
+    /** Renders the notices ticker from the device's widget settings. Weather is shown as an interstitial slide. */
+    private fun applyWidgets(widgets: SyncManager.WidgetSettings) {
         // Notices: single-line marquee ticker at the bottom.
         if (widgets.noticesEnabled && widgets.noticesText.isNotBlank()) {
             noticesBar.text = widgets.noticesText
@@ -236,6 +252,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         frontImageView?.animate()?.alpha(0f)?.setDuration(CROSSFADE_MS)?.start()
         frontImageView = backView
 
+        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
         emptyView.visibility = View.GONE
     }
 
@@ -251,6 +268,21 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         exoPlayer.play()
 
         playerView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
+        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        emptyView.visibility = View.GONE
+    }
+
+    override fun showWeather(item: MediaItem) {
+        populateWeather(latestWeather)
+
+        imageViewA.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        imageViewB.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        frontImageView = null
+        if (playerView.alpha > 0f) {
+            playerView.animate().alpha(0f).setDuration(CROSSFADE_MS).withEndAction { exoPlayer.stop() }.start()
+        }
+
+        weatherView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
         emptyView.visibility = View.GONE
     }
 
@@ -260,8 +292,60 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         playerView.animate().alpha(0f).setDuration(CROSSFADE_MS).withEndAction {
             exoPlayer.stop()
         }.start()
+        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
         frontImageView = null
         emptyView.visibility = View.VISIBLE
+    }
+
+    // ---------- Weather interstitial ----------
+
+    /** Populates the interstitial's city + 3-day forecast; the clock ticks on its own. */
+    private fun populateWeather(w: SyncManager.WeatherInfo?) {
+        val city = (w?.location ?: syncManager.getWidgetSettings().weatherLocation)
+            .substringBefore(',').trim()
+        wxCity.text = if (city.isNotEmpty()) city else getString(R.string.weather_title)
+
+        wxForecast.removeAllViews()
+        val days = w?.forecast ?: emptyList()
+        val dm = resources.displayMetrics
+        fun dp(v: Float) = (v * dm.density).toInt()
+        for (day in days) {
+            val col = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(dp(10f), 0, dp(10f), 0)
+            }
+            fun label(text: String, sizeSp: Float, bold: Boolean) = TextView(this).apply {
+                this.text = text
+                setTextColor(0xFFFFFFFF.toInt())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+                if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setShadowLayer(6f, 0f, 0f, 0xFF000000.toInt())
+            }
+            col.addView(label(day.weekday, 20f, true))
+            col.addView(label(day.date, 15f, false))
+            col.addView(label(weatherEmoji(day.icon), 40f, false).apply {
+                setPadding(0, dp(4f), 0, dp(4f))
+                setShadowLayer(0f, 0f, 0f, 0)
+            })
+            col.addView(label(day.tempC?.let { "$it°" } ?: "–", 22f, true))
+            wxForecast.addView(col)
+        }
+    }
+
+    /** Maps an OpenWeather icon code (e.g. "04d") to a weather emoji. */
+    private fun weatherEmoji(icon: String): String = when (icon.take(2)) {
+        "01" -> "☀️"
+        "02" -> "🌤️"
+        "03" -> "⛅"
+        "04" -> "☁️"
+        "09" -> "🌧️"
+        "10" -> "🌦️"
+        "11" -> "⛈️"
+        "13" -> "❄️"
+        "50" -> "🌫️"
+        else -> "🌡️"
     }
 
     override fun onSlideStarted(durationMs: Long, next: MediaItem?) {

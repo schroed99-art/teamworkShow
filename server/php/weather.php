@@ -46,24 +46,58 @@ if (is_file($cacheFile) && (time() - filemtime($cacheFile)) < 600) {
     }
 }
 
-$url = 'https://api.openweathermap.org/data/2.5/weather?q=' . rawurlencode($location)
+// Free 5-day / 3-hour forecast; we aggregate it to a 3-day daily outlook and also
+// derive the "current" reading from the first slot (chip removed, kept for compat).
+$url = 'https://api.openweathermap.org/data/2.5/forecast?q=' . rawurlencode($location)
     . '&units=metric&lang=de&appid=' . rawurlencode($apiKey);
 $ctx = stream_context_create(['http' => ['timeout' => 8, 'ignore_errors' => true]]);
 $raw = @file_get_contents($url, false, $ctx);
 $data = $raw !== false ? json_decode($raw, true) : null;
 
-if (!is_array($data) || (int) ($data['cod'] ?? 0) !== 200) {
+if (!is_array($data) || (string) ($data['cod'] ?? '') !== '200' || empty($data['list'])) {
     // Upstream failure: degrade to stub rather than erroring the display.
     tw_json(['stub' => true, 'enabled' => $enabled, 'location' => $location, 'error' => 'weather_unavailable']);
 }
 
+// Group 3-hourly entries by local date; per day pick the entry nearest 12:00 local.
+$tzOffset = (int) ($data['city']['timezone'] ?? 0);
+$wdays = ['', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']; // ISO 1=Mon .. 7=Sun
+$byDay = [];
+foreach ($data['list'] as $entry) {
+    $local = (int) ($entry['dt'] ?? 0) + $tzOffset;
+    $day = gmdate('Y-m-d', $local);
+    $hour = (int) gmdate('G', $local);
+    $score = abs($hour - 12);
+    if (!isset($byDay[$day]) || $score < $byDay[$day]['score']) {
+        $byDay[$day] = [
+            'score'   => $score,
+            'weekday' => $wdays[(int) gmdate('N', $local)],
+            'date'    => gmdate('d.m.', $local),
+            'temp_c'  => isset($entry['main']['temp']) ? (int) round((float) $entry['main']['temp']) : null,
+            'icon'    => (string) ($entry['weather'][0]['icon'] ?? ''),
+            'code'    => (int) ($entry['weather'][0]['id'] ?? 0),
+        ];
+    }
+}
+ksort($byDay);
+$forecast = [];
+foreach ($byDay as $d) {
+    unset($d['score']);
+    $forecast[] = $d;
+    if (count($forecast) >= 3) {
+        break;
+    }
+}
+
+$first = $data['list'][0];
 $result = [
     'stub'        => false,
     'enabled'     => $enabled,
     'location'    => $location,
-    'temp_c'      => isset($data['main']['temp']) ? round((float) $data['main']['temp'], 1) : null,
-    'description' => (string) ($data['weather'][0]['description'] ?? ''),
-    'icon'        => (string) ($data['weather'][0]['icon'] ?? ''),
+    'temp_c'      => isset($first['main']['temp']) ? round((float) $first['main']['temp'], 1) : null,
+    'description' => (string) ($first['weather'][0]['description'] ?? ''),
+    'icon'        => (string) ($first['weather'][0]['icon'] ?? ''),
+    'forecast'    => $forecast,
 ];
 @file_put_contents($cacheFile, json_encode($result));
 tw_json($result);

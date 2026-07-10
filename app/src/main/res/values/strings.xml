@@ -27,4 +27,5 @@
     <string name="pairing_cleared">Kopplung entfernt (Ordner-Modus)</string>
     <!-- %1$s = temperature, %2$s = description -->
     <string name="weather_chip">%1$s°C · %2$s</string>
+    <string name="weather_title">Wetter</string>
 </resources>

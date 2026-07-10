@@ -380,13 +380,14 @@ function renderDetail(t, devices, presentations){
 // Presentation slide editor (drag order + duration)
 async function editPresentation(p){
   const full=(await API.call('presentations.php?id='+p.id)).presentation;
-  let slides=(full.slides||[]).map(s=>({media_name:s.media_name,duration_ms:s.duration_ms}));
+  let slides=(full.slides||[]).map(s=>({media_name:s.media_name,duration_ms:s.duration_ms,kind:s.kind||'media'}));
   const body=$('#detailBody');
   const card=document.createElement('div'); card.className='card';
   card.innerHTML=`<h3>Slides — ${esc(p.name)}</h3>
     <ul class="list slides" id="slideList"></ul>
     <div class="row" style="margin-top:8px">
       <select id="mediaPick" class="grow"></select><button class="sm" id="addSlide">+ Slide</button>
+      <button class="sm" id="addWeather" title="Wetter-Zwischenbild einfügen">+ 🌤 Wetter</button>
     </div>
     <div class="row" style="margin-top:12px"><button id="saveSlides">Reihenfolge speichern</button>
       <button class="ghost" id="closeSlides">Schließen</button></div>`;
@@ -397,10 +398,13 @@ async function editPresentation(p){
     const ul=card.querySelector('#slideList'); ul.innerHTML='';
     slides.forEach((s,i)=>{
       const li=document.createElement('li'); li.draggable=true;
-      li.innerHTML=`<span class="handle">⠿</span>${thumbHtml(s.media_name)}<span class="mname">${esc(s.media_name)}</span>
+      const label = s.kind==='weather'
+        ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#2a1420;border:1px solid #d81b60;color:#ffb3c9">🌤 Wetter-Zwischenbild</span>`
+        : `${thumbHtml(s.media_name)}<span class="mname">${esc(s.media_name)}</span>`;
+      li.innerHTML=`<span class="handle">⠿</span>${label}
         <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>
         <button class="ghost sm" data-up>↑</button><button class="ghost sm" data-down>↓</button><button class="ghost sm" data-rm>✕</button>`;
-      li.querySelector('.thumb').onclick=()=>openLightbox(s.media_name);
+      const thumb=li.querySelector('.thumb'); if(thumb) thumb.onclick=()=>openLightbox(s.media_name);
       li.querySelector('.dur').onchange=e=>{ s.duration_ms=Math.max(250,parseInt(e.target.value)||8000); };
       li.querySelector('[data-up]').onclick=()=>{ if(i>0){ [slides[i-1],slides[i]]=[slides[i],slides[i-1]]; render(); } };
       li.querySelector('[data-down]').onclick=()=>{ if(i<slides.length-1){ [slides[i+1],slides[i]]=[slides[i],slides[i+1]]; render(); } };
@@ -414,7 +418,8 @@ async function editPresentation(p){
     });
   }
   render();
-  card.querySelector('#addSlide').onclick=()=>{ const m=mp.value; if(m){ slides.push({media_name:m,duration_ms:8000}); render(); } };
+  card.querySelector('#addSlide').onclick=()=>{ const m=mp.value; if(m){ slides.push({media_name:m,duration_ms:8000,kind:'media'}); render(); } };
+  card.querySelector('#addWeather').onclick=()=>{ slides.push({kind:'weather',media_name:'',duration_ms:8000}); render(); };
   card.querySelector('#saveSlides').onclick=async()=>{ await API.call('presentations.php','PUT',{id:p.id,slides}); toast('Slides gespeichert'); };
   card.querySelector('#closeSlides').onclick=()=>card.remove();
 }

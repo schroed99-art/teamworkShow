@@ -22,7 +22,7 @@ if ($method === 'GET') {
         if (!$p) {
             tw_json(['error' => 'not_found'], 404);
         }
-        $ss = $pdo->prepare('SELECT id, media_name, position, duration_ms FROM slides WHERE presentation_id = ? ORDER BY position, id');
+        $ss = $pdo->prepare('SELECT id, media_name, kind, position, duration_ms FROM slides WHERE presentation_id = ? ORDER BY position, id');
         $ss->execute([$id]);
         $p['slides'] = $ss->fetchAll();
         tw_json(['presentation' => $p]);
@@ -61,19 +61,24 @@ if ($method === 'PUT') {
     if (array_key_exists('slides', $b) && is_array($b['slides'])) {
         $pdo->beginTransaction();
         $pdo->prepare('DELETE FROM slides WHERE presentation_id = ?')->execute([$id]);
-        $ins = $pdo->prepare('INSERT INTO slides (presentation_id, media_name, position, duration_ms) VALUES (?,?,?,?)');
+        $ins = $pdo->prepare('INSERT INTO slides (presentation_id, media_name, kind, position, duration_ms) VALUES (?,?,?,?,?)');
         $pos = 0;
         foreach ($b['slides'] as $sl) {
+            $kind = ($sl['kind'] ?? 'media') === 'weather' ? 'weather' : 'media';
             $mn = trim((string) ($sl['media_name'] ?? ''));
-            if ($mn === '') {
+            // Media slides need a file; weather slides are file-less interstitials.
+            if ($kind === 'media' && $mn === '') {
                 continue;
+            }
+            if ($kind === 'weather') {
+                $mn = '';
             }
             $dur = (int) ($sl['duration_ms'] ?? 8000);
             if ($dur < 250) {
                 $dur = 250;
             }
             $position = array_key_exists('position', $sl) ? (int) $sl['position'] : $pos;
-            $ins->execute([$id, $mn, $position, $dur]);
+            $ins->execute([$id, $mn, $kind, $position, $dur]);
             $pos++;
         }
         $pdo->commit();

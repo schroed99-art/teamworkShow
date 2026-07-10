@@ -67,6 +67,15 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   button.eye:disabled { opacity:.4; cursor:not-allowed; }
   .badge-on { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
     color:var(--magenta); border:1px solid var(--magenta); border-radius:6px; padding:1px 6px; margin-left:6px; }
+  .statuspill { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600;
+    padding:2px 9px; border-radius:999px; border:1px solid var(--line); }
+  .statuspill .dot { width:8px; height:8px; border-radius:50%; background:currentColor; flex:none; }
+  .statuspill.online { color:#39d353; border-color:#1c5c2e; background:#0e1f13; }
+  .statuspill.offline { color:#9aa0aa; border-color:#3a3f47; background:#15171b; }
+  .statuspill.never { color:#9aa0aa; border-color:#3a3f47; background:#15171b; }
+  .statuspill.alarm { color:#ff5c72; border-color:#5a2230; background:#210e13; }
+  .statuspill.alarm .dot { animation:tw-pulse 1.1s ease-in-out infinite; }
+  @keyframes tw-pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
   button:hover { filter:brightness(1.08); }
   .card { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
   .card h3 { margin:0 0 10px; font-size:14px; }
@@ -249,6 +258,28 @@ function confirmDialog(title, text){
 const esc = s => (s??'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // Eye (open = active/shown) / eye-off (crossed = hidden) icon for presentation toggle.
+// Device online/offline pill from the server-computed status + seconds_since_seen.
+function agoHuman(s){
+  if(s===null||s===undefined) return 'nie';
+  if(s<0) s=0;
+  if(s<60) return 'vor '+s+' s';
+  if(s<3600) return 'vor '+Math.floor(s/60)+' min';
+  if(s<86400) return 'vor '+Math.floor(s/3600)+' h';
+  return 'vor '+Math.floor(s/86400)+' Tg.';
+}
+function statusPill(d){
+  const st=d.status||(d.last_seen?'offline':'never');
+  const secs=d.seconds_since_seen;
+  const map={
+    online:{cls:'online',label:'online'},
+    offline:{cls:'offline',label:'offline · '+agoHuman(secs)},
+    alarm:{cls:'alarm',label:'⚠ offline seit '+agoHuman(secs)},
+    never:{cls:'never',label:'nie gesehen'}
+  };
+  const m=map[st]||map.never;
+  return `<span class="statuspill ${m.cls}"><span class="dot"></span>${m.label}</span>`;
+}
+
 function eyeSvg(open){
   const stroke='stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
   return open
@@ -377,6 +408,7 @@ function renderDetail(t, devices, presentations){
       <div class="row wrap2">
         <b>${esc(d.name||'(ohne Name)')}</b>
         <span class="pair">${esc(d.pairing_code)}</span>
+        ${statusPill(d)}
         <span class="tag">${d.last_seen?('zuletzt: '+esc(d.last_seen)):'nie gesehen'}</span>
         <span class="spacer" style="flex:1"></span>
         <button class="ghost sm" data-deldev>Löschen</button>

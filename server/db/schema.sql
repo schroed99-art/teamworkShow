@@ -78,3 +78,15 @@ CREATE TABLE IF NOT EXISTS widget_settings (
     CONSTRAINT fk_widget_device FOREIGN KEY (device_id)
         REFERENCES devices (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Last known online/offline state per device (device_monitor.php). Lets the
+-- monitor log only transitions and raise an alarm once per offline episode.
+CREATE TABLE IF NOT EXISTS device_status (
+    device_id INT UNSIGNED NOT NULL,
+    status    VARCHAR(16) NOT NULL DEFAULT 'never',
+    since     DATETIME NOT NULL,
+    alerted   TINYINT(1) NOT NULL DEFAULT 0,
+    PRIMARY KEY (device_id),
+    CONSTRAINT fk_device_status_device FOREIGN KEY (device_id)
+        REFERENCES devices (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

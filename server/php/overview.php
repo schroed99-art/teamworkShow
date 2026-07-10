@@ -6,6 +6,7 @@
  * lives in the admin; this page is view + create + navigate only.
  */
 require __DIR__ . '/auth.php';
+require __DIR__ . '/status_util.php';
 $role = tw_role();
 if ($role === null) {
     header('Location: login.php');
@@ -33,6 +34,10 @@ $mediaStmt = $pdo->prepare(
        FROM slides s JOIN presentations p ON s.presentation_id = p.id
       WHERE p.tenant_id = ? ORDER BY s.position, s.id'
 );
+// Per tenant: device online/offline rollup (worst status wins).
+$devStmt = $pdo->prepare(
+    'SELECT TIMESTAMPDIFF(SECOND, last_seen, NOW()) AS s FROM devices WHERE tenant_id = ?'
+);
 $totalMedia = 0;
 foreach ($tenants as &$t) {
     $mediaStmt->execute([$t['id']]);
@@ -42,6 +47,14 @@ foreach ($tenants as &$t) {
     // Only real media files count as "Medien"; weather slides are file-less.
     $t['media_count'] = count(array_filter($t['slides'], static fn(array $s): bool => $s['kind'] !== 'weather'));
     $totalMedia += $t['media_count'];
+
+    $devStmt->execute([$t['id']]);
+    $statuses = array_map(
+        static fn($row): string => tw_device_status($row['s'] === null ? null : (int) $row['s']),
+        $devStmt->fetchAll()
+    );
+    $t['device_count'] = count($statuses);
+    $t['dev_status'] = tw_rollup_status($statuses);
 }
 unset($t);
 
@@ -52,6 +65,21 @@ function tw_is_video(string $name): bool
 function h(string $s): string
 {
     return htmlspecialchars($s, ENT_QUOTES);
+}
+// Discreet device status dot for a tenant card (title explains it on hover).
+function tw_status_dot(string $status, int $deviceCount): string
+{
+    $titles = [
+        'online'  => 'Gerät online',
+        'offline' => 'Gerät offline',
+        'alarm'   => 'Gerät seit über 30 min offline',
+        'none'    => 'Kein Gerät gekoppelt',
+    ];
+    $st = $titles[$status] ?? $titles['none'];
+    if ($deviceCount > 1) {
+        $st .= ' (' . $deviceCount . ' Geräte)';
+    }
+    return '<span class="statusdot ' . $status . '" title="' . h($st) . '"></span>';
 }
 // Inline sun-and-cloud pictogram for file-less weather slides in the collage.
 function tw_weather_pictogram(): string
@@ -101,6 +129,13 @@ function tw_weather_pictogram(): string
   .collage .cell.weather .wx-pic { width:66%; height:66%; }
   .body { padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
   .body .name { font-size:15px; font-weight:600; }
+  .statusdot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px;
+    vertical-align:middle; background:#5a5f68; box-shadow:0 0 0 3px rgba(255,255,255,.03); }
+  .statusdot.online { background:#39d353; box-shadow:0 0 0 3px rgba(57,211,83,.15); }
+  .statusdot.offline { background:#9aa0aa; }
+  .statusdot.alarm { background:#ff5c72; box-shadow:0 0 0 3px rgba(255,92,114,.2); animation:tw-pulse 1.1s ease-in-out infinite; }
+  .statusdot.none { background:#3a3f47; }
+  @keyframes tw-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
   .body .sub { font-size:12px; color:var(--dim); margin-bottom:10px; }
   .body button { background:var(--magenta); color:#fff; border:0; border-radius:8px; padding:9px; font-size:13px; font-weight:600; cursor:pointer; }
   .body button:hover { filter:brightness(1.08); }
@@ -166,7 +201,7 @@ function tw_weather_pictogram(): string
         <?php endforeach; endif; ?>
       </div>
       <div class="body">
-        <div class="name"><?= h($t['name']) ?></div>
+        <div class="name"><?= tw_status_dot($t['dev_status'], (int) $t['device_count']) ?><?= h($t['name']) ?></div>
         <div class="sub"><?= (int) $t['pres_count'] ?> Präsentation<?= (int) $t['pres_count'] === 1 ? '' : 'en' ?> · <?= (int) $t['media_count'] ?> Medien</div>
         <?php if ($canManage): ?>
           <button onclick="location.href='admin.php?tenant=<?= (int) $t['id'] ?>'">Konfigurieren</button>

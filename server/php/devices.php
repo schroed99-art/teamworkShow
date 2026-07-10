@@ -8,6 +8,7 @@
  *   DELETE ?id= (cascades slides via presentation? no — cascades widget_settings)
  */
 require __DIR__ . '/auth.php';
+require __DIR__ . '/status_util.php';
 tw_require_manage();
 
 $pdo = tw_db();
@@ -29,13 +30,20 @@ function tw_gen_pairing(PDO $pdo): string
 
 if ($method === 'GET') {
     $tenantId = (int) ($_GET['tenant_id'] ?? 0);
+    $sel = 'SELECT d.*, TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) AS seconds_since_seen FROM devices d';
     if ($tenantId > 0) {
-        $s = $pdo->prepare('SELECT * FROM devices WHERE tenant_id = ? ORDER BY id');
+        $s = $pdo->prepare($sel . ' WHERE d.tenant_id = ? ORDER BY d.id');
         $s->execute([$tenantId]);
         $rows = $s->fetchAll();
     } else {
-        $rows = $pdo->query('SELECT * FROM devices ORDER BY id')->fetchAll();
+        $rows = $pdo->query($sel . ' ORDER BY d.id')->fetchAll();
     }
+    foreach ($rows as &$r) {
+        $secs = $r['seconds_since_seen'] === null ? null : (int) $r['seconds_since_seen'];
+        $r['seconds_since_seen'] = $secs;
+        $r['status'] = tw_device_status($secs);
+    }
+    unset($r);
     tw_json(['devices' => $rows]);
 }
 

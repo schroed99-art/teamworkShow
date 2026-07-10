@@ -1,3 +1,6 @@
 # Media content is data, not code – keep it out of the repo.
 mock/media/
 php/media/
+
+# Secrets: real config lives only on the VM.
+php/config.php

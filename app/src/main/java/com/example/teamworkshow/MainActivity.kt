@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var wxBg: ImageView
     private lateinit var wxScrim: View
     private lateinit var wxLayer: android.widget.FrameLayout
+    private val WX_ROWS = listOf("header", "1", "2", "3", "4", "5", "6", "footer")
     private var latestWeather: SyncManager.WeatherInfo? = null
     private var lastStructSig: String? = null
     private lateinit var downloadOverlay: View
@@ -319,6 +320,27 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
         wxLayer.removeAllViews()
 
+        // Vertical layout is a fixed stack of equal rows (Header, 1-6, Footer). Each element
+        // lands in its row and is aligned horizontally within it — no overlap across rows.
+        val rowsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val rowFrames = WX_ROWS.map { android.widget.FrameLayout(this) }
+        for (fr in rowFrames) {
+            rowsBox.addView(fr, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+        wxLayer.addView(
+            rowsBox,
+            android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        // Places a view into its configured row, aligned horizontally + vertically centred.
+        fun place(view: View, c: org.json.JSONObject?, w0: Int = android.widget.FrameLayout.LayoutParams.WRAP_CONTENT, h0: Int = android.widget.FrameLayout.LayoutParams.WRAP_CONTENT) {
+            val lp = android.widget.FrameLayout.LayoutParams(w0, h0)
+            lp.gravity = wxHGravity(c) or Gravity.CENTER_VERTICAL
+            rowFrames[wxRowIndex(c?.optString("v", "header"))].addView(view, lp)
+        }
+
         // City name (from device Wetter-Ort / live weather).
         val cityCfg = cfg?.optJSONObject("city")
         if (cityCfg == null || cityCfg.optBoolean("show", true)) {
@@ -331,7 +353,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 setShadowLayer(8f, 0f, 0f, 0xFF000000.toInt())
             }
-            addWxElement(tv, cityCfg)
+            place(tv, cityCfg)
         }
 
         // 3-day forecast row, scaled by the configured percentage.
@@ -365,16 +387,14 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                 col.addView(label(day.tempC?.let { "$it°" } ?: "–", 22f, true))
                 row.addView(col)
             }
-            addWxElement(row, fcCfg)
+            place(row, fcCfg)
         }
 
         // Analog clock (ticks on its own once attached).
         val clkCfg = cfg?.optJSONObject("clock")
         if (clkCfg == null || clkCfg.optBoolean("show", true)) {
             val sizeDp = (clkCfg?.optInt("size", 150) ?: 150).coerceIn(40, 600)
-            val lp = android.widget.FrameLayout.LayoutParams(dp(sizeDp.toFloat()), dp(sizeDp.toFloat()))
-            lp.gravity = wxGravity(clkCfg)
-            wxLayer.addView(android.widget.AnalogClock(this), lp)
+            place(android.widget.AnalogClock(this), clkCfg, dp(sizeDp.toFloat()), dp(sizeDp.toFloat()))
         }
 
         // Free-text blocks.
@@ -389,34 +409,23 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, t.optInt("size", 20).toFloat())
                     setShadowLayer(6f, 0f, 0f, 0xFF000000.toInt())
                 }
-                addWxElement(tv, t)
+                place(tv, t)
             }
         }
     }
 
-    /** Adds a view to the interstitial layer, positioned by its grid config (h/v). */
-    private fun addWxElement(view: View, cfg: org.json.JSONObject?) {
-        val lp = android.widget.FrameLayout.LayoutParams(
-            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
-        )
-        lp.gravity = wxGravity(cfg)
-        wxLayer.addView(view, lp)
+    /** Horizontal alignment for an element's `h` value. */
+    private fun wxHGravity(cfg: org.json.JSONObject?): Int = when (cfg?.optString("h", "center")) {
+        "left" -> Gravity.START
+        "right" -> Gravity.END
+        else -> Gravity.CENTER_HORIZONTAL
     }
 
-    /** Maps an element's {h,v} grid cell to a FrameLayout gravity. */
-    private fun wxGravity(cfg: org.json.JSONObject?): Int {
-        val h = when (cfg?.optString("h", "center")) {
-            "left" -> Gravity.START
-            "right" -> Gravity.END
-            else -> Gravity.CENTER_HORIZONTAL
-        }
-        val v = when (cfg?.optString("v", "middle")) {
-            "top" -> Gravity.TOP
-            "bottom" -> Gravity.BOTTOM
-            else -> Gravity.CENTER_VERTICAL
-        }
-        return h or v
+    /** Row index for an element's `v` value (legacy top/middle/bottom mapped onto rows). */
+    private fun wxRowIndex(v: String?): Int {
+        val mapped = when (v) { "top" -> "header"; "middle" -> "4"; "bottom" -> "footer"; else -> v }
+        val i = WX_ROWS.indexOf(mapped)
+        return if (i >= 0) i else 0
     }
 
     /** Parses a #rgb/#rrggbb color, or returns [fallback]. */

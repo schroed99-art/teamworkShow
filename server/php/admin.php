@@ -458,7 +458,9 @@ async function openWeatherLayout(){
   let orient='port';
 
   const hOpts=[['left','links'],['center','mitte'],['right','rechts']];
-  const vOpts=[['top','oben'],['middle','mitte'],['bottom','unten']];
+  const WXROWS=['header','1','2','3','4','5','6','footer'];
+  const vOpts=[['header','Header'],['1','Zeile 1'],['2','Zeile 2'],['3','Zeile 3'],['4','Zeile 4'],['5','Zeile 5'],['6','Zeile 6'],['footer','Footer']];
+  const vFix=v=>({top:'header',middle:'4',bottom:'footer'}[v]||v); // migrate legacy values
   const sel=(val,opts)=>opts.map(o=>`<option value="${o[0]}" ${o[0]===val?'selected':''}>${o[1]}</option>`).join('');
   const mediaOpts=`<option value="">(kein Hintergrund)</option>`
     +media.map(m=>`<option value="${esc(m)}" ${m===L.background?'selected':''}>${esc(m)}</option>`).join('');
@@ -476,7 +478,7 @@ async function openWeatherLayout(){
         <div class="hd"><input type="checkbox" data-x="show" ${L.city.show?'checked':''}> Ort-Name</div>
         <div class="ctl">
           <label>Horizontal<select data-x="h">${sel(L.city.h,hOpts)}</select></label>
-          <label>Vertikal<select data-x="v">${sel(L.city.v,vOpts)}</select></label>
+          <label>Zeile<select data-x="v">${sel(vFix(L.city.v),vOpts)}</select></label>
           <label>Größe (sp)<input type="number" data-x="size" value="${L.city.size}" min="8" max="200"></label>
           <label>Farbe<input type="color" data-x="color" value="${L.city.color||'#FFFFFF'}"></label>
         </div>
@@ -485,7 +487,7 @@ async function openWeatherLayout(){
         <div class="hd"><input type="checkbox" data-x="show" ${L.forecast.show?'checked':''}> 3-Tage-Vorhersage</div>
         <div class="ctl">
           <label>Horizontal<select data-x="h">${sel(L.forecast.h,hOpts)}</select></label>
-          <label>Vertikal<select data-x="v">${sel(L.forecast.v,vOpts)}</select></label>
+          <label>Zeile<select data-x="v">${sel(vFix(L.forecast.v),vOpts)}</select></label>
           <label>Größe (%)<input type="number" data-x="size" value="${L.forecast.size}" min="20" max="300" step="10"></label>
         </div>
       </div>
@@ -493,7 +495,7 @@ async function openWeatherLayout(){
         <div class="hd"><input type="checkbox" data-x="show" ${L.clock.show?'checked':''}> Analoge Uhr</div>
         <div class="ctl">
           <label>Horizontal<select data-x="h">${sel(L.clock.h,hOpts)}</select></label>
-          <label>Vertikal<select data-x="v">${sel(L.clock.v,vOpts)}</select></label>
+          <label>Zeile<select data-x="v">${sel(vFix(L.clock.v),vOpts)}</select></label>
           <label>Größe (dp)<input type="number" data-x="size" value="${L.clock.size}" min="40" max="600" step="10"></label>
         </div>
       </div>
@@ -531,7 +533,7 @@ async function openWeatherLayout(){
       const row=document.createElement('div'); row.className='wx-txtrow';
       row.innerHTML=`<input type="text" placeholder="Text…" value="${esc(t.text||'')}" data-x="text" style="flex:1;min-width:130px">
         <select data-x="h">${sel(t.h||'center',hOpts)}</select>
-        <select data-x="v">${sel(t.v||'bottom',vOpts)}</select>
+        <select data-x="v">${sel(vFix(t.v)||'footer',vOpts)}</select>
         <input type="number" data-x="size" value="${t.size||20}" min="8" max="200" style="width:66px" title="Größe (sp)">
         <input type="color" data-x="color" value="${t.color||'#FFFFFF'}">
         <button class="ghost sm" data-rm title="Entfernen">✕</button>`;
@@ -542,7 +544,7 @@ async function openWeatherLayout(){
     });
   }
   bg.querySelector('#wxAddText').onclick=()=>{ if(L.texts.length>=5){ toast('Max. 5 Texte'); return; }
-    L.texts.push({text:'',h:'center',v:'bottom',size:20,color:'#FFFFFF'}); renderTexts(); preview(); };
+    L.texts.push({text:'',h:'center',v:'footer',size:20,color:'#FFFFFF'}); renderTexts(); preview(); };
 
   bg.querySelector('#wxBgSel').onchange=e=>{ L.background=e.target.value; preview(); };
   const scr=bg.querySelector('#wxScrim'); scr.oninput=()=>{ L.scrim=parseInt(scr.value)||0;
@@ -551,15 +553,20 @@ async function openWeatherLayout(){
     bg.querySelector('#wxOrient').textContent=orient==='port'?'Querformat':'Hochformat';
     bg.querySelector('#wxPrev').classList.toggle('land',orient==='land'); preview(); };
 
-  function posStyle(h,v){ let s='position:absolute;',tx='0',ty='0';
+  function rowMidPct(v){ let i=WXROWS.indexOf(vFix(v)); if(i<0)i=0; return ((i+0.5)/WXROWS.length)*100; }
+  function posStyle(h,v){ let s='position:absolute;',tx='0';
     if(h==='left')s+='left:6%;'; else if(h==='right')s+='right:6%;'; else { s+='left:50%;'; tx='-50%'; }
-    if(v==='top')s+='top:6%;'; else if(v==='bottom')s+='bottom:6%;'; else { s+='top:50%;'; ty='-50%'; }
-    return s+`transform:translate(${tx},${ty});`; }
+    s+=`top:${rowMidPct(v)}%;`;
+    return s+`transform:translate(${tx},-50%);`; }
   function preview(){
     const prev=bg.querySelector('#wxPrev'); const W=prev.clientWidth||260; const f=W/411; // ~dp width of a phone
     let html='';
     if(L.background) html+=`<img class="bg" src="${mediaUrl(L.background)}" alt="">`;
     html+=`<div class="scrim" style="opacity:${(L.scrim||0)/100}"></div>`;
+    // Row guides (Header, 1-6, Footer) so placement is obvious.
+    for(let i=0;i<WXROWS.length;i++){ const top=(i/WXROWS.length)*100;
+      html+=`<div style="position:absolute;left:0;right:0;top:${top}%;height:${100/WXROWS.length}%;border-top:1px solid rgba(255,255,255,.14);box-sizing:border-box"></div>`;
+      html+=`<div style="position:absolute;left:3px;top:${top}%;transform:translateY(2px);font-size:8px;color:rgba(255,255,255,.35)">${WXROWS[i]==='header'?'H':WXROWS[i]==='footer'?'F':WXROWS[i]}</div>`; }
     if(L.city.show){ const fs=Math.max(8,(L.city.size||34)*f);
       html+=`<div class="el" style="${posStyle(L.city.h,L.city.v)}font-size:${fs}px;color:${L.city.color||'#fff'};font-weight:700">Ort</div>`; }
     if(L.forecast.show){ const sc=(L.forecast.size||100)/100; const base=Math.max(7,30*f*sc);

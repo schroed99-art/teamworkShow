@@ -38,9 +38,9 @@ if ($hasRow === 0) {
     $default = [
         'background' => '',
         'scrim'      => 20,
-        'city'       => ['show' => true, 'h' => 'center', 'v' => 'top',    'size' => 34, 'color' => '#FFFFFF'],
-        'forecast'   => ['show' => true, 'h' => 'center', 'v' => 'middle', 'size' => 100],
-        'clock'      => ['show' => true, 'h' => 'right',  'v' => 'middle', 'size' => 150],
+        'city'       => ['show' => true, 'h' => 'center', 'v' => 'header', 'size' => 34, 'color' => '#FFFFFF'],
+        'forecast'   => ['show' => true, 'h' => 'center', 'v' => '4',      'size' => 100],
+        'clock'      => ['show' => true, 'h' => 'right',  'v' => '5',      'size' => 150],
         'texts'      => [],
     ];
     $pdo->prepare('INSERT INTO weather_layout (id, config) VALUES (1, ?)')

@@ -14,16 +14,17 @@ $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
 const TW_WX_H = ['left', 'center', 'right'];
-const TW_WX_V = ['top', 'middle', 'bottom'];
+// Vertical placement is a fixed row: Header, rows 1-6, Footer (equal bands, top -> bottom).
+const TW_WX_V = ['header', '1', '2', '3', '4', '5', '6', 'footer'];
 
 function tw_wx_defaults(): array
 {
     return [
         'background' => '',
         'scrim'      => 20,
-        'city'       => ['show' => true, 'h' => 'center', 'v' => 'top',    'size' => 34, 'color' => '#FFFFFF'],
-        'forecast'   => ['show' => true, 'h' => 'center', 'v' => 'middle', 'size' => 100],
-        'clock'      => ['show' => true, 'h' => 'right',  'v' => 'middle', 'size' => 150],
+        'city'       => ['show' => true, 'h' => 'center', 'v' => 'header', 'size' => 34, 'color' => '#FFFFFF'],
+        'forecast'   => ['show' => true, 'h' => 'center', 'v' => '4',      'size' => 100],
+        'clock'      => ['show' => true, 'h' => 'right',  'v' => '5',      'size' => 150],
         'texts'      => [],
     ];
 }
@@ -41,7 +42,11 @@ function tw_wx_h($v): string
 
 function tw_wx_v($v): string
 {
-    return in_array($v, TW_WX_V, true) ? $v : 'middle';
+    // Accept the row set, and map the legacy top/middle/bottom bands onto rows.
+    $s = is_scalar($v) ? (string) $v : '';
+    $legacy = ['top' => 'header', 'middle' => '4', 'bottom' => 'footer'];
+    $s = $legacy[$s] ?? $s;
+    return in_array($s, TW_WX_V, true) ? $s : 'header';
 }
 
 /** Accept #rgb / #rrggbb, else white. */

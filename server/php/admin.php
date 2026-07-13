@@ -570,7 +570,11 @@ async function editPresentation(p){
     </div>
     <div class="row" style="margin-top:12px"><button id="saveSlides">Reihenfolge speichern</button>
       <button class="ghost" id="closeSlides">Schließen</button></div>`;
-  body.prepend(card);
+  // Keep the tab bar (Präsentationen/Geräte/Einstellungen) pinned at the top;
+  // open the slides editor directly below it instead of above.
+  if (body.firstElementChild) body.insertBefore(card, body.firstElementChild.nextSibling);
+  else body.appendChild(card);
+  card.scrollIntoView({ behavior:'smooth', block:'nearest' });
   const mp=card.querySelector('#mediaPick'); mp.innerHTML=media.map(m=>`<option>${esc(m)}</option>`).join('');
 
   function render(){

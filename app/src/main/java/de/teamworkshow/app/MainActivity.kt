@@ -318,6 +318,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         if (widgets.noticesEnabled && widgets.noticesText.isNotBlank()) {
             val density = resources.displayMetrics.density
             noticesText.text = widgets.noticesText
+            noticesText.ellipsize = null // scroll the full text; never truncate with "…"
             noticesText.setTextSize(TypedValue.COMPLEX_UNIT_SP, widgets.noticesSize.toFloat())
             noticesText.setTextColor(parseColor(widgets.noticesColor, 0xFFFFFFFF.toInt()))
             noticesText.typeface = android.graphics.Typeface.create(
@@ -359,8 +360,16 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         noticesText.translationX = 0f
         noticesText.post {
             val barWidth = noticesBar.width
-            val textWidth = noticesText.width
+            // Measure the FULL intrinsic text width so the whole string scrolls; the
+            // view is wrap_content inside a match_parent bar, so its laid-out width
+            // would otherwise be capped at the bar width (and ellipsized to "…").
+            val textWidth = kotlin.math.ceil(
+                noticesText.paint.measureText(noticesText.text?.toString() ?: "")
+            ).toInt()
             if (barWidth <= 0 || textWidth <= 0) return@post
+            // Grow the view to the full text width so it renders every character.
+            val lp = noticesText.layoutParams
+            if (lp.width != textWidth) { lp.width = textWidth; noticesText.layoutParams = lp }
             val start = barWidth.toFloat()      // enter from off-screen right
             val end = -textWidth.toFloat()      // exit fully off-screen left
             val speedPx = tickerSpeedDp * resources.displayMetrics.density // dp/s from device config

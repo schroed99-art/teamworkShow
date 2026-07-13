@@ -171,8 +171,7 @@ function tw_weather_pictogram(): string
     <a class="pool" href="benutzer.php" title="Benutzerverwaltung">Benutzer</a>
     <a class="pool" href="admin.php#media" title="Medienpool im Admin">Medienpool</a>
   <?php endif; ?>
-  <a class="logout" href="change_password.php" title="Eigenes Passwort ändern">Passwort</a>
-  <a class="logout" href="login.php?logout=1">Abmelden</a>
+  <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
 
 <div class="h2">Mandanten</div>

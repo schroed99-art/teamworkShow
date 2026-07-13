@@ -67,7 +67,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <a class="nav" href="overview.php">← Übersicht</a>
   <a class="nav" href="admin.php">Admin</a>
   <a class="nav" href="benutzer.php">Benutzer</a>
-  <a class="nav" href="login.php?logout=1">Abmelden</a>
+  <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
 
 <div class="wrap">

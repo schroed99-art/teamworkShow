@@ -10,7 +10,16 @@
 require __DIR__ . '/auth.php';
 require __DIR__ . '/db.php';
 
-$keys = ['help_company', 'help_phone', 'help_email', 'help_hours', 'help_text'];
+$keys = [
+    'help_company',       // Firmenname
+    'help_app',           // Application (Produktname)
+    'help_version',       // Version (Info-Text; App zeigt sonst ihre echte Version)
+    'help_phone',         // Telefon
+    'help_contact',       // Ansprechpartner
+    'help_support_mail',  // Support: Mail
+    'help_support_phone', // Support: Telefon
+    'help_website',       // Internetseite
+];
 $pdo = tw_db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

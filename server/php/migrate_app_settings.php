@@ -24,11 +24,14 @@ $pdo->exec(
 echo "app_settings table ready\n";
 
 $defaults = [
-    'help_company' => 'Teamwork',
-    'help_phone'   => '',
-    'help_email'   => '',
-    'help_hours'   => '',
-    'help_text'    => '',
+    'help_company'       => 'Teamwork',
+    'help_app'           => 'Teamwork Show',
+    'help_version'       => '',
+    'help_phone'         => '',
+    'help_contact'       => '',
+    'help_support_mail'  => '',
+    'help_support_phone' => '',
+    'help_website'       => '',
 ];
 $ins = $pdo->prepare('INSERT IGNORE INTO app_settings (k, v) VALUES (?, ?)');
 foreach ($defaults as $k => $v) {

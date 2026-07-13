@@ -356,15 +356,19 @@ class SyncManager(context: Context, private val mediaDir: File) {
     /** Central help/contact info, edited in the dashboard and delivered with the playlist. */
     data class HelpInfo(
         val company: String,
+        val app: String,
+        val version: String,
         val phone: String,
-        val email: String,
-        val hours: String,
-        val text: String,
+        val contact: String,
+        val supportMail: String,
+        val supportPhone: String,
+        val website: String,
     ) {
-        fun isEmpty(): Boolean =
-            company.isBlank() && phone.isBlank() && email.isBlank() && hours.isBlank() && text.isBlank()
+        fun isEmpty(): Boolean = listOf(
+            company, app, version, phone, contact, supportMail, supportPhone, website
+        ).all { it.isBlank() }
 
-        companion object { val EMPTY = HelpInfo("", "", "", "", "") }
+        companion object { val EMPTY = HelpInfo("", "", "", "", "", "", "", "") }
     }
 
     fun getHelpInfo(): HelpInfo {
@@ -373,10 +377,13 @@ class SyncManager(context: Context, private val mediaDir: File) {
             val o = JSONObject(raw)
             HelpInfo(
                 company = o.optString("company"),
+                app = o.optString("app"),
+                version = o.optString("version"),
                 phone = o.optString("phone"),
-                email = o.optString("email"),
-                hours = o.optString("hours"),
-                text = o.optString("text"),
+                contact = o.optString("contact"),
+                supportMail = o.optString("support_mail"),
+                supportPhone = o.optString("support_phone"),
+                website = o.optString("website"),
             )
         } catch (e: Exception) {
             HelpInfo.EMPTY

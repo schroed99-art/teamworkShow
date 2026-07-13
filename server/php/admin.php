@@ -549,14 +549,16 @@ function renderDetail(t, devices, presentations){
     <h4 style="margin:2px 0 4px">Hilfe &amp; Kontakt</h4>
     <p class="muted" style="margin:0 0 10px">Wird im Wartungsmenü der App angezeigt (gilt global für alle Geräte).</p>
     <div class="grid2">
-      <div><label class="f">Firma</label><input data-h="help_company" class="grow" style="width:100%"></div>
-      <div><label class="f">Telefon</label><input data-h="help_phone" class="grow" style="width:100%"></div>
-      <div><label class="f">E-Mail</label><input data-h="help_email" class="grow" style="width:100%"></div>
-      <div><label class="f">Erreichbarkeit</label><input data-h="help_hours" class="grow" style="width:100%"></div>
+      <div><label class="f">Firmenname</label><input data-h="help_company" style="width:100%"></div>
+      <div><label class="f">Application</label><input data-h="help_app" style="width:100%" placeholder="z.B. Teamwork Show"></div>
+      <div><label class="f">Version</label><input data-h="help_version" style="width:100%" placeholder="leer = App zeigt eigene Version"></div>
+      <div><label class="f">Telefon</label><input data-h="help_phone" style="width:100%"></div>
+      <div><label class="f">Ansprechpartner</label><input data-h="help_contact" style="width:100%"></div>
+      <div><label class="f">Internetseite</label><input data-h="help_website" style="width:100%" placeholder="https://…"></div>
+      <div><label class="f">Support · E-Mail</label><input data-h="help_support_mail" type="email" style="width:100%"></div>
+      <div><label class="f">Support · Telefon</label><input data-h="help_support_phone" style="width:100%"></div>
     </div>
-    <label class="f">Hinweistext</label>
-    <textarea data-h="help_text" rows="3" style="width:100%;resize:vertical"></textarea>
-    <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savehelp>Hilfe speichern</button></div>`;
+    <div class="row" style="margin-top:10px"><span class="spacer" style="flex:1"></span><button class="sm" data-savehelp>Hilfe speichern</button></div>`;
   sWrap.appendChild(help);
   fetch('settings.php').then(r=>r.ok?r.json():null).then(d=>{ if(d) help.querySelectorAll('[data-h]').forEach(el=>{ el.value=d[el.dataset.h]||''; }); }).catch(()=>{});
   help.querySelector('[data-savehelp]').onclick=async()=>{

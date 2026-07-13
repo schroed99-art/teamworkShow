@@ -37,14 +37,21 @@
     <string name="maintenance_pin_prompt">Bitte PIN eingeben, um ins Wartungsmenü zu gelangen.</string>
 
     <!-- Settings / maintenance menu additions -->
+    <string name="settings_update">App aktualisieren</string>
     <string name="settings_help">Hilfe &amp; Kontakt</string>
     <string name="settings_storage">Speicherort</string>
     <string name="settings_export_logs">Logs exportieren</string>
+    <!-- App update via menu -->
+    <string name="update_checking">Suche nach Update…</string>
+    <string name="update_none">Keine neue Version – installiert: %1$s</string>
     <!-- Help &amp; contact dialog -->
+    <string name="help_app">Anwendung: %1$s</string>
+    <string name="help_version">Version: %1$s</string>
+    <string name="help_contact">Ansprechpartner: %1$s</string>
     <string name="help_phone">Telefon: %1$s</string>
-    <string name="help_email">E-Mail: %1$s</string>
-    <string name="help_hours">Erreichbarkeit: %1$s</string>
-    <string name="help_empty">Es sind noch keine Hilfe- und Kontaktdaten hinterlegt. Diese werden zentral im Dashboard gepflegt und beim nächsten Sync übernommen.</string>
+    <string name="help_support_mail">Support (E-Mail): %1$s</string>
+    <string name="help_support_phone">Support (Telefon): %1$s</string>
+    <string name="help_website">Internet: %1$s</string>
     <string name="help_close">Schließen</string>
     <!-- Storage path dialog -->
     <string name="storage_hint">z. B. /storage/emulated/0/TeamworkShow</string>

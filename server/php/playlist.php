@@ -140,7 +140,10 @@ try {
     }
 
     // Central help/contact card (global settings); degrade silently pre-migration.
-    $help = ['company' => '', 'phone' => '', 'email' => '', 'hours' => '', 'text' => ''];
+    $help = [
+        'company' => '', 'app' => '', 'version' => '', 'phone' => '',
+        'contact' => '', 'support_mail' => '', 'support_phone' => '', 'website' => '',
+    ];
     try {
         $rows = tw_db()->query("SELECT k, v FROM app_settings WHERE k LIKE 'help\\_%'")->fetchAll();
         foreach ($rows as $r) {

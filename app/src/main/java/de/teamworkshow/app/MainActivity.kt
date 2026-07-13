@@ -276,6 +276,35 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         updateManager.startInstall(this, base, info)
     }
 
+    /**
+     * Explicit "App aktualisieren" menu action: checks the backend for a newer
+     * signed APK and, if there is one, starts the install immediately; otherwise
+     * reports that the app is already up to date.
+     */
+    private fun checkForUpdateFromMenu() {
+        val base = syncManager.getServerUrl()
+        if (base == null) {
+            Toast.makeText(this, R.string.sync_no_server, Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, R.string.update_checking, Toast.LENGTH_SHORT).show()
+        syncExecutor.execute {
+            val info = updateManager.check(base)
+            runOnUiThread {
+                if (info != null) {
+                    showUpdateBadge(info)
+                    onUpdateBadgeClicked()
+                } else {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.update_none, appVersionText()),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+
     /** Full-screen pairing code prompt, shown until the backend claims this device. */
     private fun updatePairingOverlay() {
         val show = syncManager.pairingStatus == SyncManager.Pairing.UNPAIRED
@@ -710,6 +739,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             getString(R.string.maintenance_pairing),
             getString(R.string.maintenance_sync_now),
             getString(R.string.maintenance_reload),
+            getString(R.string.settings_update),
             getString(R.string.settings_help),
             getString(R.string.settings_storage),
             getString(R.string.settings_export_logs),
@@ -723,10 +753,11 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                     1 -> showPairingDialog()
                     2 -> syncNow(userTriggered = true)
                     3 -> slideShowController.reload()
-                    4 -> showHelpDialog()
-                    5 -> showStorageDialog()
-                    6 -> exportLogs()
-                    7 -> confirmExit()
+                    4 -> checkForUpdateFromMenu()
+                    5 -> showHelpDialog()
+                    6 -> showStorageDialog()
+                    7 -> exportLogs()
+                    8 -> confirmExit()
                 }
             }
             .setOnDismissListener { hideSystemBars() }
@@ -749,17 +780,22 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     /** Read-only help &amp; contact card fed centrally from the dashboard via the playlist sync. */
     private fun showHelpDialog() {
         val h = syncManager.getHelpInfo()
-        val body = if (h.isEmpty()) {
-            getString(R.string.help_empty)
-        } else {
-            buildString {
-                if (h.company.isNotBlank()) append(h.company).append("\n\n")
-                if (h.text.isNotBlank()) append(h.text).append("\n\n")
-                if (h.phone.isNotBlank()) append(getString(R.string.help_phone, h.phone)).append("\n")
-                if (h.email.isNotBlank()) append(getString(R.string.help_email, h.email)).append("\n")
-                if (h.hours.isNotBlank()) append(getString(R.string.help_hours, h.hours)).append("\n")
-            }.trim()
-        }
+        // Version + app name fall back to what's actually installed when unset on the server.
+        val appName = h.app.ifBlank { getString(R.string.app_name) }
+        val version = h.version.ifBlank { appVersionText() }
+        val body = buildString {
+            if (h.company.isNotBlank()) append(h.company).append("\n")
+            append(getString(R.string.help_app, appName)).append("\n")
+            append(getString(R.string.help_version, version)).append("\n")
+            val hasContact = h.phone.isNotBlank() || h.contact.isNotBlank() ||
+                h.supportMail.isNotBlank() || h.supportPhone.isNotBlank() || h.website.isNotBlank()
+            if (hasContact) append("\n")
+            if (h.contact.isNotBlank()) append(getString(R.string.help_contact, h.contact)).append("\n")
+            if (h.phone.isNotBlank()) append(getString(R.string.help_phone, h.phone)).append("\n")
+            if (h.supportMail.isNotBlank()) append(getString(R.string.help_support_mail, h.supportMail)).append("\n")
+            if (h.supportPhone.isNotBlank()) append(getString(R.string.help_support_phone, h.supportPhone)).append("\n")
+            if (h.website.isNotBlank()) append(getString(R.string.help_website, h.website)).append("\n")
+        }.trim()
         MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.settings_help)
             .setMessage(body)

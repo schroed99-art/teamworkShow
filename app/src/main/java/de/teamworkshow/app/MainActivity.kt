@@ -1,7 +1,7 @@
 package de.teamworkshow.app
 
 import android.animation.ObjectAnimator
-import android.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -653,10 +653,12 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     private fun showPinDialog() {
         val pinInput = EditText(this).apply {
+            setTextColor(0xFFF1F5F9.toInt())
+            setHintTextColor(0xFF8A93A3.toInt())
             hint = getString(R.string.maintenance_pin_hint)
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
         }
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.maintenance_title)
             .setView(pinInput)
             .setPositiveButton(R.string.maintenance_ok) { _, _ ->
@@ -682,7 +684,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             getString(R.string.settings_export_logs),
             getString(R.string.maintenance_exit)
         )
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.maintenance_title)
             .setItems(options) { _, which ->
                 when (which) {
@@ -701,7 +703,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     }
 
     private fun confirmExit() {
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.exit_confirm_title)
             .setMessage(R.string.exit_confirm_msg)
             .setPositiveButton(R.string.exit_confirm_ok) { _, _ ->
@@ -727,7 +729,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                 if (h.hours.isNotBlank()) append(getString(R.string.help_hours, h.hours)).append("\n")
             }.trim()
         }
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.settings_help)
             .setMessage(body)
             .setPositiveButton(R.string.help_close, null)
@@ -740,11 +742,13 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         val current = settingsPrefs.getString(KEY_STORAGE_BASE, "").orEmpty()
         val effective = resolveMediaDir().parentFile?.absolutePath ?: ""
         val input = EditText(this).apply {
+            setTextColor(0xFFF1F5F9.toInt())
+            setHintTextColor(0xFF8A93A3.toInt())
             hint = getString(R.string.storage_hint)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setText(current)
         }
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.settings_storage)
             .setMessage(getString(R.string.storage_current, effective))
             .setView(input)
@@ -807,11 +811,13 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     private fun showServerUrlDialog() {
         val urlInput = EditText(this).apply {
+            setTextColor(0xFFF1F5F9.toInt())
+            setHintTextColor(0xFF8A93A3.toInt())
             hint = getString(R.string.server_url_hint)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setText(syncManager.getServerUrl() ?: "")
         }
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.maintenance_server)
             .setView(urlInput)
             .setPositiveButton(R.string.maintenance_ok) { _, _ ->
@@ -825,11 +831,13 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     private fun showPairingDialog() {
         val codeInput = EditText(this).apply {
+            setTextColor(0xFFF1F5F9.toInt())
+            setHintTextColor(0xFF8A93A3.toInt())
             hint = getString(R.string.pairing_hint)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
             setText(syncManager.getPairingCode() ?: "")
         }
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.maintenance_pairing)
             .setView(codeInput)
             .setPositiveButton(R.string.maintenance_ok) { _, _ ->

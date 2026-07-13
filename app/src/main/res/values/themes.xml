@@ -20,4 +20,30 @@
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
         <item name="postSplashScreenTheme">@style/Theme.TeamworkShow.Splash</item>
     </style>
+
+    <!-- Branded maintenance/settings dialogs: dark slate surface, rounded corners,
+         magenta buttons — matches the app instead of the white system default. -->
+    <style name="ThemeOverlay.TeamworkShow.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorSurface">#FF161B24</item>
+        <item name="colorSurfaceContainerHigh">#FF161B24</item>
+        <item name="colorOnSurface">#FFF1F5F9</item>
+        <item name="colorOnSurfaceVariant">#FFC0C6D0</item>
+        <item name="colorPrimary">@color/brand_magenta</item>
+        <item name="android:textColorPrimary">#FFF1F5F9</item>
+        <item name="android:textColorSecondary">#FFC0C6D0</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.TeamworkShow.Dialog</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.TeamworkShow.DialogButton</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.TeamworkShow.DialogButton</item>
+        <item name="buttonBarNeutralButtonStyle">@style/Widget.TeamworkShow.DialogButton</item>
+    </style>
+
+    <style name="ShapeAppearance.TeamworkShow.Dialog" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+
+    <style name="Widget.TeamworkShow.DialogButton" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/brand_magenta</item>
+        <item name="android:textStyle">bold</item>
+    </style>
 </resources>

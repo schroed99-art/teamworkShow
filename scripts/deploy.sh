@@ -50,6 +50,11 @@ echo ">> Deploying server to $VM_USER@$VM_IP…"
 scp -i "$KEY" -o BatchMode=yes \
   server/php/*.php \
   "$VM_USER@$VM_IP:$VM_PATH/"
+# Static assets (dashboard logo watermark, etc.)
+ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" "mkdir -p $VM_PATH/assets"
+scp -i "$KEY" -o BatchMode=yes \
+  server/php/assets/* \
+  "$VM_USER@$VM_IP:$VM_PATH/assets/"
 # Retire the old public folder-scan page so index.php becomes the directory index.
 ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" \
   "rm -f $VM_PATH/index.html; chown -R www-data:www-data $VM_PATH"

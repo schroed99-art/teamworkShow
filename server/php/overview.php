@@ -102,10 +102,14 @@ function tw_weather_pictogram(): string
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Teamwork Show — Übersicht</title>
 <style>
-  :root { --magenta:#d81b60; --bg:#0a0a0a; --panel:#151515; --panel2:#1d1d1d; --line:#2a2a2a;
-          --text:#f2f2f2; --dim:#9a9a9a; }
+  :root { --magenta:#e11d48; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155;
+          --text:#f1f5f9; --dim:#94a3b8; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  body::after { content:""; position:fixed; right:28px; bottom:22px; width:min(360px,32vw); height:min(360px,32vw);
+    background:url('assets/logo_mark.png') no-repeat right bottom; background-size:contain;
+    opacity:.05; pointer-events:none; z-index:0; }
+  .grid, header, .h2 { position:relative; z-index:1; }
   header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; }
   header h1 { margin:0; font-size:20px; font-weight:600; }
   header h1 span { color:var(--magenta); }
@@ -149,7 +153,7 @@ function tw_weather_pictogram(): string
   .modal-bg.show { display:flex; }
   .modal { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; width:min(400px,92vw); }
   .modal h3 { margin:0 0 12px; }
-  .modal input { width:100%; background:#0d0d0d; border:1px solid #333; color:var(--text); border-radius:9px; padding:10px 12px; font-size:14px; }
+  .modal input { width:100%; background:#0f172a; border:1px solid var(--line); color:var(--text); border-radius:9px; padding:10px 12px; font-size:14px; }
   .modal .row { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
   .modal button { border:0; border-radius:9px; padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer; background:var(--magenta); color:#fff; }
   .modal button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }

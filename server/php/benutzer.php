@@ -26,17 +26,20 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Teamwork Show — Benutzer</title>
 <style>
-  :root { --magenta:#d81b60; --bg:#0a0a0a; --panel:#151515; --panel2:#1d1d1d; --line:#2a2a2a; --text:#f2f2f2; --dim:#9a9a9a; }
+  :root { --magenta:#e11d48; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155; --text:#f1f5f9; --dim:#94a3b8; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line); }
+  body::after { content:""; position:fixed; right:28px; bottom:22px; width:min(360px,32vw); height:min(360px,32vw);
+    background:url('assets/logo_mark.png') no-repeat right bottom; background-size:contain;
+    opacity:.05; pointer-events:none; z-index:0; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line); position:relative; z-index:1; }
   header h1 { font-size:18px; margin:0; }
   header h1 span { color:var(--magenta); }
   header .ver { color:var(--dim); font-size:12px; }
   header .spacer { flex:1; }
   a.nav { color:var(--dim); text-decoration:none; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:6px 12px; }
   a.nav:hover { color:var(--text); border-color:var(--magenta); }
-  .wrap { padding:20px; }
+  .wrap { padding:20px; position:relative; z-index:1; }
   .head { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
   .head .title h2 { margin:0; font-size:20px; }
   .head .title p { margin:2px 0 0; color:var(--dim); font-size:13px; }
@@ -61,7 +64,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .b-koordinator { background:#10263a; color:#6db3f2; border:1px solid #1c496e; }
   .b-betrachter { background:#20241d; color:#9fd07a; border:1px solid #34502a; }
   .b-aktiv { background:#12331c; color:#5bd07a; border:1px solid #22502f; }
-  .b-inaktiv { background:#2a2a2a; color:#9a9a9a; border:1px solid #3a3a3a; }
+  .b-inaktiv { background:#26344a; color:#94a3b8; border:1px solid #334155; }
   .kuerzel { font-size:12px; color:var(--dim); }
   .acts { display:flex; gap:6px; }
   .icon { width:34px; height:34px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--dim);
@@ -76,7 +79,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .modal h3 { margin:0 0 14px; font-size:16px; display:flex; align-items:center; }
   .modal h3 .x { margin-left:auto; cursor:pointer; color:var(--dim); font-size:18px; }
   label.f { display:block; font-size:11px; color:var(--dim); margin:12px 0 5px; }
-  input, select, textarea { width:100%; background:#0d0d0d; border:1px solid #333; color:var(--text); border-radius:9px; padding:10px 12px; font-size:13px; }
+  input, select, textarea { width:100%; background:#0f172a; border:1px solid var(--line); color:var(--text); border-radius:9px; padding:10px 12px; font-size:13px; }
   input:focus, select:focus, textarea:focus { outline:none; border-color:var(--magenta); }
   input[readonly] { color:var(--dim); }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }

@@ -55,17 +55,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Teamwork Show — Login</title>
 <style>
-  :root { --magenta:#d81b60; --bg:#000; --panel:#141414; --text:#f4f4f4; --dim:#9a9a9a; }
+  :root { --magenta:#e11d48; --bg:#0f172a; --panel:#1e293b; --line:#334155; --text:#f1f5f9; --dim:#94a3b8; }
   * { box-sizing:border-box; }
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
          background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .card { background:var(--panel); border:1px solid #242424; border-radius:16px; padding:32px; width:min(360px,92vw);
-          box-shadow:0 12px 40px rgba(0,0,0,.5); }
+  body::after { content:""; position:fixed; right:32px; bottom:26px; width:min(320px,40vw); height:min(320px,40vw);
+    background:url('assets/logo_mark.png') no-repeat right bottom; background-size:contain;
+    opacity:.05; pointer-events:none; z-index:0; }
+  .card { position:relative; z-index:1; background:var(--panel); border:1px solid var(--line); border-radius:16px;
+          padding:32px; width:min(360px,92vw); box-shadow:0 12px 40px rgba(0,0,0,.45); }
   h1 { margin:0 0 4px; font-size:22px; }
   h1 span { color:var(--magenta); }
   p.sub { margin:0 0 24px; color:var(--dim); font-size:13px; }
   label { display:block; font-size:12px; color:var(--dim); margin:14px 0 6px; }
-  input { width:100%; padding:12px 14px; border-radius:10px; border:1px solid #333; background:#0d0d0d; color:var(--text);
+  input { width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--line); background:#0f172a; color:var(--text);
           font-size:15px; }
   input:focus { outline:none; border-color:var(--magenta); }
   button { margin-top:20px; width:100%; padding:12px; border:0; border-radius:10px; background:var(--magenta);

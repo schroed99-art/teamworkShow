@@ -27,11 +27,14 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Teamwork Show — Admin</title>
 <style>
-  :root { --magenta:#d81b60; --bg:#0a0a0a; --panel:#151515; --panel2:#1d1d1d; --line:#2a2a2a;
-          --text:#f2f2f2; --dim:#9a9a9a; }
+  :root { --magenta:#e11d48; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155;
+          --text:#f1f5f9; --dim:#94a3b8; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:14px; }
+  body::after { content:""; position:fixed; right:28px; bottom:22px; width:min(360px,32vw); height:min(360px,32vw);
+    background:url('assets/logo_mark.png') no-repeat right bottom; background-size:contain;
+    opacity:.05; pointer-events:none; z-index:0; }
   header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line);
            position:sticky; top:0; background:var(--bg); z-index:5; }
   header h1 { font-size:18px; margin:0; }
@@ -41,7 +44,8 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   a.logout { color:var(--dim); text-decoration:none; font-size:13px; border:1px solid var(--line);
              padding:6px 12px; border-radius:8px; }
   a.logout:hover { color:var(--text); border-color:var(--magenta); }
-  .wrap { display:grid; grid-template-columns:260px 1fr; gap:18px; padding:18px; align-items:start; }
+  .wrap { display:grid; grid-template-columns:260px 1fr; gap:18px; padding:18px; align-items:start;
+          position:relative; z-index:1; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
   .panel h2 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
   ul.list { list-style:none; margin:0; padding:0; }
@@ -51,7 +55,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   ul.list li .name { flex:1; }
   .row { display:flex; gap:8px; align-items:center; }
   .row.wrap2 { flex-wrap:wrap; }
-  input, select, textarea { background:#0d0d0d; border:1px solid #333; color:var(--text); border-radius:9px;
+  input, select, textarea { background:#0f172a; border:1px solid var(--line); color:var(--text); border-radius:9px;
                             padding:9px 11px; font-size:13px; }
   input:focus, select:focus, textarea:focus { outline:none; border-color:var(--magenta); }
   input.grow { flex:1; }
@@ -119,7 +123,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   /* media pool */
   .drop { margin-top:6px; padding:16px; border:2px dashed var(--line); border-radius:10px;
           display:flex; align-items:center; gap:14px; flex-wrap:wrap; transition:border-color .15s, background .15s; }
-  .drop.over { border-color:var(--magenta); background:rgba(216,27,96,.08); }
+  .drop.over { border-color:var(--magenta); background:rgba(225,29,72,.10); }
   #upStatus { margin-left:auto; color:var(--magenta); font-size:13px; }
   .poolGrid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); margin-top:14px; }
   .pcard { position:relative; background:#0e0e0e; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
@@ -556,7 +560,7 @@ async function editPresentation(p){
     slides.forEach((s,i)=>{
       const li=document.createElement('li'); li.draggable=true;
       const label = s.kind==='weather'
-        ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#2a1420;border:1px solid #d81b60;color:#ffb3c9">🌤 Wetter-Zwischenbild</span>`
+        ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #e11d48;color:#fda4b8">🌤 Wetter-Zwischenbild</span>`
         : `${thumbHtml(s.media_name)}<span class="mname">${esc(s.media_name)}</span>`;
       li.innerHTML=`<span class="handle">⠿</span>${label}
         <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>

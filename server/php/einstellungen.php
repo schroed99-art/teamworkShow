@@ -42,7 +42,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .spacer { flex:1; }
   a.nav { color:var(--dim); text-decoration:none; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:6px 12px; }
   a.nav:hover { color:var(--text); border-color:var(--magenta); }
-  .wrap { padding:20px; position:relative; z-index:1; max-width:1000px; }
+  .wrap { padding:20px; position:relative; z-index:1; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:16px; }
   .card h3 { margin:0 0 4px; font-size:15px; }
   .muted { color:var(--dim); font-size:12px; }

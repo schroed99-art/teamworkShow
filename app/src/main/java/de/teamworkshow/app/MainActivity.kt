@@ -46,7 +46,10 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var playerView: PlayerView
     private lateinit var emptyView: View
     private lateinit var slideProgress: ProgressBar
-    private lateinit var noticesBar: TextView
+    private lateinit var noticesBar: android.widget.FrameLayout
+    private lateinit var noticesText: TextView
+    private var tickerAnimator: android.animation.ValueAnimator? = null
+    private var tickerText: String? = null
 
     // Weather forecast interstitial (a file-less slide); its contents are built at
     // runtime from the global layout config (background + grid-positioned elements).
@@ -130,6 +133,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         emptyView = findViewById(R.id.emptyView)
         slideProgress = findViewById(R.id.slideProgress)
         noticesBar = findViewById(R.id.noticesBar)
+        noticesText = findViewById(R.id.noticesText)
         weatherView = findViewById(R.id.weatherView)
         wxBg = findViewById(R.id.wxBg)
         wxScrim = findViewById(R.id.wxScrim)
@@ -214,8 +218,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         // Notices: single-line marquee ticker at the bottom, styled per device.
         if (widgets.noticesEnabled && widgets.noticesText.isNotBlank()) {
             val density = resources.displayMetrics.density
-            noticesBar.text = widgets.noticesText
-            noticesBar.setTextSize(TypedValue.COMPLEX_UNIT_SP, widgets.noticesSize.toFloat())
+            noticesText.text = widgets.noticesText
+            noticesText.setTextSize(TypedValue.COMPLEX_UNIT_SP, widgets.noticesSize.toFloat())
             noticesBar.setBackgroundColor(parseColor(widgets.noticesBg, 0x66000000))
             // Fixed box height (dp) with vertically centred text; 0 = auto (wrap).
             val lp = noticesBar.layoutParams
@@ -225,12 +229,50 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             }
             noticesBar.layoutParams = lp
-            noticesBar.gravity = if (widgets.noticesHeight > 0) Gravity.CENTER_VERTICAL else Gravity.NO_GRAVITY
             noticesBar.visibility = View.VISIBLE
-            noticesBar.isSelected = true // required to start the marquee
+            // (Re)start the continuous scroll only when the text actually changed,
+            // so the 60s sync doesn't make an unchanged ticker jump back mid-run.
+            if (tickerAnimator == null || tickerText != widgets.noticesText) {
+                tickerText = widgets.noticesText
+                startTicker()
+            }
         } else {
+            stopTicker()
             noticesBar.visibility = View.GONE
         }
+    }
+
+    /**
+     * Continuously scrolls the notices text right-to-left across the full width
+     * of the bar. Runs forever at a constant speed; restarts from the right edge
+     * each loop. Waits for layout so the bar/text widths are known.
+     */
+    private fun startTicker() {
+        tickerAnimator?.cancel()
+        noticesText.translationX = 0f
+        noticesText.post {
+            val barWidth = noticesBar.width
+            val textWidth = noticesText.width
+            if (barWidth <= 0 || textWidth <= 0) return@post
+            val start = barWidth.toFloat()      // enter from off-screen right
+            val end = -textWidth.toFloat()      // exit fully off-screen left
+            val speedPx = 90f * resources.displayMetrics.density // ~90dp/s
+            val durationMs = ((start - end) / speedPx * 1000f).toLong().coerceAtLeast(1000L)
+            tickerAnimator = android.animation.ValueAnimator.ofFloat(start, end).apply {
+                duration = durationMs
+                interpolator = android.view.animation.LinearInterpolator()
+                repeatCount = android.animation.ValueAnimator.INFINITE
+                repeatMode = android.animation.ValueAnimator.RESTART
+                addUpdateListener { noticesText.translationX = it.animatedValue as Float }
+                start()
+            }
+        }
+    }
+
+    private fun stopTicker() {
+        tickerAnimator?.cancel()
+        tickerAnimator = null
+        tickerText = null
     }
 
     // ---------- Immersive Mode ----------

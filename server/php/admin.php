@@ -381,6 +381,19 @@ function renderDetail(t, devices, presentations){
   const body=$('#detailBody');
   body.innerHTML='';
 
+  // Tabs: Präsentationen / Geräte / Einstellungen — only one panel visible at a time.
+  const tabs=document.createElement('div'); tabs.className='row'; tabs.style.cssText='gap:6px;margin-bottom:12px';
+  const panels={};
+  const showTab=name=>{
+    Object.keys(panels).forEach(k=>{ panels[k].style.display=(k===name)?'':'none'; });
+    tabs.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.tab===name)?'sm':'ghost sm'; });
+  };
+  [['pres','Präsentationen'],['dev','Geräte'],['set','Einstellungen']].forEach(([k,label])=>{
+    const b=document.createElement('button'); b.dataset.tab=k; b.textContent=label; b.onclick=()=>showTab(k);
+    tabs.appendChild(b);
+  });
+  body.appendChild(tabs);
+
   // Presentations
   const pWrap=document.createElement('div'); pWrap.className='card';
   pWrap.innerHTML=`<h3>Präsentationen</h3>`;
@@ -414,6 +427,7 @@ function renderDetail(t, devices, presentations){
   pAdd.querySelector('button').onclick=async()=>{ const name=$('#newPres').value.trim(); if(!name)return;
     await API.call('presentations.php','POST',{tenant_id:t.id,name}); toast('Erstellt'); selectTenant(t); };
   pWrap.appendChild(pAdd);
+  panels.pres=pWrap;
   body.appendChild(pWrap);
 
   // Devices
@@ -502,14 +516,21 @@ function renderDetail(t, devices, presentations){
     }catch(e){ toast('Fehler – Code evtl. schon vergeben'); }
   };
   dWrap.appendChild(dAdd);
+  panels.dev=dWrap;
   body.appendChild(dWrap);
 
-  // Tenant delete
+  // Settings tab: tenant-level actions
+  const sWrap=document.createElement('div'); sWrap.className='card';
+  sWrap.innerHTML='<h3>Einstellungen</h3>';
   const tDel=document.createElement('div'); tDel.className='row'; tDel.style.marginTop='6px';
   tDel.innerHTML=`<button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;
   tDel.querySelector('button').onclick=async()=>{ if(await confirmDialog('Mandant löschen?', t.name+' — inkl. Geräte & Präsentationen')){
     await API.call('tenants.php?id='+t.id,'DELETE'); activeTenant=null; $('#detailTitle').textContent='Bitte einen Mandanten wählen'; $('#detailBody').innerHTML=''; toast('Gelöscht'); loadTenants(); } };
-  body.appendChild(tDel);
+  sWrap.appendChild(tDel);
+  panels.set=sWrap;
+  body.appendChild(sWrap);
+
+  showTab('pres');
 }
 
 // Presentation slide editor (drag order + duration)

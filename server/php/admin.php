@@ -178,6 +178,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?> · Admin</span>
   <span class="spacer"></span>
   <a class="logout" href="overview.php">← Übersicht</a>
+  <a class="logout" href="einstellungen.php">Einstellungen</a>
   <a class="logout" href="benutzer.php">Benutzer</a>
   <a class="logout" href="login.php?logout=1">Abmelden</a>
 </header>
@@ -539,34 +540,10 @@ function renderDetail(t, devices, presentations){
   panels.dev=devPanel;
   body.appendChild(devPanel);
 
-  // Settings tab: global help/contact card + tenant-level actions
+  // Settings tab: tenant-level actions (global settings moved to einstellungen.php)
   const sWrap=document.createElement('div'); sWrap.className='card';
-  sWrap.innerHTML='<h3>Einstellungen</h3>';
-
-  // --- Hilfe & Kontakt (global, delivered to every device via the playlist sync) ---
-  const help=document.createElement('div'); help.style.marginBottom='18px';
-  help.innerHTML=`
-    <h4 style="margin:2px 0 4px">Hilfe &amp; Kontakt</h4>
-    <p class="muted" style="margin:0 0 10px">Wird im Wartungsmenü der App angezeigt (gilt global für alle Geräte).</p>
-    <div class="grid2">
-      <div><label class="f">Firmenname</label><input data-h="help_company" style="width:100%"></div>
-      <div><label class="f">Application</label><input data-h="help_app" style="width:100%" placeholder="z.B. Teamwork Show"></div>
-      <div><label class="f">Version</label><input data-h="help_version" style="width:100%" placeholder="leer = App zeigt eigene Version"></div>
-      <div><label class="f">Telefon</label><input data-h="help_phone" style="width:100%"></div>
-      <div><label class="f">Ansprechpartner</label><input data-h="help_contact" style="width:100%"></div>
-      <div><label class="f">Internetseite</label><input data-h="help_website" style="width:100%" placeholder="https://…"></div>
-      <div><label class="f">Support · E-Mail</label><input data-h="help_support_mail" type="email" style="width:100%"></div>
-      <div><label class="f">Support · Telefon</label><input data-h="help_support_phone" style="width:100%"></div>
-    </div>
-    <div class="row" style="margin-top:10px"><span class="spacer" style="flex:1"></span><button class="sm" data-savehelp>Hilfe speichern</button></div>`;
-  sWrap.appendChild(help);
-  fetch('settings.php').then(r=>r.ok?r.json():null).then(d=>{ if(d) help.querySelectorAll('[data-h]').forEach(el=>{ el.value=d[el.dataset.h]||''; }); }).catch(()=>{});
-  help.querySelector('[data-savehelp]').onclick=async()=>{
-    const payload={}; help.querySelectorAll('[data-h]').forEach(el=>payload[el.dataset.h]=el.value);
-    try{ const r=await fetch('settings.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      toast(r.ok?'Hilfe & Kontakt gespeichert':'Speichern fehlgeschlagen'); }
-    catch(e){ toast('Speichern fehlgeschlagen'); }
-  };
+  sWrap.innerHTML='<h3>Einstellungen</h3>'
+    +'<p class="muted" style="margin:0 0 8px">Globale Hilfe- &amp; Kontaktdaten unter <a href="einstellungen.php" style="color:var(--magenta)">Einstellungen</a>.</p>';
 
   const tDel=document.createElement('div'); tDel.className='row'; tDel.style.marginTop='6px';
   tDel.innerHTML=`<button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;

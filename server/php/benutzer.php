@@ -101,6 +101,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <?php if ($version !== ''): ?><span class="ver">v<?= htmlspecialchars($version) ?></span><?php endif; ?>
   <span class="spacer"></span>
   <a class="nav" href="overview.php">← Übersicht</a>
+  <a class="nav" href="einstellungen.php">Einstellungen</a>
   <a class="nav" href="change_password.php">Passwort</a>
   <a class="nav" href="login.php?logout=1">Abmelden</a>
 </header>

@@ -7,7 +7,16 @@
  * technician on-site: open in any phone browser on the same network, tap
  * download, install. Reads the same app_update.json that app_update.php and
  * scripts/publish-apk.sh use, so it always reflects the latest published APK.
+ *
+ * Login-gated: reachable only from the (authenticated) admin dashboard. A fresh
+ * device must sign in first; unauthenticated visitors are sent to the login page.
  */
+require __DIR__ . '/auth.php';
+if (tw_role() === null) {
+    header('Location: login.php');
+    exit;
+}
+
 $apkName  = 'app-release.apk';
 $apkPath  = __DIR__ . '/' . $apkName;
 $metaPath = __DIR__ . '/app_update.json';

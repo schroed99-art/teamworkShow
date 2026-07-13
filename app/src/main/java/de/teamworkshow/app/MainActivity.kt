@@ -651,16 +651,47 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     // ---------- Maintenance dialogs ----------
 
-    private fun showPinDialog() {
-        val pinInput = EditText(this).apply {
+    /**
+     * Builds a nicely inset, rounded input field for a dialog and returns the
+     * container to pass to [MaterialAlertDialogBuilder.setView] plus the EditText
+     * to read. Keeps the input legible and padded on the dark dialog surface.
+     */
+    private fun dialogInput(hintRes: Int, inputType: Int, prefill: String? = null): Pair<View, EditText> {
+        val d = resources.displayMetrics.density
+        val edit = EditText(this).apply {
             setTextColor(0xFFF1F5F9.toInt())
             setHintTextColor(0xFF8A93A3.toInt())
-            hint = getString(R.string.maintenance_pin_hint)
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = getString(hintRes)
+            this.inputType = inputType
+            setBackgroundResource(R.drawable.tw_input_bg)
+            val ip = (14 * d).toInt()
+            setPadding(ip, (13 * d).toInt(), ip, (13 * d).toInt())
+            textSize = 16f
+            if (prefill != null) setText(prefill)
         }
+        val wrap = android.widget.FrameLayout(this).apply {
+            val h = (22 * d).toInt()
+            setPadding(h, (8 * d).toInt(), h, (4 * d).toInt())
+            addView(
+                edit,
+                android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+        return wrap to edit
+    }
+
+    private fun showPinDialog() {
+        val (view, pinInput) = dialogInput(
+            R.string.maintenance_pin_hint,
+            InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        )
         MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.maintenance_title)
-            .setView(pinInput)
+            .setMessage(R.string.maintenance_pin_prompt)
+            .setView(view)
             .setPositiveButton(R.string.maintenance_ok) { _, _ ->
                 if (pinInput.text.toString() == MAINTENANCE_PIN) {
                     showMaintenanceMenu()
@@ -741,17 +772,15 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private fun showStorageDialog() {
         val current = settingsPrefs.getString(KEY_STORAGE_BASE, "").orEmpty()
         val effective = resolveMediaDir().parentFile?.absolutePath ?: ""
-        val input = EditText(this).apply {
-            setTextColor(0xFFF1F5F9.toInt())
-            setHintTextColor(0xFF8A93A3.toInt())
-            hint = getString(R.string.storage_hint)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setText(current)
-        }
+        val (view, input) = dialogInput(
+            R.string.storage_hint,
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
+            current
+        )
         MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.settings_storage)
             .setMessage(getString(R.string.storage_current, effective))
-            .setView(input)
+            .setView(view)
             .setPositiveButton(R.string.maintenance_ok) { _, _ -> applyStoragePath(input.text.toString().trim()) }
             .setNeutralButton(R.string.storage_reset) { _, _ -> applyStoragePath("") }
             .setNegativeButton(R.string.maintenance_cancel, null)
@@ -810,16 +839,14 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     }
 
     private fun showServerUrlDialog() {
-        val urlInput = EditText(this).apply {
-            setTextColor(0xFFF1F5F9.toInt())
-            setHintTextColor(0xFF8A93A3.toInt())
-            hint = getString(R.string.server_url_hint)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setText(syncManager.getServerUrl() ?: "")
-        }
+        val (view, urlInput) = dialogInput(
+            R.string.server_url_hint,
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
+            syncManager.getServerUrl() ?: ""
+        )
         MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.maintenance_server)
-            .setView(urlInput)
+            .setView(view)
             .setPositiveButton(R.string.maintenance_ok) { _, _ ->
                 syncManager.setServerUrl(urlInput.text.toString())
                 syncNow(userTriggered = true)
@@ -830,16 +857,14 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     }
 
     private fun showPairingDialog() {
-        val codeInput = EditText(this).apply {
-            setTextColor(0xFFF1F5F9.toInt())
-            setHintTextColor(0xFF8A93A3.toInt())
-            hint = getString(R.string.pairing_hint)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
-            setText(syncManager.getPairingCode() ?: "")
-        }
+        val (view, codeInput) = dialogInput(
+            R.string.pairing_hint,
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS,
+            syncManager.getPairingCode() ?: ""
+        )
         MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_TeamworkShow_Dialog)
             .setTitle(R.string.maintenance_pairing)
-            .setView(codeInput)
+            .setView(view)
             .setPositiveButton(R.string.maintenance_ok) { _, _ ->
                 val code = codeInput.text.toString().trim()
                 syncManager.setPairingCode(code)

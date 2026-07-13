@@ -34,6 +34,8 @@
     <string name="weather_chip">%1$s°C · %2$s</string>
     <string name="weather_title">Wetter</string>
 
+    <string name="maintenance_pin_prompt">Bitte PIN eingeben, um ins Wartungsmenü zu gelangen.</string>
+
     <!-- Settings / maintenance menu additions -->
     <string name="settings_help">Hilfe &amp; Kontakt</string>
     <string name="settings_storage">Speicherort</string>

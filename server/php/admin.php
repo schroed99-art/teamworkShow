@@ -522,8 +522,22 @@ function renderDetail(t, devices, presentations){
     }catch(e){ toast('Fehler – Code evtl. schon vergeben'); }
   };
   dWrap.appendChild(dAdd);
-  panels.dev=dWrap;
-  body.appendChild(dWrap);
+
+  // Separate "App-Installation" tile: link to the login-gated download page.
+  const aWrap=document.createElement('div'); aWrap.className='card';
+  aWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06);margin-bottom:14px';
+  aWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">📲 App-Installation</h3>
+    <p class="muted" style="margin:0 0 12px">Neues Gerät einrichten oder die App manuell aktualisieren – öffnet die Download-Seite (nur für angemeldete Nutzer erreichbar).</p>
+    <a href="download.php" target="_blank" rel="noopener"
+       style="display:inline-flex;align-items:center;gap:8px;background:var(--magenta);color:#fff;
+              padding:11px 18px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">
+       ⬇ Download-Seite öffnen</a>`;
+
+  const devPanel=document.createElement('div');
+  devPanel.appendChild(aWrap);
+  devPanel.appendChild(dWrap);
+  panels.dev=devPanel;
+  body.appendChild(devPanel);
 
   // Settings tab: global help/contact card + tenant-level actions
   const sWrap=document.createElement('div'); sWrap.className='card';

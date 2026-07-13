@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <style>
-  :root { --magenta:#e91e63; --bg:#0f172a; --panel:#1e293b; --line:#334155; --text:#f1f5f9; --dim:#94a3b8; }
+  :root { --magenta:#d21a55; --bg:#0f172a; --panel:#1e293b; --line:#334155; --text:#f1f5f9; --dim:#94a3b8; }
   * { box-sizing:border-box; }
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
          background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }

@@ -29,7 +29,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <style>
-  :root { --magenta:#e91e63; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155;
+  :root { --magenta:#d21a55; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155;
           --text:#f1f5f9; --dim:#94a3b8; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
@@ -125,7 +125,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   /* media pool */
   .drop { margin-top:6px; padding:16px; border:2px dashed var(--line); border-radius:10px;
           display:flex; align-items:center; gap:14px; flex-wrap:wrap; transition:border-color .15s, background .15s; }
-  .drop.over { border-color:var(--magenta); background:rgba(233,30,99,.10); }
+  .drop.over { border-color:var(--magenta); background:rgba(210,26,85,.10); }
   #upStatus { margin-left:auto; color:var(--magenta); font-size:13px; }
   .poolGrid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); margin-top:14px; }
   .pcard { position:relative; background:#0e0e0e; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
@@ -562,7 +562,7 @@ async function editPresentation(p){
     slides.forEach((s,i)=>{
       const li=document.createElement('li'); li.draggable=true;
       const label = s.kind==='weather'
-        ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #e91e63;color:#fda4b8">🌤 Wetter-Zwischenbild</span>`
+        ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #d21a55;color:#fda4b8">🌤 Wetter-Zwischenbild</span>`
         : `${thumbHtml(s.media_name)}<span class="mname">${esc(s.media_name)}</span>`;
       li.innerHTML=`<span class="handle">⠿</span>${label}
         <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>

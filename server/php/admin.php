@@ -391,6 +391,7 @@ function renderDetail(t, devices, presentations){
   const tabs=document.createElement('div'); tabs.className='row'; tabs.style.cssText='gap:6px;margin-bottom:12px';
   const panels={};
   const showTab=name=>{
+    document.getElementById('slidesEditor')?.remove(); // leave the slides editor when switching tabs
     Object.keys(panels).forEach(k=>{ panels[k].style.display=(k===name)?'':'none'; });
     tabs.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.tab===name)?'sm':'ghost sm'; });
   };
@@ -401,7 +402,7 @@ function renderDetail(t, devices, presentations){
   body.appendChild(tabs);
 
   // Presentations
-  const pWrap=document.createElement('div'); pWrap.className='card';
+  const pWrap=document.createElement('div'); pWrap.className='card'; pWrap.id='panelPres';
   pWrap.innerHTML=`<h3>Präsentationen</h3>`;
   const activePresIds=new Set(devices.map(d=>String(d.presentation_id)).filter(v=>v&&v!=='null'));
   const hasDevices=devices.length>0;
@@ -560,8 +561,10 @@ async function editPresentation(p){
   const full=(await API.call('presentations.php?id='+p.id)).presentation;
   let slides=(full.slides||[]).map(s=>({media_name:s.media_name,duration_ms:s.duration_ms,kind:s.kind||'media'}));
   const body=$('#detailBody');
-  const card=document.createElement('div'); card.className='card';
-  card.innerHTML=`<h3>Slides — ${esc(p.name)}</h3>
+  const card=document.createElement('div'); card.className='card'; card.id='slidesEditor';
+  card.innerHTML=`
+    <a href="#" id="backPres" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
+    <h3 style="margin-top:0">Slides — ${esc(p.name)}</h3>
     <ul class="list slides" id="slideList"></ul>
     <div class="row" style="margin-top:8px">
       <select id="mediaPick" class="grow"></select><button class="sm" id="addSlide">+ Slide</button>
@@ -570,8 +573,11 @@ async function editPresentation(p){
     </div>
     <div class="row" style="margin-top:12px"><button id="saveSlides">Reihenfolge speichern</button>
       <button class="ghost" id="closeSlides">Schließen</button></div>`;
-  // Keep the tab bar (Präsentationen/Geräte/Einstellungen) pinned at the top;
-  // open the slides editor directly below it instead of above.
+  // Master-detail: hide the presentation list and show only this editor below the
+  // tab bar (which stays pinned). Back/Schließen restores the list.
+  document.getElementById('slidesEditor')?.remove();
+  const presPanel=document.getElementById('panelPres');
+  if (presPanel) presPanel.style.display='none';
   if (body.firstElementChild) body.insertBefore(card, body.firstElementChild.nextSibling);
   else body.appendChild(card);
   card.scrollIntoView({ behavior:'smooth', block:'nearest' });
@@ -605,7 +611,9 @@ async function editPresentation(p){
   card.querySelector('#addWeather').onclick=()=>{ slides.push({kind:'weather',media_name:'',duration_ms:8000}); render(); };
   card.querySelector('#editWxLayout').onclick=openWeatherLayout;
   card.querySelector('#saveSlides').onclick=async()=>{ await API.call('presentations.php','PUT',{id:p.id,slides}); toast('Slides gespeichert'); };
-  card.querySelector('#closeSlides').onclick=()=>card.remove();
+  const closeEditor=()=>{ card.remove(); const pp=document.getElementById('panelPres'); if(pp) pp.style.display=''; };
+  card.querySelector('#closeSlides').onclick=closeEditor;
+  card.querySelector('#backPres').onclick=(e)=>{ e.preventDefault(); closeEditor(); };
 }
 
 // ---- Wetter-Layout (global shared template for all weather interstitials) ----

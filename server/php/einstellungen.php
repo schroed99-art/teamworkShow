@@ -49,7 +49,8 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   label.f { display:block; font-size:11px; color:var(--dim); margin:10px 0 4px; }
   input { width:100%; background:#0f172a; border:1px solid var(--line); color:var(--text); border-radius:9px; padding:10px 12px; font-size:13px; }
   input:focus { outline:none; border-color:var(--magenta); }
-  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; }
+  .grid2 { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px 18px; }
+  @media (max-width:1200px){ .grid2 { grid-template-columns:repeat(2, minmax(0,1fr)); } }
   @media (max-width:640px){ .grid2 { grid-template-columns:1fr; } }
   .row { display:flex; gap:8px; align-items:center; }
   button { border:0; border-radius:9px; padding:10px 16px; font-size:13px; font-weight:600; cursor:pointer; background:var(--magenta); color:#fff; }

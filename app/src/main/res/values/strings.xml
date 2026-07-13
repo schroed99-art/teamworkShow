@@ -20,6 +20,9 @@
     <string name="server_url_hint">http://10.0.2.2:8080</string>
     <string name="sync_no_server">Kein Server konfiguriert</string>
     <string name="sync_updated">Medien aktualisiert</string>
+    <!-- %1$s = new version name, e.g. 1.0.22 -->
+    <string name="update_available">⬆ %1$s</string>
+    <string name="update_installing">Aktualisiere…</string>
     <string name="sync_no_change">Bereits aktuell</string>
     <string name="maintenance_pairing">Gerät koppeln</string>
     <string name="pairing_title">Gerät koppeln</string>

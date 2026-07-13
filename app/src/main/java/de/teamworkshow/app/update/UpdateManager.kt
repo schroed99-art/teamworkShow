@@ -12,17 +12,19 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import java.util.Collections
 
 /**
- * In-app self-update for sideloaded builds. Once per sync it asks the backend
- * (app_update.php) whether a newer signed APK is published; if so it downloads
- * the APK to the cache, verifies its SHA-256, and launches the system package
- * installer. The user confirms the final install prompt — silent installs need
- * device-owner/kiosk provisioning, which we don't require here.
+ * In-app self-update for sideloaded builds. [check] asks the backend
+ * (app_update.php) whether a newer signed APK is published; the UI surfaces a
+ * discreet badge and calls [startInstall] only when the operator taps it. That
+ * downloads the APK to the cache, verifies its SHA-256, and launches the system
+ * package installer. The operator confirms the final install prompt (and the
+ * one-time "install unknown apps" / Play Protect prompts) — silent installs
+ * need device-owner/kiosk provisioning, which we don't require here.
  *
- * All updates are signed with the same release key as the running build, so the
- * installer treats them as an in-place update (no uninstall needed).
+ * Nothing installs automatically, so an install prompt never overlays a running
+ * presentation. All updates are signed with the same release key as the running
+ * build, so the installer treats them as an in-place update (no uninstall needed).
  */
 class UpdateManager(private val context: Context) {
 
@@ -34,34 +36,26 @@ class UpdateManager(private val context: Context) {
         val sha256: String,
     )
 
-    /** versionCodes we've already launched the installer for this process. */
-    private val offered = Collections.synchronizedSet(HashSet<Int>())
-
-    /** Ask for the unknown-sources grant at most once per process (avoids nagging). */
-    @Volatile private var permissionPrompted = false
-
     /**
-     * Background-thread entry point: check + (if newer) download + prompt install.
-     * Safe to call every sync; network cost is a small JSON unless an update exists.
+     * Operator-triggered install: downloads the advertised APK (off the UI
+     * thread), verifies its SHA-256, and launches the system installer. Called
+     * when the user taps the update badge — never automatically — so the install
+     * prompt never overlays a running presentation.
+     *
+     * If the "install unknown apps" grant is missing, it opens that settings
+     * screen instead; the operator grants it and taps the badge again.
      */
-    fun maybeUpdate(activity: Activity, baseUrl: String) {
-        val info = check(baseUrl) ?: return
-        if (offered.contains(info.versionCode)) return
-
-        // Our app needs the "install unknown apps" grant. If missing, ask once and
-        // bail — we retry on a later sync once the user has granted it.
+    fun startInstall(activity: Activity, baseUrl: String, info: Info) {
         if (!context.packageManager.canRequestPackageInstalls()) {
-            if (!permissionPrompted) {
-                permissionPrompted = true
-                activity.runOnUiThread { requestInstallPermission(activity) }
-            }
+            requestInstallPermission(activity)
             return
         }
-
-        val file = download(baseUrl, info) ?: return
-        if (offered.add(info.versionCode)) {
-            activity.runOnUiThread { launchInstaller(activity, file) }
-        }
+        Thread {
+            val file = download(baseUrl, info)
+            if (file != null) {
+                activity.runOnUiThread { launchInstaller(activity, file) }
+            }
+        }.start()
     }
 
     /** Returns update Info when the backend advertises a versionCode newer than ours. */

@@ -103,6 +103,25 @@
         android:shadowDy="0"
         android:contentDescription="@null" />
 
+    <!-- Update-available badge, just below the version label. Appears only when
+         a newer signed APK is published; tapping it starts the download+install.
+         The operator triggers it deliberately, so no system prompt ever overlays
+         a running presentation. -->
+    <TextView
+        android:id="@+id/updateBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="10dp"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="3dp"
+        android:background="#D81B60"
+        android:textColor="#FFFFFFFF"
+        android:textSize="11sp"
+        android:visibility="gone"
+        android:contentDescription="@null" />
+
     <!-- Notices ticker, bottom (from the device's widget settings).
          Continuous right-to-left scroller: the inner text is translated across
          the full-width bar (see startTicker), so it always scrolls regardless

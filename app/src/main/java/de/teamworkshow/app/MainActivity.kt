@@ -75,6 +75,9 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     private lateinit var syncManager: SyncManager
     private val updateManager = UpdateManager(this)
+    private lateinit var updateBadge: TextView
+    private var pendingUpdate: UpdateManager.Info? = null
+    private var installing = false
     private val syncExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val syncRunnable = object : Runnable {
@@ -144,6 +147,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         pairingOverlay = findViewById(R.id.pairingOverlay)
         pairingCodeLabel = findViewById(R.id.pairingCode)
         findViewById<TextView>(R.id.versionLabel).text = appVersionText()
+        updateBadge = findViewById(R.id.updateBadge)
+        updateBadge.setOnClickListener { onUpdateBadgeClicked() }
 
         setupExoPlayer()
 
@@ -202,9 +207,40 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 }
             }
-            // In-app self-update: offer a newer signed APK if the backend has one.
-            syncManager.getServerUrl()?.let { updateManager.maybeUpdate(this@MainActivity, it) }
+            // In-app self-update: only DETECT a newer signed APK here and surface a
+            // discreet badge. The operator taps it to start the install, so the
+            // system install prompt never overlays a running presentation.
+            syncManager.getServerUrl()?.let { base ->
+                val info = updateManager.check(base)
+                runOnUiThread {
+                    if (info != null) showUpdateBadge(info) else hideUpdateBadge()
+                }
+            }
         }
+    }
+
+    /** Shows the discreet "update available" badge under the version label. */
+    private fun showUpdateBadge(info: UpdateManager.Info) {
+        if (installing) return // don't overwrite the "Aktualisiere…" state
+        pendingUpdate = info
+        updateBadge.text = getString(R.string.update_available, info.versionName)
+        updateBadge.visibility = View.VISIBLE
+    }
+
+    private fun hideUpdateBadge() {
+        if (installing) return
+        pendingUpdate = null
+        updateBadge.visibility = View.GONE
+    }
+
+    /** Operator tapped the badge: start the deliberate download + install. */
+    private fun onUpdateBadgeClicked() {
+        if (installing) return
+        val info = pendingUpdate ?: return
+        val base = syncManager.getServerUrl() ?: return
+        installing = true
+        updateBadge.text = getString(R.string.update_installing)
+        updateManager.startInstall(this, base, info)
     }
 
     /** Full-screen pairing code prompt, shown until the backend claims this device. */

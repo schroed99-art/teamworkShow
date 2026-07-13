@@ -111,7 +111,8 @@ try {
 
     $ws = $pdo->prepare(
         'SELECT weather_enabled, weather_location, notices_enabled, notices_text,
-                notices_size, notices_bg, notices_height, schedule
+                notices_size, notices_bg, notices_height,
+                notices_font, notices_color, notices_speed, schedule
          FROM widget_settings WHERE device_id = ?'
     );
     $ws->execute([$dev['id']]);

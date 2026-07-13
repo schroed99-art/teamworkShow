@@ -111,7 +111,8 @@ function tw_weather_pictogram(): string
   body::after { content:""; position:fixed; right:28px; bottom:22px; width:min(360px,32vw); height:min(360px,32vw);
     background:url('assets/logo_mark.png') no-repeat right bottom; background-size:contain;
     opacity:.05; pointer-events:none; z-index:0; }
-  .grid, header, .h2 { position:relative; z-index:1; }
+  .grid, .h2 { position:relative; z-index:1; }
+  header { position:relative; z-index:30; }
   header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; }
   header h1 { margin:0; font-size:20px; font-weight:600; }
   header h1 span { color:var(--magenta); }

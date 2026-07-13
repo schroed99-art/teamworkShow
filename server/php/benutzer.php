@@ -34,7 +34,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   body::after { content:""; position:fixed; right:28px; bottom:22px; width:min(360px,32vw); height:min(360px,32vw);
     background:url('assets/logo_mark.png') no-repeat right bottom; background-size:contain;
     opacity:.05; pointer-events:none; z-index:0; }
-  header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line); position:relative; z-index:1; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line); position:relative; z-index:30; }
   header h1 { font-size:18px; margin:0; }
   header h1 span { color:var(--magenta); }
   header .ver { color:var(--dim); font-size:12px; }

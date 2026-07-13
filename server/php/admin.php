@@ -452,7 +452,7 @@ function renderDetail(t, devices, presentations){
           </div>
         </div>
       </div>
-      <div class="row" style="margin-top:8px"><button class="sm" data-savedev>Gerät speichern</button></div>`;
+      <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Änderungen speichern</button></div>`;
     c.querySelector('[data-savedev]').onclick=async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
       await API.call('devices.php','PUT',{id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null});
@@ -506,7 +506,7 @@ function renderDetail(t, devices, presentations){
 
   // Tenant delete
   const tDel=document.createElement('div'); tDel.className='row'; tDel.style.marginTop='6px';
-  tDel.innerHTML=`<span class="spacer" style="flex:1"></span><button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;
+  tDel.innerHTML=`<button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;
   tDel.querySelector('button').onclick=async()=>{ if(await confirmDialog('Mandant löschen?', t.name+' — inkl. Geräte & Präsentationen')){
     await API.call('tenants.php?id='+t.id,'DELETE'); activeTenant=null; $('#detailTitle').textContent='Bitte einen Mandanten wählen'; $('#detailBody').innerHTML=''; toast('Gelöscht'); loadTenants(); } };
   body.appendChild(tDel);

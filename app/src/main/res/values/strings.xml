@@ -33,4 +33,25 @@
     <!-- %1$s = temperature, %2$s = description -->
     <string name="weather_chip">%1$s°C · %2$s</string>
     <string name="weather_title">Wetter</string>
+
+    <!-- Settings / maintenance menu additions -->
+    <string name="settings_help">Hilfe &amp; Kontakt</string>
+    <string name="settings_storage">Speicherort</string>
+    <string name="settings_export_logs">Logs exportieren</string>
+    <!-- Help &amp; contact dialog -->
+    <string name="help_phone">Telefon: %1$s</string>
+    <string name="help_email">E-Mail: %1$s</string>
+    <string name="help_hours">Erreichbarkeit: %1$s</string>
+    <string name="help_empty">Es sind noch keine Hilfe- und Kontaktdaten hinterlegt. Diese werden zentral im Dashboard gepflegt und beim nächsten Sync übernommen.</string>
+    <string name="help_close">Schließen</string>
+    <!-- Storage path dialog -->
+    <string name="storage_hint">z. B. /storage/emulated/0/TeamworkShow</string>
+    <string name="storage_current">Aktueller Speicherort:\n%1$s\n\nLeer lassen = interner App-Ordner (Standard).</string>
+    <string name="storage_reset">Zurücksetzen</string>
+    <string name="storage_saved">Speicherort gespeichert – App wird neu geladen.</string>
+    <string name="storage_not_writable">Pfad nicht beschreibbar: %1$s</string>
+    <string name="storage_need_permission">Bitte „Zugriff auf alle Dateien" für Teamwork Show erlauben, dann den Speicherort erneut setzen.</string>
+    <!-- Log export -->
+    <string name="logs_exported">Logs gespeichert:\n%1$s</string>
+    <string name="logs_export_failed">Log-Export fehlgeschlagen.</string>
 </resources>

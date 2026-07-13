@@ -5,6 +5,7 @@ import android.util.Log
 import de.teamworkshow.app.BuildConfig
 import de.teamworkshow.app.model.SlideMeta
 import kotlin.random.Random
+import de.teamworkshow.app.util.AppLog
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -277,7 +278,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
                 conn.disconnect()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Weather fetch failed: ${e.message}")
+            AppLog.w(TAG, "Weather fetch failed: ${e.message}")
             null
         }
     }
@@ -291,7 +292,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         val remote = try {
             fetchPlaylist(base)
         } catch (e: Exception) {
-            Log.w(TAG, "Playlist fetch failed: ${e.message}")
+            AppLog.w(TAG, "Playlist fetch failed: ${e.message}")
             return false
         }
 
@@ -318,7 +319,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
                 downloadTo(base, item.name, File(mediaDir, item.name))
                 changed = true
             } catch (e: Exception) {
-                Log.w(TAG, "Download failed for ${item.name}: ${e.message}")
+                AppLog.w(TAG, "Download failed for ${item.name}: ${e.message}")
             }
             done++
             listener?.onProgress(done, toDownload.size, item.name)
@@ -329,6 +330,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         syncWeatherAsset(base)
 
         listener?.onFinish(changed)
+        AppLog.i(TAG, "sync done: changed=$changed, remote=${remote.size}, downloaded=$done")
         return changed
     }
 
@@ -346,9 +348,45 @@ class SyncManager(context: Context, private val mediaDir: File) {
             try {
                 downloadTo(base, want.name, local)
             } catch (e: Exception) {
-                Log.w(TAG, "Weather background download failed for ${want.name}: ${e.message}")
+                AppLog.w(TAG, "Weather background download failed for ${want.name}: ${e.message}")
             }
         }
+    }
+
+    /** Central help/contact info, edited in the dashboard and delivered with the playlist. */
+    data class HelpInfo(
+        val company: String,
+        val phone: String,
+        val email: String,
+        val hours: String,
+        val text: String,
+    ) {
+        fun isEmpty(): Boolean =
+            company.isBlank() && phone.isBlank() && email.isBlank() && hours.isBlank() && text.isBlank()
+
+        companion object { val EMPTY = HelpInfo("", "", "", "", "") }
+    }
+
+    fun getHelpInfo(): HelpInfo {
+        val raw = prefs.getString(KEY_HELP, null) ?: return HelpInfo.EMPTY
+        return try {
+            val o = JSONObject(raw)
+            HelpInfo(
+                company = o.optString("company"),
+                phone = o.optString("phone"),
+                email = o.optString("email"),
+                hours = o.optString("hours"),
+                text = o.optString("text"),
+            )
+        } catch (e: Exception) {
+            HelpInfo.EMPTY
+        }
+    }
+
+    private fun saveHelpInfo(h: JSONObject?) {
+        prefs.edit().apply {
+            if (h == null) remove(KEY_HELP) else putString(KEY_HELP, h.toString())
+        }.apply()
     }
 
     private fun fetchPlaylist(base: String): List<RemoteItem> {
@@ -402,6 +440,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
             saveWidgetSettings(root.optJSONObject("widgets"))
             // Global weather-interstitial template + its background download hint.
             saveWeatherLayout(root.optJSONObject("weather_layout"))
+            // Central help/contact info (device mode only); folder mode clears it.
+            saveHelpInfo(root.optJSONObject("help"))
             pendingWeatherAsset = root.optJSONObject("weather_asset")?.let { a ->
                 val name = a.optString("name", "")
                 if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) {
@@ -468,6 +508,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val KEY_WEATHER = "weather_slides"
         private const val KEY_WEATHER_LAYOUT = "weather_layout"
         private const val KEY_WIDGETS = "widget_settings"
+        private const val KEY_HELP = "help_info"
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 30_000
     }

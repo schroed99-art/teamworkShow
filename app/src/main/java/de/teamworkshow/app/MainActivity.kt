@@ -2,15 +2,20 @@ package de.teamworkshow.app
 
 import android.animation.ObjectAnimator
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.text.InputType
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -36,7 +41,11 @@ import de.teamworkshow.app.update.UpdateManager
 import de.teamworkshow.app.player.PlayerCallback
 import de.teamworkshow.app.player.SlideShowController
 import de.teamworkshow.app.playlist.PlaylistManager
+import de.teamworkshow.app.util.AppLog
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), PlayerCallback {
@@ -113,6 +122,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private val tapTimestamps = ArrayDeque<Long>()
 
     companion object {
+        private const val TAG = "MainActivity"
         private const val CROSSFADE_MS = 300L
         private const val MAINTENANCE_PIN = "0000"
         private const val TAP_COUNT_REQUIRED = 5
@@ -120,10 +130,32 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         private const val CORNER_DP = 150f
         private const val SYNC_INTERVAL_MS = 60_000L
         private const val WEATHER_PLACEHOLDER = "__weather__"
+        private const val PREFS = "teamworkshow_settings"
+        private const val KEY_STORAGE_BASE = "storage_base"
+    }
+
+    /** Shared with SyncManager's prefs; holds the optional custom storage base path. */
+    private val settingsPrefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
+
+    /**
+     * Media download directory: a `media/` subfolder under the technician-chosen
+     * base path when set + writable (needs all-files access), else the app's own
+     * external files dir. Logs export next to it.
+     */
+    private fun resolveMediaDir(): File {
+        val base = settingsPrefs.getString(KEY_STORAGE_BASE, null)
+        if (!base.isNullOrBlank()) {
+            val dir = File(base, "media")
+            if ((dir.exists() || dir.mkdirs()) && dir.canWrite()) return dir
+            AppLog.w(TAG, "custom storage '$base' not usable — falling back to app dir")
+        }
+        return File(getExternalFilesDir(null), "media").also { it.mkdirs() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppLog.init(this)
+        AppLog.i(TAG, "app start ${appVersionText()}")
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -152,7 +184,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
         setupExoPlayer()
 
-        val mediaDir = File(getExternalFilesDir(null), "media").also { it.mkdirs() }
+        val mediaDir = resolveMediaDir()
+        AppLog.i(TAG, "media dir: ${mediaDir.absolutePath}")
         syncManager = SyncManager(this, mediaDir)
         syncManager.listener = downloadListener
         // Show this device's pairing code until the backend recognises it.
@@ -595,6 +628,15 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         return true
     }
 
+    /** Hardware/soft MENU key is a second, discreet way into the settings menu. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            showPinDialog()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     private fun recordTap() {
         val now = System.currentTimeMillis()
         tapTimestamps.addLast(now)
@@ -635,6 +677,9 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             getString(R.string.maintenance_pairing),
             getString(R.string.maintenance_sync_now),
             getString(R.string.maintenance_reload),
+            getString(R.string.settings_help),
+            getString(R.string.settings_storage),
+            getString(R.string.settings_export_logs),
             getString(R.string.maintenance_exit)
         )
         AlertDialog.Builder(this)
@@ -645,7 +690,10 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                     1 -> showPairingDialog()
                     2 -> syncNow(userTriggered = true)
                     3 -> slideShowController.reload()
-                    4 -> confirmExit()
+                    4 -> showHelpDialog()
+                    5 -> showStorageDialog()
+                    6 -> exportLogs()
+                    7 -> confirmExit()
                 }
             }
             .setOnDismissListener { hideSystemBars() }
@@ -656,10 +704,105 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         AlertDialog.Builder(this)
             .setTitle(R.string.exit_confirm_title)
             .setMessage(R.string.exit_confirm_msg)
-            .setPositiveButton(R.string.exit_confirm_ok) { _, _ -> finishAndRemoveTask() }
+            .setPositiveButton(R.string.exit_confirm_ok) { _, _ ->
+                AppLog.i(TAG, "app exit requested by operator")
+                finishAndRemoveTask()
+            }
             .setNegativeButton(R.string.maintenance_cancel, null)
             .setOnDismissListener { hideSystemBars() }
             .show()
+    }
+
+    /** Read-only help &amp; contact card fed centrally from the dashboard via the playlist sync. */
+    private fun showHelpDialog() {
+        val h = syncManager.getHelpInfo()
+        val body = if (h.isEmpty()) {
+            getString(R.string.help_empty)
+        } else {
+            buildString {
+                if (h.company.isNotBlank()) append(h.company).append("\n\n")
+                if (h.text.isNotBlank()) append(h.text).append("\n\n")
+                if (h.phone.isNotBlank()) append(getString(R.string.help_phone, h.phone)).append("\n")
+                if (h.email.isNotBlank()) append(getString(R.string.help_email, h.email)).append("\n")
+                if (h.hours.isNotBlank()) append(getString(R.string.help_hours, h.hours)).append("\n")
+            }.trim()
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_help)
+            .setMessage(body)
+            .setPositiveButton(R.string.help_close, null)
+            .setOnDismissListener { hideSystemBars() }
+            .show()
+    }
+
+    /** Lets the technician relocate downloaded media + log exports to a chosen path. */
+    private fun showStorageDialog() {
+        val current = settingsPrefs.getString(KEY_STORAGE_BASE, "").orEmpty()
+        val effective = resolveMediaDir().parentFile?.absolutePath ?: ""
+        val input = EditText(this).apply {
+            hint = getString(R.string.storage_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setText(current)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_storage)
+            .setMessage(getString(R.string.storage_current, effective))
+            .setView(input)
+            .setPositiveButton(R.string.maintenance_ok) { _, _ -> applyStoragePath(input.text.toString().trim()) }
+            .setNeutralButton(R.string.storage_reset) { _, _ -> applyStoragePath("") }
+            .setNegativeButton(R.string.maintenance_cancel, null)
+            .setOnDismissListener { hideSystemBars() }
+            .show()
+    }
+
+    private fun applyStoragePath(path: String) {
+        // Writing outside app-specific storage needs "all files access" on Android 11+.
+        if (path.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            && !Environment.isExternalStorageManager()
+        ) {
+            Toast.makeText(this, R.string.storage_need_permission, Toast.LENGTH_LONG).show()
+            try {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            } catch (e: Exception) {
+                try {
+                    startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                } catch (e2: Exception) {
+                    AppLog.w(TAG, "cannot open all-files-access settings: ${e2.message}")
+                }
+            }
+            // Fall through: save the path so it takes effect once permission is granted.
+        }
+        settingsPrefs.edit().apply {
+            if (path.isEmpty()) remove(KEY_STORAGE_BASE) else putString(KEY_STORAGE_BASE, path)
+        }.apply()
+        AppLog.i(TAG, "storage base set to '${path.ifEmpty { "(default)" }}'")
+        Toast.makeText(this, R.string.storage_saved, Toast.LENGTH_SHORT).show()
+        // Rebuild SyncManager/PlaylistManager against the new directory.
+        recreate()
+    }
+
+    /** Exports the collected logs to a timestamped file next to the media directory. */
+    private fun exportLogs() {
+        syncExecutor.execute {
+            val baseDir = resolveMediaDir().parentFile ?: filesDir
+            val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.GERMANY).format(Date())
+            val dest = File(baseDir, "teamworkshow-logs-$stamp.log")
+            val ok = AppLog.exportTo(dest)
+            mainHandler.post {
+                val text = if (ok != null) {
+                    getString(R.string.logs_exported, dest.absolutePath)
+                } else {
+                    getString(R.string.logs_export_failed)
+                }
+                Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+                hideSystemBars()
+            }
+        }
     }
 
     private fun showServerUrlDialog() {

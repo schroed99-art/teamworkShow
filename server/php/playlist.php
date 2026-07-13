@@ -139,8 +139,23 @@ try {
         // weather_layout table may not exist yet (pre-migration): degrade silently.
     }
 
+    // Central help/contact card (global settings); degrade silently pre-migration.
+    $help = ['company' => '', 'phone' => '', 'email' => '', 'hours' => '', 'text' => ''];
+    try {
+        $rows = tw_db()->query("SELECT k, v FROM app_settings WHERE k LIKE 'help\\_%'")->fetchAll();
+        foreach ($rows as $r) {
+            $field = substr((string) $r['k'], 5); // strip 'help_'
+            if (array_key_exists($field, $help)) {
+                $help[$field] = (string) $r['v'];
+            }
+        }
+    } catch (Throwable $e) {
+        // app_settings table may not exist yet.
+    }
+
     tw_json([
         'items'  => $items,
+        'help'   => $help,
         'device' => [
             'pairing_code' => $dev['pairing_code'],
             'name'         => $dev['name'],

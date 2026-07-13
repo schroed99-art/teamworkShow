@@ -525,9 +525,33 @@ function renderDetail(t, devices, presentations){
   panels.dev=dWrap;
   body.appendChild(dWrap);
 
-  // Settings tab: tenant-level actions
+  // Settings tab: global help/contact card + tenant-level actions
   const sWrap=document.createElement('div'); sWrap.className='card';
   sWrap.innerHTML='<h3>Einstellungen</h3>';
+
+  // --- Hilfe & Kontakt (global, delivered to every device via the playlist sync) ---
+  const help=document.createElement('div'); help.style.marginBottom='18px';
+  help.innerHTML=`
+    <h4 style="margin:2px 0 4px">Hilfe &amp; Kontakt</h4>
+    <p class="muted" style="margin:0 0 10px">Wird im Wartungsmenü der App angezeigt (gilt global für alle Geräte).</p>
+    <div class="grid2">
+      <div><label class="f">Firma</label><input data-h="help_company" class="grow" style="width:100%"></div>
+      <div><label class="f">Telefon</label><input data-h="help_phone" class="grow" style="width:100%"></div>
+      <div><label class="f">E-Mail</label><input data-h="help_email" class="grow" style="width:100%"></div>
+      <div><label class="f">Erreichbarkeit</label><input data-h="help_hours" class="grow" style="width:100%"></div>
+    </div>
+    <label class="f">Hinweistext</label>
+    <textarea data-h="help_text" rows="3" style="width:100%;resize:vertical"></textarea>
+    <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savehelp>Hilfe speichern</button></div>`;
+  sWrap.appendChild(help);
+  fetch('settings.php').then(r=>r.ok?r.json():null).then(d=>{ if(d) help.querySelectorAll('[data-h]').forEach(el=>{ el.value=d[el.dataset.h]||''; }); }).catch(()=>{});
+  help.querySelector('[data-savehelp]').onclick=async()=>{
+    const payload={}; help.querySelectorAll('[data-h]').forEach(el=>payload[el.dataset.h]=el.value);
+    try{ const r=await fetch('settings.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      toast(r.ok?'Hilfe & Kontakt gespeichert':'Speichern fehlgeschlagen'); }
+    catch(e){ toast('Speichern fehlgeschlagen'); }
+  };
+
   const tDel=document.createElement('div'); tDel.className='row'; tDel.style.marginTop='6px';
   tDel.innerHTML=`<button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;
   tDel.querySelector('button').onclick=async()=>{ if(await confirmDialog('Mandant löschen?', t.name+' — inkl. Geräte & Präsentationen')){

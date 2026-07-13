@@ -66,7 +66,6 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?> · Einstellungen</span>
   <span class="spacer"></span>
   <a class="nav" href="overview.php">← Übersicht</a>
-  <a class="nav" href="admin.php">Admin</a>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
 

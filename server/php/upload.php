@@ -3,9 +3,12 @@
  * Accepts media uploads (multipart POST, field "file", one or many) and stores
  * them in media/. Same filename overwrites (= exchange); new name adds.
  *
- * NOTE: no authentication yet — fine for a trusted LAN staging server, but add
- * auth before exposing publicly (planned for Step 2).
+ * Auth: requires a manage role (admin/koordinator) via dashboard session or
+ * X-Admin-Token. Used by the Medienpool and the slide editor.
  */
+require_once __DIR__ . '/auth.php';
+tw_require_manage();
+
 header('Content-Type: application/json; charset=utf-8');
 
 $allowed = ['jpg', 'jpeg', 'png', 'webp', 'mp4'];

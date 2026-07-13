@@ -461,16 +461,35 @@ function renderDetail(t, devices, presentations){
       </div>
       <div class="grid2" style="margin-top:8px">
         <div><label class="f">Wetter-Ort</label><input value="${esc(d._w_loc||'')}" data-w="weather_location" style="width:100%" placeholder="z.B. Berlin,DE"></div>
-        <div><label class="f"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> Wetter aktiv</label>
-             <label class="f"><input type="checkbox" data-w="notices_enabled" ${d._n_en?'checked':''}> Hinweis aktiv</label></div>
-        <div style="grid-column:1/3"><label class="f">Hinweis-Text</label><textarea data-w="notices_text" style="width:100%" rows="2">${esc(d._n_txt||'')}</textarea></div>
-        <div style="grid-column:1/3"><label class="f">Hinweis-Laufschrift (Kasten unten, rechts→links)</label>
-          <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
-            <div><label class="f">Schriftgröße (sp)</label><input type="number" min="8" max="80" data-w="notices_size" style="width:90px" value="15"></div>
-            <div><label class="f">Rahmen-Höhe (dp, 0=auto)</label><input type="number" min="0" max="300" data-w="notices_height" style="width:110px" value="0"></div>
-            <div><label class="f">Rahmen-Farbe</label><input type="color" data-nc="rgb" style="width:56px;height:34px;padding:2px" value="#000000"></div>
-            <div><label class="f">Deckkraft (%)</label><input type="number" min="0" max="100" data-nc="op" style="width:80px" value="40"></div>
-          </div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:8px"><label class="f" style="margin:0"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> Wetter aktiv</label></div>
+      </div>
+      <div style="margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:14px;background:rgba(210,26,85,.04)">
+        <div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
+          <b>🔤 Laufschrift</b>
+          <span class="muted">Kasten unten, läuft rechts → links</span>
+          <span class="spacer" style="flex:1"></span>
+          <label class="f" style="margin:0"><input type="checkbox" data-w="notices_enabled" ${d._n_en?'checked':''}> aktiv</label>
+        </div>
+        <label class="f">Text</label>
+        <textarea data-w="notices_text" style="width:100%" rows="2">${esc(d._n_txt||'')}</textarea>
+        <div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+          <div><label class="f">Schriftart</label>
+            <select data-w="notices_font" style="width:150px">
+              <option value="">Standard</option>
+              <option value="serif">Serif</option>
+              <option value="monospace">Monospace</option>
+              <option value="sans-serif-condensed">Schmal</option>
+              <option value="sans-serif-light">Leicht</option>
+              <option value="sans-serif-medium">Medium</option>
+            </select></div>
+          <div><label class="f">Schriftgröße (sp)</label><input type="number" min="8" max="80" data-w="notices_size" style="width:90px" value="15"></div>
+          <div><label class="f">Schriftfarbe</label><input type="color" data-nc="fg" style="width:56px;height:34px;padding:2px" value="#FFFFFF"></div>
+          <div><label class="f">Tempo (dp/s)</label><input type="number" min="20" max="400" step="10" data-w="notices_speed" style="width:90px" value="90"></div>
+        </div>
+        <div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+          <div><label class="f">Rahmen-Höhe (dp, 0=auto)</label><input type="number" min="0" max="300" data-w="notices_height" style="width:120px" value="0"></div>
+          <div><label class="f">Rahmen-Farbe</label><input type="color" data-nc="rgb" style="width:56px;height:34px;padding:2px" value="#000000"></div>
+          <div><label class="f">Rahmen-Deckkraft (%)</label><input type="number" min="0" max="100" data-nc="op" style="width:90px" value="40"></div>
         </div>
       </div>
       <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Änderungen speichern</button></div>`;
@@ -485,7 +504,9 @@ function renderDetail(t, devices, presentations){
       await API.call('widgets.php','PUT',{device_id:d.id,
         weather_enabled:w('weather_enabled').checked, weather_location:w('weather_location').value,
         notices_enabled:w('notices_enabled').checked, notices_text:w('notices_text').value,
-        notices_size:+w('notices_size').value||15, notices_height:+w('notices_height').value||0, notices_bg:nbg});
+        notices_size:+w('notices_size').value||15, notices_height:+w('notices_height').value||0, notices_bg:nbg,
+        notices_font:w('notices_font').value, notices_speed:+w('notices_speed').value||90,
+        notices_color:(nc('fg').value||'#FFFFFF')});
       toast('Gerät gespeichert');
     };
     c.querySelector('[data-deldev]').onclick=async()=>{ if(await confirmDialog('Gerät löschen?', d.name||d.pairing_code)){
@@ -497,8 +518,13 @@ function renderDetail(t, devices, presentations){
       set('weather_location',w.weather_location); set('weather_enabled',w.weather_enabled);
       set('notices_enabled',w.notices_enabled); set('notices_text',w.notices_text);
       set('notices_size',w.notices_size??15); set('notices_height',w.notices_height??0);
-      // Split stored #AARRGGBB (or #RRGGBB) into colour + opacity% for the two inputs.
+      set('notices_font',w.notices_font||''); set('notices_speed',w.notices_speed??90);
       const nc=k=>c.querySelector(`[data-nc="${k}"]`);
+      // Text colour: strip alpha for the <input type=color>.
+      let fg=(w.notices_color||'#FFFFFF').trim();
+      if(/^#[0-9a-fA-F]{8}$/.test(fg)) fg='#'+fg.slice(3);
+      if(nc('fg')) nc('fg').value=(/^#[0-9a-fA-F]{6}$/.test(fg)?fg:'#FFFFFF');
+      // Split stored #AARRGGBB (or #RRGGBB) into colour + opacity% for the border inputs.
       let bg=(w.notices_bg||'#66000000').trim(), a=255, rgb='#000000';
       if(/^#[0-9a-fA-F]{8}$/.test(bg)){ a=parseInt(bg.slice(1,3),16); rgb='#'+bg.slice(3); }
       else if(/^#[0-9a-fA-F]{6}$/.test(bg)){ a=255; rgb=bg; }

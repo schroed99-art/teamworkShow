@@ -59,6 +59,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var noticesText: TextView
     private var tickerAnimator: android.animation.ValueAnimator? = null
     private var tickerText: String? = null
+    private var tickerSpeedDp: Int = 90
 
     // Weather forecast interstitial (a file-less slide); its contents are built at
     // runtime from the global layout config (background + grid-positioned elements).
@@ -318,6 +319,11 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             val density = resources.displayMetrics.density
             noticesText.text = widgets.noticesText
             noticesText.setTextSize(TypedValue.COMPLEX_UNIT_SP, widgets.noticesSize.toFloat())
+            noticesText.setTextColor(parseColor(widgets.noticesColor, 0xFFFFFFFF.toInt()))
+            noticesText.typeface = android.graphics.Typeface.create(
+                if (widgets.noticesFont.isBlank()) "sans-serif" else widgets.noticesFont,
+                android.graphics.Typeface.NORMAL
+            )
             noticesBar.setBackgroundColor(parseColor(widgets.noticesBg, 0x66000000))
             // Fixed box height (dp) with vertically centred text; 0 = auto (wrap).
             val lp = noticesBar.layoutParams
@@ -328,9 +334,12 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             }
             noticesBar.layoutParams = lp
             noticesBar.visibility = View.VISIBLE
-            // (Re)start the continuous scroll only when the text actually changed,
-            // so the 60s sync doesn't make an unchanged ticker jump back mid-run.
-            if (tickerAnimator == null || tickerText != widgets.noticesText) {
+            // (Re)start the continuous scroll only when text or speed changed, so the
+            // 60s sync doesn't make an unchanged ticker jump back mid-run.
+            val restart = tickerAnimator == null || tickerText != widgets.noticesText ||
+                tickerSpeedDp != widgets.noticesSpeed
+            tickerSpeedDp = widgets.noticesSpeed
+            if (restart) {
                 tickerText = widgets.noticesText
                 startTicker()
             }
@@ -354,7 +363,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             if (barWidth <= 0 || textWidth <= 0) return@post
             val start = barWidth.toFloat()      // enter from off-screen right
             val end = -textWidth.toFloat()      // exit fully off-screen left
-            val speedPx = 90f * resources.displayMetrics.density // ~90dp/s
+            val speedPx = tickerSpeedDp * resources.displayMetrics.density // dp/s from device config
             val durationMs = ((start - end) / speedPx * 1000f).toLong().coerceAtLeast(1000L)
             tickerAnimator = android.animation.ValueAnimator.ofFloat(start, end).apply {
                 duration = durationMs

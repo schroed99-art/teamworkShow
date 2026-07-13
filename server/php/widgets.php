@@ -38,8 +38,10 @@ if ($method === 'PUT' || $method === 'POST') {
     }
     $set = [];
     $vals = [];
+    $fontWhitelist = ['', 'serif', 'monospace', 'sans-serif-condensed', 'sans-serif-light', 'sans-serif-medium'];
     foreach (['weather_enabled', 'weather_location', 'notices_enabled', 'notices_text',
-              'notices_size', 'notices_bg', 'notices_height', 'schedule'] as $c) {
+              'notices_size', 'notices_bg', 'notices_height',
+              'notices_font', 'notices_color', 'notices_speed', 'schedule'] as $c) {
         if (!array_key_exists($c, $b)) {
             continue;
         }
@@ -52,6 +54,18 @@ if ($method === 'PUT' || $method === 'POST') {
         } elseif ($c === 'notices_height') {
             $set[] = "$c = ?";
             $vals[] = max(0, min(300, (int) $b[$c]));        // box height in dp; 0 = auto
+        } elseif ($c === 'notices_speed') {
+            $set[] = "$c = ?";
+            $vals[] = max(20, min(400, (int) $b[$c]));        // scroll speed in dp/s
+        } elseif ($c === 'notices_font') {
+            $f = is_string($b[$c]) ? trim($b[$c]) : '';
+            $set[] = "$c = ?";
+            $vals[] = in_array($f, $fontWhitelist, true) ? $f : '';
+        } elseif ($c === 'notices_color') {
+            $col = is_string($b[$c]) ? trim($b[$c]) : '';
+            $set[] = "$c = ?";
+            $vals[] = preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $col)
+                ? $col : '#FFFFFFFF';
         } elseif ($c === 'notices_bg') {
             // #RGB / #RRGGBB / #AARRGGBB; fall back to the classic translucent black.
             $bg = is_string($b[$c]) ? trim($b[$c]) : '';

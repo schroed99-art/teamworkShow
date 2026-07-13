@@ -25,8 +25,10 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Teamwork Show — Benutzer</title>
+<link rel="icon" type="image/png" sizes="64x64" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <style>
-  :root { --magenta:#e11d48; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155; --text:#f1f5f9; --dim:#94a3b8; }
+  :root { --magenta:#e91e63; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155; --text:#f1f5f9; --dim:#94a3b8; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   body::after { content:""; position:fixed; right:28px; bottom:22px; width:min(360px,32vw); height:min(360px,32vw);

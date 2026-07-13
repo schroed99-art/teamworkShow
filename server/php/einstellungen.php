@@ -66,7 +66,6 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <span class="spacer"></span>
   <a class="nav" href="overview.php">← Übersicht</a>
   <a class="nav" href="admin.php">Admin</a>
-  <a class="nav" href="benutzer.php">Benutzer</a>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
 
@@ -85,6 +84,12 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
       <div><label class="f">Support · Telefon</label><input data-h="help_support_phone"></div>
     </div>
     <div class="row" style="margin-top:14px"><span class="spacer"></span><button id="save">Speichern</button></div>
+  </div>
+
+  <div class="card">
+    <h3>Benutzerverwaltung</h3>
+    <p class="muted" style="margin:0 0 12px">Konten anlegen, Rollen vergeben, Passwörter zurücksetzen oder Nutzer deaktivieren.</p>
+    <a href="benutzer.php" style="display:inline-flex;align-items:center;gap:8px;background:var(--magenta);color:#fff;padding:10px 16px;border-radius:9px;text-decoration:none;font-weight:600;font-size:13px">👥 Benutzer verwalten</a>
   </div>
 </div>
 

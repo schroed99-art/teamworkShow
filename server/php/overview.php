@@ -167,8 +167,7 @@ function tw_weather_pictogram(): string
   <?php if ($version !== ''): ?><span class="ver">v<?= h($version) ?></span><?php endif; ?>
   <span class="stat"><?= count($tenants) ?> Mandanten · <?= $totalMedia ?> Medien</span>
   <?php if ($canManage): ?>
-    <a class="pool" href="einstellungen.php" title="Globale Einstellungen">Einstellungen</a>
-    <a class="pool" href="benutzer.php" title="Benutzerverwaltung">Benutzer</a>
+    <a class="pool" href="einstellungen.php" title="Einstellungen &amp; Benutzerverwaltung">Einstellungen</a>
     <a class="pool" href="admin.php#media" title="Medienpool im Admin">Medienpool</a>
   <?php endif; ?>
   <?php include __DIR__ . '/nav_user.php'; ?>

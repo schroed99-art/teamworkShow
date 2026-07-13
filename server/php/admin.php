@@ -179,7 +179,6 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <span class="spacer"></span>
   <a class="logout" href="overview.php">← Übersicht</a>
   <a class="logout" href="einstellungen.php">Einstellungen</a>
-  <a class="logout" href="benutzer.php">Benutzer</a>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
 

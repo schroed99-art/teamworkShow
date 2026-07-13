@@ -592,8 +592,10 @@ async function editPresentation(p){
     <a href="#" id="backPres" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
     <h3 style="margin-top:0">Slides — ${esc(p.name)}</h3>
     <ul class="list slides" id="slideList"></ul>
-    <div class="row" style="margin-top:8px">
+    <div class="row wrap2" style="margin-top:8px;gap:8px">
       <select id="mediaPick" class="grow"></select><button class="sm" id="addSlide">+ Slide</button>
+      <input type="file" id="slUpload" accept=".jpg,.jpeg,.png,.webp,.mp4" multiple hidden>
+      <button class="sm ghost" id="slUploadBtn" title="Bild/Video hochladen und in die Auswahl übernehmen">⬆ Hochladen</button>
       <button class="sm" id="addWeather" title="Wetter-Zwischenbild einfügen">+ 🌤 Wetter</button>
       <button class="sm ghost" id="editWxLayout" title="Wetter-Layout gestalten">🌤 Layout…</button>
     </div>
@@ -608,6 +610,26 @@ async function editPresentation(p){
   else body.appendChild(card);
   card.scrollIntoView({ behavior:'smooth', block:'nearest' });
   const mp=card.querySelector('#mediaPick'); mp.innerHTML=media.map(m=>`<option>${esc(m)}</option>`).join('');
+
+  // Upload images/videos straight from the slide editor (same media/ folder as the
+  // Medienpool via upload.php); refresh the picker and preselect the new file.
+  const slUpload=card.querySelector('#slUpload'), slUploadBtn=card.querySelector('#slUploadBtn');
+  slUploadBtn.onclick=()=>slUpload.click();
+  slUpload.onchange=async()=>{
+    const files=slUpload.files; if(!files||!files.length) return;
+    const label=slUploadBtn.textContent; slUploadBtn.textContent='lädt…'; slUploadBtn.disabled=true;
+    let last='', fail=0;
+    for(const f of files){ const fd=new FormData(); fd.append('file',f);
+      try{ const r=await fetch('upload.php',{method:'POST',body:fd}); const j=await r.json();
+        if(j.ok && j.saved && j.saved.length){ last=j.saved[j.saved.length-1]; } else fail++;
+      }catch(e){ fail++; }
+    }
+    slUpload.value=''; slUploadBtn.textContent=label; slUploadBtn.disabled=false;
+    await loadMedia();
+    mp.innerHTML=media.map(m=>`<option>${esc(m)}</option>`).join('');
+    if(last){ mp.value=last; toast(fail?('Hochgeladen: '+last+' ('+fail+' fehlgeschlagen)'):('Hochgeladen: '+last+' – jetzt „+ Slide"')); }
+    else toast('Upload fehlgeschlagen');
+  };
 
   function render(){
     const ul=card.querySelector('#slideList'); ul.innerHTML='';

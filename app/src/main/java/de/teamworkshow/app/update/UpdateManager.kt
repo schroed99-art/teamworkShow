@@ -11,6 +11,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.security.MessageDigest
 
 /**
@@ -95,7 +96,7 @@ class UpdateManager(private val context: Context) {
         if (out.exists() && info.sha256.isNotEmpty() && sha256(out).equals(info.sha256, ignoreCase = true)) {
             out // already downloaded + verified
         } else {
-            openGet("$baseUrl/${info.apk}", readTimeoutMs = 120_000).inputStream.use { input ->
+            openGet("$baseUrl/apk.php${pairingParam()}", readTimeoutMs = 120_000).inputStream.use { input ->
                 out.outputStream().use { input.copyTo(it) }
             }
             if (info.sha256.isNotEmpty() && !sha256(out).equals(info.sha256, ignoreCase = true)) {
@@ -137,6 +138,13 @@ class UpdateManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "cannot open unknown-sources settings: ${e.message}")
         }
+    }
+
+    /** `?device=CODE` for the gated apk.php, using the same pairing code SyncManager stores. */
+    private fun pairingParam(): String {
+        val code = context.getSharedPreferences("teamworkshow_settings", Context.MODE_PRIVATE)
+            .getString("pairing_code", null)?.trim().orEmpty()
+        return if (code.isNotEmpty()) "?device=" + URLEncoder.encode(code, "UTF-8") else ""
     }
 
     private fun openGet(urlStr: String, readTimeoutMs: Int): HttpURLConnection =

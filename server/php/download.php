@@ -17,8 +17,10 @@ if (tw_role() === null) {
     exit;
 }
 
+require_once __DIR__ . '/apk_path.php';
+
 $apkName  = 'app-release.apk';
-$apkPath  = __DIR__ . '/' . $apkName;
+$apkPath  = tw_apk_path();
 $metaPath = __DIR__ . '/app_update.json';
 
 $meta = [];
@@ -85,7 +87,7 @@ header('Content-Type: text/html; charset=utf-8');
 <?php if ($available): ?>
     <div class="badge">Version <?= htmlspecialchars($versionName) ?> &middot; <?= $sizeMb ?> MB</div>
 
-    <a class="dl" href="<?= htmlspecialchars($apkName) ?>" download>⬇︎ App herunterladen</a>
+    <a class="dl" href="apk.php" download>⬇︎ App herunterladen</a>
     <p class="meta">Danach in den Downloads antippen, um zu installieren.</p>
 
     <hr>

@@ -16,11 +16,13 @@
  * serves that metadata and confirms the APK is actually present.
  * No auth guard — like playlist/media/weather/version, it is public.
  */
+require_once __DIR__ . '/apk_path.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 $apkName = 'app-release.apk';
-$apkPath = __DIR__ . '/' . $apkName;
+$apkPath = tw_apk_path();
 $metaPath = __DIR__ . '/app_update.json';
 
 // Fallback versionName from the deployed version.php (single source of truth).

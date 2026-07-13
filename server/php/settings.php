@@ -7,8 +7,8 @@
  * The public playlist endpoint reads the same table to deliver the help card to
  * devices; this endpoint is the dashboard's editor for it.
  */
-require __DIR__ . '/auth.php';
-require __DIR__ . '/db.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/db.php';
 
 $keys = [
     'help_company',       // Firmenname

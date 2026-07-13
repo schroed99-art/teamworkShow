@@ -45,11 +45,18 @@ cat > "$META" <<JSON
 JSON
 
 # ---- publish to the VM ----
-echo ">> Uploading APK ($SIZE bytes) + metadata to $VM_USER@$VM_IP…"
-scp -i "$KEY" -o BatchMode=yes "$APK" "$VM_USER@$VM_IP:$VM_PATH/app-release.apk"
+# The APK goes to a PRIVATE dir outside the web root; it is served only through
+# apk.php (dashboard session or valid device pairing code). Only the metadata
+# (app_update.json) stays public so the app can check for updates.
+PRIVATE_DIR="/var/www/teamworkshow-apk"
+echo ">> Uploading APK ($SIZE bytes) to $VM_USER@$VM_IP:$PRIVATE_DIR + metadata to web root…"
+ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" "mkdir -p $PRIVATE_DIR"
+scp -i "$KEY" -o BatchMode=yes "$APK" "$VM_USER@$VM_IP:$PRIVATE_DIR/app-release.apk"
 scp -i "$KEY" -o BatchMode=yes "$META" "$VM_USER@$VM_IP:$VM_PATH/app_update.json"
 ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" \
-  "chown www-data:www-data $VM_PATH/app-release.apk $VM_PATH/app_update.json"
+  "rm -f $VM_PATH/app-release.apk; \
+   chown www-data:www-data $PRIVATE_DIR/app-release.apk $VM_PATH/app_update.json; \
+   chmod 640 $PRIVATE_DIR/app-release.apk"
 rm -f "$META"
 
 echo ""

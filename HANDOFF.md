@@ -1,4 +1,4 @@
-# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.37)
+# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.40)
 
 Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital-Signage-App** (Kotlin) + **PHP-Medienserver**. Die App spielt eine Endlos-Slideshow aus einem gerätespezifischen Medienordner, der alle 60 s per Hash vom Server synchronisiert wird.
 
@@ -7,7 +7,7 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 ## Repo & Version
 - Pfad: `~/Claude/teamworkshow` (Umzug 2026-07-14, vorher `~/AndroidStudioProjects/TeamworkShow`) · Git-Remote: GitHub `schroed99-art/teamworkShow`
 - Branch `main`. Alles zu GitHub **gepusht** (`main` = `origin/main`).
-- Version: Root-Datei `VERSION` (aktuell **1.0.37**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
+- Version: Root-Datei `VERSION` (aktuell **1.0.40**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
 - **Standing deploy-OK** (Memory `teamworkshow-autodeploy`): commit→deploy→migrate→smoke→push ohne Rückfrage. Ad-hoc-DB-Mutationen (außerhalb `deploy.sh` + benannter Migrationen) brauchen weiter explizite Freigabe.
 
 ## ⚠️ Paket umbenannt: `com.example.teamworkshow` → **`de.teamworkshow.app`**
@@ -46,7 +46,16 @@ Geplant in 4 Schritten: **5.1 Multi-Format → 5.2 Mandanten-Self-Service → 5.
 - Eine geänderte Zonen-Aufteilung erzeugt die Activity neu (`zoneLayoutSignature`) — derselbe Weg wie beim Formatwechsel, greift innerhalb eines Sync-Intervalls ohne Neustart.
 - Verifiziert: 20/20 Backend-Probe; am Emulator 60/40 übereinander, Livewechsel auf 50/50 nebeneinander und zurück auf eine Fläche (dort weiterhin inkl. Wetter-Zwischenbild).
 
-**5.4 Nachrichten — offen.** Naheliegend: eine Slide-`kind='news'` analog zum dateilosen `kind='weather'`, pro Zone authorbar. Die Laufschrift bleibt bewusst geräteweit (unter beiden Zonen); erst 5.4 würde sie ggf. pro Zone brauchen.
+**5.4 Nachrichten — FERTIG (v1.0.40, am Emulator verifiziert).**
+- Neue Slide-Art **`kind='news'`** (Migration `migrate_slide_news.php`: `slides.kind`-ENUM um `news` erweitert, `slides.text_title` + `slides.text_body`). Eine Nachricht ist **dateilos** wie das Wetter-Zwischenbild und trägt ihren Text selbst.
+- **Warum das die Zonen automatisch löst:** eine Slide gehört zu einer Präsentation, eine Präsentation zu einer Zone. Firma und Kunde schreiben damit je in ihr eigenes Board, ohne dass es dafür ein zweites Datenmodell braucht.
+- Dashboard: im Slide-Editor **„+ 📰 Nachricht"**; Überschrift und Text werden direkt in der Slide-Zeile bearbeitet, Reihenfolge und Dauer wie bei jeder anderen Slide. Eine Nachricht **ohne jeden Text wird beim Speichern verworfen** (sonst stünde ein leeres Board auf dem Bildschirm).
+- App: `MediaType.NEWS` + `NewsSlide`, gerendert in `zone_stage.xml` (`newsView`) — Magenta-Akzent, Titel + Text mit `autoSizeTextType`, damit dieselbe Nachricht im Vollbild wie in einer schmalen Zone lesbar bleibt.
+- **`items` ist die Download-Liste, nicht die Playlist** — der Unterschied zählt jetzt: in `single` steht dort auch das Dateilose (die App baut ihre Show genau daraus), in `split` ausschließlich echte Dateien (die Show steht in `zones`). Wer hier etwas ergänzt, muss beide Fälle bedenken.
+- Die Laufschrift bleibt bewusst **geräteweit** (unter beiden Zonen) — sie gehört dem Gerät, nicht einer Zone.
+- Verifiziert: 19/19 Backend-Probe (u. a. Kunde schreibt sein eigenes Board → 200, fremdes → 403); am Emulator je eine eigene Nachricht in Firmen- und Kunden-Zone.
+
+**Phase 5 ist damit abgeschlossen.**
 
 ## Zuletzt ausgeliefert (2026-07-13/14, diese Session)
 Großer UI-/Feature-Block — Details je Punkt in Memory `teamworkshow-status` (neueste oben):

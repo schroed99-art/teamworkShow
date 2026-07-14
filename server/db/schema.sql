@@ -56,7 +56,10 @@ CREATE TABLE IF NOT EXISTS slides (
     id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
     presentation_id INT UNSIGNED NOT NULL,
     media_name      VARCHAR(255) NOT NULL,
-    kind            ENUM('media','weather') NOT NULL DEFAULT 'media',
+    -- 'weather' and 'news' are file-less slides; a news slide carries its own text.
+    kind            ENUM('media','weather','news') NOT NULL DEFAULT 'media',
+    text_title      VARCHAR(200) NOT NULL DEFAULT '',
+    text_body       TEXT NULL DEFAULT NULL,
     position        INT NOT NULL DEFAULT 0,
     duration_ms     INT NOT NULL DEFAULT 8000,
     PRIMARY KEY (id),

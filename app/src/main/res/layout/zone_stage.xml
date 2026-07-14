@@ -78,6 +78,53 @@
 
     </FrameLayout>
 
+    <!-- News slide: a file-less message. Text auto-sizes, so the same slide stays
+         legible whether it fills the screen or only a narrow zone. -->
+    <LinearLayout
+        android:id="@+id/newsView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:background="#0F172A"
+        android:padding="@dimen/weather_padding"
+        android:alpha="0">
+
+        <View
+            android:layout_width="64dp"
+            android:layout_height="4dp"
+            android:background="@color/brand_magenta"
+            android:layout_marginBottom="14dp" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/newsTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="3"
+            android:textColor="#FFFFFFFF"
+            android:textStyle="bold"
+            android:textSize="34sp"
+            app:autoSizeTextType="uniform"
+            app:autoSizeMinTextSize="14sp"
+            app:autoSizeMaxTextSize="44sp"
+            android:contentDescription="@null" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/newsBody"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="12dp"
+            android:textColor="#FFCBD5E1"
+            android:textSize="20sp"
+            android:lineSpacingMultiplier="1.15"
+            app:autoSizeTextType="uniform"
+            app:autoSizeMinTextSize="11sp"
+            app:autoSizeMaxTextSize="26sp"
+            android:contentDescription="@null" />
+
+    </LinearLayout>
+
     <!-- Discreet preloader line: shows elapsed time of the current slide -->
     <ProgressBar
         android:id="@+id/slideProgress"

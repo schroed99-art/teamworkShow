@@ -735,7 +735,8 @@ function renderDetail(t, devices, presentations){
 // Presentation slide editor (drag order + duration)
 async function editPresentation(p){
   const full=(await API.call('presentations.php?id='+p.id)).presentation;
-  let slides=(full.slides||[]).map(s=>({media_name:s.media_name,duration_ms:s.duration_ms,kind:s.kind||'media'}));
+  let slides=(full.slides||[]).map(s=>({media_name:s.media_name,duration_ms:s.duration_ms,kind:s.kind||'media',
+    text_title:s.text_title||'', text_body:s.text_body||''}));
   const body=$('#detailBody');
   const card=document.createElement('div'); card.className='card'; card.id='slidesEditor';
   card.innerHTML=`
@@ -747,9 +748,10 @@ async function editPresentation(p){
       <input type="file" id="slUpload" accept=".jpg,.jpeg,.png,.webp,.mp4" multiple hidden>
       <button class="sm ghost" id="slUploadBtn" title="Bild/Video hochladen und in die Auswahl übernehmen">⬆ Hochladen</button>
       <button class="sm" id="addWeather" title="Wetter-Zwischenbild einfügen">+ 🌤 Wetter</button>
+      <button class="sm" id="addNews" title="Nachricht einfügen (Überschrift + Text, ohne Datei)">+ 📰 Nachricht</button>
       ${IS_KUNDE?'':'<button class="sm ghost" id="editWxLayout" title="Wetter-Layout gestalten">🌤 Layout…</button>'}
     </div>
-    <div class="row" style="margin-top:12px"><button id="saveSlides">Reihenfolge speichern</button>
+    <div class="row" style="margin-top:12px"><button id="saveSlides">Speichern</button>
       <button class="ghost" id="closeSlides">Schließen</button></div>`;
   // Master-detail: hide the presentation list and show only this editor below the
   // tab bar (which stays pinned). Back/Schließen restores the list.
@@ -785,12 +787,30 @@ async function editPresentation(p){
     const ul=card.querySelector('#slideList'); ul.innerHTML='';
     slides.forEach((s,i)=>{
       const li=document.createElement('li'); li.draggable=true;
-      const label = s.kind==='weather'
-        ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #d21a55;color:#fda4b8">🌤 Wetter-Zwischenbild</span>`
-        : `${thumbHtml(s.media_name)}<span class="mname">${esc(s.media_name)}</span>`;
-      li.innerHTML=`<span class="handle">⠿</span>${label}
-        <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>
-        <button class="ghost sm" data-up>↑</button><button class="ghost sm" data-down>↓</button><button class="ghost sm" data-rm>✕</button>`;
+      // A news slide has no file: it is edited in place, right where it sits in the order.
+      if (s.kind==='news') {
+        li.style.cssText='flex-direction:column;align-items:stretch;gap:8px';
+        li.innerHTML=`<div class="row" style="gap:8px">
+            <span class="handle">⠿</span>
+            <span class="mname" style="flex:1;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #d21a55;color:#fda4b8">📰 Nachricht</span>
+            <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>
+            <button class="ghost sm" data-up>↑</button><button class="ghost sm" data-down>↓</button><button class="ghost sm" data-rm>✕</button>
+          </div>
+          <input data-nt placeholder="Überschrift…" value="${esc(s.text_title)}" style="width:100%">
+          <textarea data-nb rows="3" placeholder="Text der Nachricht…" style="width:100%">${esc(s.text_body)}</textarea>`;
+        li.querySelector('[data-nt]').oninput=e=>{ s.text_title=e.target.value; };
+        li.querySelector('[data-nb]').oninput=e=>{ s.text_body=e.target.value; };
+        // Dragging from inside the text fields would fight with selecting text.
+        li.querySelectorAll('input,textarea').forEach(el=>{ el.draggable=false;
+          el.onmousedown=ev=>ev.stopPropagation(); });
+      } else {
+        const label = s.kind==='weather'
+          ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #d21a55;color:#fda4b8">🌤 Wetter-Zwischenbild</span>`
+          : `${thumbHtml(s.media_name)}<span class="mname">${esc(s.media_name)}</span>`;
+        li.innerHTML=`<span class="handle">⠿</span>${label}
+          <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>
+          <button class="ghost sm" data-up>↑</button><button class="ghost sm" data-down>↓</button><button class="ghost sm" data-rm>✕</button>`;
+      }
       const thumb=li.querySelector('.thumb'); if(thumb) thumb.onclick=()=>openLightbox(s.media_name);
       li.querySelector('.dur').onchange=e=>{ s.duration_ms=Math.max(250,parseInt(e.target.value)||8000); };
       li.querySelector('[data-up]').onclick=()=>{ if(i>0){ [slides[i-1],slides[i]]=[slides[i],slides[i-1]]; render(); } };
@@ -807,6 +827,8 @@ async function editPresentation(p){
   render();
   card.querySelector('#addSlide').onclick=()=>{ const m=mp.value; if(m){ slides.push({media_name:m,duration_ms:8000,kind:'media'}); render(); } };
   card.querySelector('#addWeather').onclick=()=>{ slides.push({kind:'weather',media_name:'',duration_ms:8000}); render(); };
+  card.querySelector('#addNews').onclick=()=>{
+    slides.push({kind:'news',media_name:'',duration_ms:10000,text_title:'',text_body:''}); render(); };
   // The weather template is one global design shared by every tenant (weather_layout.php
   // is staff-only), so the customer never gets this entry point.
   card.querySelector('#editWxLayout')?.addEventListener('click', openWeatherLayout);

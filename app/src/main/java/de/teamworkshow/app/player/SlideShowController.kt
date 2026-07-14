@@ -75,6 +75,13 @@ class SlideShowController(
                 callback.onSlideStarted(duration, next)
                 handler.postDelayed(::onImageDone, duration)
             }
+            MediaType.NEWS -> {
+                // File-less message slide: same timing as an image.
+                val duration = if (item.durationMs > 0) item.durationMs else IMAGE_DURATION_MS
+                callback.showNews(item)
+                callback.onSlideStarted(duration, next)
+                handler.postDelayed(::onImageDone, duration)
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -48,6 +49,9 @@ class Stage(
     private val emptyView: View = root.findViewById(R.id.emptyView)
     private val slideProgress: ProgressBar = root.findViewById(R.id.slideProgress)
     private val weatherView: View = root.findViewById(R.id.weatherView)
+    private val newsView: View = root.findViewById(R.id.newsView)
+    private val newsTitle: TextView = root.findViewById(R.id.newsTitle)
+    private val newsBody: TextView = root.findViewById(R.id.newsBody)
 
     // Exposed so MainActivity can paint the weather interstitial into this zone.
     val wxBg: ImageView = root.findViewById(R.id.wxBg)
@@ -86,6 +90,12 @@ class Stage(
 
     // ---------- PlayerCallback ----------
 
+    /** Fades out both file-less overlays; each show* call re-raises the one it needs. */
+    private fun hideOverlays() {
+        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        newsView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+    }
+
     override fun showImage(item: MediaItem) {
         val bitmap = preloaded?.takeIf { it.first == item.file }?.second
             ?: bitmapLoader(item.file) ?: return
@@ -103,7 +113,7 @@ class Stage(
         frontImageView?.animate()?.alpha(0f)?.setDuration(CROSSFADE_MS)?.start()
         frontImageView = backView
 
-        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        hideOverlays()
         emptyView.visibility = View.GONE
     }
 
@@ -119,7 +129,7 @@ class Stage(
         exoPlayer.play()
 
         playerView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
-        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        hideOverlays()
         emptyView.visibility = View.GONE
     }
 
@@ -134,7 +144,29 @@ class Stage(
                 .withEndAction { exoPlayer.stop() }.start()
         }
 
+        newsView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
         weatherView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
+        emptyView.visibility = View.GONE
+    }
+
+    /** File-less message slide: the text travels on the item itself. */
+    override fun showNews(item: MediaItem) {
+        val news = item.news ?: return
+        newsTitle.text = news.title
+        newsTitle.visibility = if (news.title.isBlank()) View.GONE else View.VISIBLE
+        newsBody.text = news.body
+        newsBody.visibility = if (news.body.isBlank()) View.GONE else View.VISIBLE
+
+        imageViewA.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        imageViewB.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        frontImageView = null
+        if (playerView.alpha > 0f) {
+            playerView.animate().alpha(0f).setDuration(CROSSFADE_MS)
+                .withEndAction { exoPlayer.stop() }.start()
+        }
+
+        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        newsView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
         emptyView.visibility = View.GONE
     }
 
@@ -143,7 +175,7 @@ class Stage(
         imageViewB.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
         playerView.animate().alpha(0f).setDuration(CROSSFADE_MS)
             .withEndAction { exoPlayer.stop() }.start()
-        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
+        hideOverlays()
         frontImageView = null
         emptyView.visibility = View.VISIBLE
     }

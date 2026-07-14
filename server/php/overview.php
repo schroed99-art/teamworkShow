@@ -54,8 +54,11 @@ foreach ($tenants as &$t) {
     $t['slides'] = array_map(static function (array $r): array {
         return ['name' => (string) $r['media_name'], 'kind' => (string) ($r['kind'] ?? 'media')];
     }, $mediaStmt->fetchAll());
-    // Only real media files count as "Medien"; weather slides are file-less.
-    $t['media_count'] = count(array_filter($t['slides'], static fn(array $s): bool => $s['kind'] !== 'weather'));
+    // Only real media files count as "Medien"; weather and news slides are file-less.
+    $t['media_count'] = count(array_filter(
+        $t['slides'],
+        static fn(array $s): bool => !in_array($s['kind'], ['weather', 'news'], true)
+    ));
     $totalMedia += $t['media_count'];
 
     $devStmt->execute([$t['id']]);
@@ -206,13 +209,16 @@ function tw_weather_pictogram(): string
           foreach ($preview as $idx => $slide):
             $name = $slide['name'];
             $isWeather = $slide['kind'] === 'weather';
-            $isVid = !$isWeather && tw_is_video($name);
+            $isNews = $slide['kind'] === 'news';
+            $isVid = !$isWeather && !$isNews && tw_is_video($name);
             $lead = $idx === 0 ? ' lead' : '';
             $showMore = ($idx === count($preview) - 1 && $extra > 0);
         ?>
-          <div class="cell<?= $lead ?><?= $isWeather ? ' weather' : '' ?>">
+          <div class="cell<?= $lead ?><?= ($isWeather || $isNews) ? ' weather' : '' ?>">
             <?php if ($isWeather): ?>
               <?= tw_weather_pictogram() ?>
+            <?php elseif ($isNews): ?>
+              <span style="font-size:26px">📰</span>
             <?php elseif ($isVid): ?>
               <video muted preload="metadata" src="media.php?name=<?= rawurlencode($name) ?>#t=0.1"></video>
               <span class="play">▶</span>

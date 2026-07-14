@@ -7,6 +7,8 @@ interface PlayerCallback {
     fun showVideo(item: MediaItem)
     /** Renders the file-less weather forecast interstitial. */
     fun showWeather(item: MediaItem)
+    /** Renders a file-less news slide (title + body carried by the item itself). */
+    fun showNews(item: MediaItem)
     fun showEmpty()
 
     /**

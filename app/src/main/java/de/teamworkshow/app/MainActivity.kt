@@ -33,6 +33,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import de.teamworkshow.app.model.MediaItem
 import de.teamworkshow.app.model.MediaType
+import de.teamworkshow.app.model.NewsSlide
 import de.teamworkshow.app.network.SyncManager
 import de.teamworkshow.app.update.UpdateManager
 import de.teamworkshow.app.player.Stage
@@ -118,6 +119,7 @@ class MainActivity : AppCompatActivity() {
         private const val CORNER_DP = 150f
         private const val SYNC_INTERVAL_MS = 60_000L
         private const val WEATHER_PLACEHOLDER = "__weather__"
+        private const val NEWS_PLACEHOLDER = "__news__"
         private const val PREFS = "teamworkshow_settings"
         private const val KEY_STORAGE_BASE = "storage_base"
         private const val KEY_FORMAT = "display_format"
@@ -210,6 +212,11 @@ class MainActivity : AppCompatActivity() {
                     MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, it.durationMs, it.position)
                 }
             }
+            playlist.newsProvider = {
+                syncManager.getNewsSlides().map {
+                    MediaItem(File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, it.durationMs, it.position, news = it)
+                }
+            }
             stageCustomer = newStage(customerRoot, playlist, mediaDir)
             stageCustomer.start()
             return
@@ -236,14 +243,21 @@ class MainActivity : AppCompatActivity() {
         itemsProvider = {
             val cfg = syncManager.getZoneConfig()
             if (cfg == null) emptyList() else pick(cfg).map { s ->
-                if (s.weather) {
-                    MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, s.durationMs, s.position)
-                } else {
-                    val file = File(mediaDir, s.name)
-                    val type = if (file.extension.lowercase() == "mp4") MediaType.VIDEO else MediaType.IMAGE
-                    MediaItem(file, type, s.durationMs, s.position)
+                when (s.kind) {
+                    "weather" ->
+                        MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, s.durationMs, s.position)
+                    "news" -> MediaItem(
+                        File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, s.durationMs, s.position,
+                        news = NewsSlide(s.title, s.body, s.position, s.durationMs)
+                    )
+                    else -> {
+                        val file = File(mediaDir, s.name)
+                        val type = if (file.extension.lowercase() == "mp4") MediaType.VIDEO else MediaType.IMAGE
+                        MediaItem(file, type, s.durationMs, s.position)
+                    }
                 }
-            }.filter { it.type == MediaType.WEATHER || it.file.isFile }
+                // File-less slides always play; a media slide only once its file is here.
+            }.filter { it.type == MediaType.WEATHER || it.type == MediaType.NEWS || it.file.isFile }
         }
     }
 
@@ -312,7 +326,7 @@ class MainActivity : AppCompatActivity() {
             val hasWeatherSlide = if (zones == null) {
                 syncManager.getWeatherSlides().isNotEmpty()
             } else {
-                zones.company.any { it.weather } || zones.customer.any { it.weather }
+                zones.company.any { it.kind == "weather" } || zones.customer.any { it.kind == "weather" }
             }
             val weather = if (widgets.weatherEnabled || hasWeatherSlide) syncManager.fetchWeather() else null
             // Reload when media changed OR the slide structure (order/duration/weather/zones) changed.

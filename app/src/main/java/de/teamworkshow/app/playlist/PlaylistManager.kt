@@ -23,6 +23,12 @@ class PlaylistManager(private val mediaDir: File) {
     var weatherProvider: () -> List<MediaItem> = { emptyList() }
 
     /**
+     * Supplies file-less news slides (kind='news') with their server-defined
+     * position/duration and text. Merged into the playlist and ordered by position.
+     */
+    var newsProvider: () -> List<MediaItem> = { emptyList() }
+
+    /**
      * Zone mode: supplies the complete, already-resolved item list for this zone.
      * When set, the media folder is NOT scanned — the folder is shared by both
      * zones, so a zone must play exactly the slides the server assigned to it and
@@ -54,7 +60,7 @@ class PlaylistManager(private val mediaDir: File) {
         } else {
             emptyList()
         }
-        items = (fileItems + weatherProvider())
+        items = (fileItems + weatherProvider() + newsProvider())
             .sortedWith(compareBy({ it.position }, { it.file.name.lowercase() }))
         index = 0
     }

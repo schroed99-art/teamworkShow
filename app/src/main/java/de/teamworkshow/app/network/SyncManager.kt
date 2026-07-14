@@ -3,6 +3,7 @@ package de.teamworkshow.app.network
 import android.content.Context
 import android.util.Log
 import de.teamworkshow.app.BuildConfig
+import de.teamworkshow.app.model.NewsSlide
 import de.teamworkshow.app.model.SlideMeta
 import kotlin.random.Random
 import de.teamworkshow.app.util.AppLog
@@ -179,6 +180,40 @@ class SyncManager(context: Context, private val mediaDir: File) {
         prefs.edit().putString(KEY_WEATHER, arr.toString()).apply()
     }
 
+    /** File-less news slides (title + body + position/duration) from the last device playlist. */
+    fun getNewsSlides(): List<NewsSlide> {
+        val raw = prefs.getString(KEY_NEWS, null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(raw)
+            val out = ArrayList<NewsSlide>(arr.length())
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                out.add(
+                    NewsSlide(
+                        title = o.optString("t", ""),
+                        body = o.optString("b", ""),
+                        position = o.optInt("p", Int.MAX_VALUE),
+                        durationMs = o.optLong("d", 0L),
+                    )
+                )
+            }
+            out
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun saveNewsSlides(slides: List<NewsSlide>) {
+        val arr = org.json.JSONArray()
+        for (s in slides) {
+            arr.put(
+                JSONObject().put("t", s.title).put("b", s.body)
+                    .put("p", s.position).put("d", s.durationMs)
+            )
+        }
+        prefs.edit().putString(KEY_NEWS, arr.toString()).apply()
+    }
+
     /** Global weather-interstitial template config, or null when unset (app uses defaults). */
     fun getWeatherLayout(): JSONObject? {
         val raw = prefs.getString(KEY_WEATHER_LAYOUT, null) ?: return null
@@ -209,12 +244,20 @@ class SyncManager(context: Context, private val mediaDir: File) {
             (prefs.getString(KEY_WEATHER, "") ?: "") + "|" +
             (prefs.getString(KEY_WEATHER_LAYOUT, "") ?: "") + "|" +
             (prefs.getString(KEY_FORMAT, "") ?: "") + "|" +
-            (prefs.getString(KEY_ZONES, "") ?: "")
+            (prefs.getString(KEY_ZONES, "") ?: "") + "|" +
+            (prefs.getString(KEY_NEWS, "") ?: "")
 
     // ---------- Screen zones (Phase 5.3) ----------
 
-    /** One slide of a zone. A weather interstitial has no file. */
-    data class ZoneSlide(val name: String, val weather: Boolean, val position: Int, val durationMs: Long)
+    /** One slide of a zone. 'weather' and 'news' are file-less; 'news' carries its text. */
+    data class ZoneSlide(
+        val name: String,
+        val kind: String,          // "media" | "weather" | "news"
+        val title: String,
+        val body: String,
+        val position: Int,
+        val durationMs: Long,
+    )
 
     /**
      * A split screen: two independent slide lists, [splitPercent] being the company
@@ -238,16 +281,20 @@ class SyncManager(context: Context, private val mediaDir: File) {
         val out = ArrayList<ZoneSlide>(arr.length())
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
-            val weather = o.optString("kind", "media") == "weather"
+            val kind = o.optString("kind", "media")
             val name = o.optString("name", "")
-            // Never let a zone name escape the media directory.
-            if (!weather && (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains(".."))) {
+            // Only media slides have a file — and it must never escape the media directory.
+            if (kind == "media" &&
+                (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains(".."))
+            ) {
                 continue
             }
             out.add(
                 ZoneSlide(
                     name = name,
-                    weather = weather,
+                    kind = kind,
+                    title = o.optString("title", ""),
+                    body = o.optString("body", ""),
                     position = o.optInt("position", Int.MAX_VALUE),
                     durationMs = o.optLong("duration_ms", 0L),
                 )
@@ -509,11 +556,26 @@ class SyncManager(context: Context, private val mediaDir: File) {
             val arr = root.getJSONArray("items")
             val out = ArrayList<RemoteItem>(arr.length())
             val weather = ArrayList<SlideMeta>()
+            val news = ArrayList<NewsSlide>()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
+                val kind = o.optString("kind", "media")
                 // File-less weather interstitials carry ordering/timing but no media file.
-                if (o.optString("kind", "media") == "weather") {
+                if (kind == "weather") {
                     weather.add(SlideMeta(o.optInt("position", Int.MAX_VALUE), o.optLong("duration_ms", 0L)))
+                    continue
+                }
+                // News slides are file-less too — they carry their own text. Keeping them
+                // out of `out` is what stops the downloader from chasing an empty name.
+                if (kind == "news") {
+                    news.add(
+                        NewsSlide(
+                            title = o.optString("title", ""),
+                            body = o.optString("body", ""),
+                            position = o.optInt("position", Int.MAX_VALUE),
+                            durationMs = o.optLong("duration_ms", 0L),
+                        )
+                    )
                     continue
                 }
                 val name = o.getString("name")
@@ -531,6 +593,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
             }
             savePlaylistMeta(out)
             saveWeatherSlides(weather)
+            saveNewsSlides(news)
             // `widgets` is present only in device mode; folder mode clears it to defaults.
             saveWidgetSettings(root.optJSONObject("widgets"))
             // Global weather-interstitial template + its background download hint.
@@ -610,6 +673,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val KEY_HELP = "help_info"
         private const val KEY_FORMAT = "display_format"
         private const val KEY_ZONES = "zones"
+        private const val KEY_NEWS = "news_slides"
         private const val DEFAULT_FORMAT = "portrait"
         private val DISPLAY_FORMATS = setOf("portrait", "phone", "landscape", "tablet")
         private const val CONNECT_TIMEOUT_MS = 10_000

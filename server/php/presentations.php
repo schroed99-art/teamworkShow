@@ -4,14 +4,24 @@
  *   GET  ?id=          -> { presentation: { ..., slides:[{id,media_name,position,duration_ms}] } }
  *   GET  ?tenant_id=   -> { presentations: [...] }
  *   POST {tenant_id, name}                       -> create
- *   PUT  {id, name?, slides?:[{media_name,duration_ms,position?}]}  -> rename and/or replace ordered slide list
+ *   PUT  {id, name?, slides?:[{media_name,kind,text_title?,text_body?,duration_ms,position?}]}
+ *                      -> rename and/or replace the ordered slide list
  *   DELETE ?id=        -> delete (cascades slides)
+ *
+ * Slide kinds: 'media' (a pool file), 'weather' (file-less interstitial) and
+ * 'news' (file-less message, carries its own title + body).
  */
 require __DIR__ . '/auth.php';
 tw_require_manage();
 
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
+
+/** UTF-8-safe truncation to $n characters (no mbstring dependency). */
+function tw_cut(string $s, int $n): string
+{
+    return preg_replace('/^(.{0,' . $n . '}).*$/us', '$1', $s) ?? $s;
+}
 
 /** Tenant that owns $id, or null when the presentation does not exist. */
 function tw_presentation_tenant(PDO $pdo, int $id): ?int
@@ -32,7 +42,7 @@ if ($method === 'GET') {
             tw_json(['error' => 'not_found'], 404);
         }
         tw_require_tenant((int) $p['tenant_id']);
-        $ss = $pdo->prepare('SELECT id, media_name, kind, position, duration_ms FROM slides WHERE presentation_id = ? ORDER BY position, id');
+        $ss = $pdo->prepare('SELECT id, media_name, kind, text_title, text_body, position, duration_ms FROM slides WHERE presentation_id = ? ORDER BY position, id');
         $ss->execute([$id]);
         $p['slides'] = $ss->fetchAll();
         tw_json(['presentation' => $p]);
@@ -97,24 +107,39 @@ if ($method === 'PUT') {
     if (array_key_exists('slides', $b) && is_array($b['slides'])) {
         $pdo->beginTransaction();
         $pdo->prepare('DELETE FROM slides WHERE presentation_id = ?')->execute([$id]);
-        $ins = $pdo->prepare('INSERT INTO slides (presentation_id, media_name, kind, position, duration_ms) VALUES (?,?,?,?,?)');
+        $ins = $pdo->prepare(
+            'INSERT INTO slides (presentation_id, media_name, kind, text_title, text_body, position, duration_ms)
+             VALUES (?,?,?,?,?,?,?)'
+        );
         $pos = 0;
         foreach ($b['slides'] as $sl) {
-            $kind = ($sl['kind'] ?? 'media') === 'weather' ? 'weather' : 'media';
-            $mn = trim((string) ($sl['media_name'] ?? ''));
-            // Media slides need a file; weather slides are file-less interstitials.
-            if ($kind === 'media' && $mn === '') {
-                continue;
+            $kind = (string) ($sl['kind'] ?? 'media');
+            if (!in_array($kind, ['media', 'weather', 'news'], true)) {
+                $kind = 'media';
             }
-            if ($kind === 'weather') {
+            $mn = trim((string) ($sl['media_name'] ?? ''));
+            $title = '';
+            $body = null;
+            if ($kind === 'news') {
+                // A news slide carries its own text and no file. An empty message
+                // would show an empty board, so drop it rather than store it.
                 $mn = '';
+                $title = tw_cut(trim((string) ($sl['text_title'] ?? '')), 200);
+                $body = tw_cut(trim((string) ($sl['text_body'] ?? '')), 2000);
+                if ($title === '' && $body === '') {
+                    continue;
+                }
+            } elseif ($kind === 'weather') {
+                $mn = ''; // file-less interstitial
+            } elseif ($mn === '') {
+                continue; // a media slide without a file is nothing
             }
             $dur = (int) ($sl['duration_ms'] ?? 8000);
             if ($dur < 250) {
                 $dur = 250;
             }
             $position = array_key_exists('position', $sl) ? (int) $sl['position'] : $pos;
-            $ins->execute([$id, $mn, $kind, $position, $dur]);
+            $ins->execute([$id, $mn, $kind, $title, $body, $position, $dur]);
             $pos++;
         }
         $pdo->commit();

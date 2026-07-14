@@ -45,17 +45,30 @@ function tw_slides_of(PDO $pdo, string $dir, ?int $presentationId, bool &$hasWea
         return [];
     }
     $ss = $pdo->prepare(
-        'SELECT media_name, kind, position, duration_ms FROM slides
+        'SELECT media_name, kind, text_title, text_body, position, duration_ms FROM slides
          WHERE presentation_id = ? ORDER BY position, id'
     );
     $ss->execute([$presentationId]);
     $out = [];
     foreach ($ss as $row) {
-        if (($row['kind'] ?? 'media') === 'weather') {
+        $kind = (string) ($row['kind'] ?? 'media');
+        if ($kind === 'weather') {
             $hasWeather = true;
             $out[] = [
                 'name'        => '',
                 'kind'        => 'weather',
+                'position'    => (int) $row['position'],
+                'duration_ms' => (int) $row['duration_ms'],
+            ];
+            continue;
+        }
+        // News: a file-less slide that carries its own message.
+        if ($kind === 'news') {
+            $out[] = [
+                'name'        => '',
+                'kind'        => 'news',
+                'title'       => (string) ($row['text_title'] ?? ''),
+                'body'        => (string) ($row['text_body'] ?? ''),
                 'position'    => (int) $row['position'],
                 'duration_ms' => (int) $row['duration_ms'],
             ];
@@ -135,21 +148,22 @@ try {
         ? tw_slides_of($pdo, $dir, $dev['company_presentation_id'] ?? null, $hasWeather)
         : [];
 
-    // `items` stays the flat union: it is what the app downloads and hashes, so a
-    // file used by either zone must appear here exactly once.
-    $items = $customer;
-    if ($zoneMode === 'split') {
+    // `items` is the app's download list.
+    //  - single: it is ALSO the whole playlist, so the file-less weather/news slides
+    //    stay in it — the app builds its slideshow from exactly this array.
+    //  - split:  the playlist lives in `zones`, so `items` carries only real files,
+    //    each exactly once, even when both zones use the same one.
+    if ($zoneMode !== 'split') {
+        $items = $customer;
+    } else {
+        $items = [];
         $seen = [];
-        foreach ($customer as $it) {
-            if ($it['name'] !== '') {
-                $seen[$it['name']] = true;
+        foreach (array_merge($customer, $company) as $it) {
+            if ($it['name'] === '' || isset($seen[$it['name']])) {
+                continue;
             }
-        }
-        foreach ($company as $it) {
-            if ($it['name'] !== '' && !isset($seen[$it['name']])) {
-                $seen[$it['name']] = true;
-                $items[] = $it;
-            }
+            $seen[$it['name']] = true;
+            $items[] = $it;
         }
     }
 

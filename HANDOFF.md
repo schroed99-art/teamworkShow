@@ -1,32 +1,46 @@
-# TeamworkShow — Session-Handoff (Stand 2026-07-10, v1.0.15)
+# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.29)
 
 Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital-Signage-App** (Kotlin) + **PHP-Medienserver**. Die App spielt eine Endlos-Slideshow aus einem gerätespezifischen Medienordner, der alle 60 s per Hash vom Server synchronisiert wird.
 
+> Ältere Feature-Abschnitte weiter unten (v1.0.3–v1.0.15) sind Historie; die aktuellen Stände stehen hier oben.
+
 ## Repo & Version
 - Pfad: `~/AndroidStudioProjects/TeamworkShow` · Git-Remote: GitHub `schroed99-art/teamworkShow`
-- Branch `main`, letzter Commit **`6412862`** (Notice-Ticker konfigurierbar, v1.0.15). Alles zu GitHub **gepusht** (`main` = `origin/main`). Working tree clean.
-- Version: Root-Datei `VERSION` (aktuell **1.0.15**, VM meldet 1.0.15). `scripts/deploy.sh` bumpt Patch → baut App → installiert → deployt Server.
+- Branch `main`, letzter Commit **`9897ba9`** (upload.php hinter Login). Alles zu GitHub **gepusht** (`main` = `origin/main`). Working tree clean.
+- Version: Root-Datei `VERSION` (aktuell **1.0.29**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
 - **Standing deploy-OK** (Memory `teamworkshow-autodeploy`): commit→deploy→migrate→smoke→push ohne Rückfrage. Ad-hoc-DB-Mutationen (außerhalb `deploy.sh` + benannter Migrationen) brauchen weiter explizite Freigabe.
 
-## Zuletzt ausgeliefert (2026-07-10, diese Session)
-- **v1.0.12** Wetter als Zwischenbild-Slide (eigener Slide-Typ in der Präsentation).
-- **v1.0.13** Wetter-Zwischenbild **frei konfigurierbar** (globale Vorlage `weather_layout`-Tabelle): Hintergrund aus Medienpool, Elemente Ort/3-Tage-Vorhersage/Analoguhr/Freitext mit Größe+Position. Editor „🌤 Layout…" im Slide-Editor. Migration `migrate_weather_layout.php` (gelaufen).
-- **v1.0.14** Wetter-Layout **Zeilen-Modell**: 8 feste Zeilen (Header,1–6,Footer) statt 3 Bänder; Element wählt Zeile + H-Ausrichtung + Größe → keine Überlappung. Schema unverändert (keine Migration).
-- **v1.0.15** **Hinweis-Laufschrift konfigurierbar** (pro Gerät): 3 neue `widget_settings`-Spalten `notices_size`(sp)/`notices_bg`(#AARRGGBB)/`notices_height`(dp). Felder im Geräte-Editor (Schriftgröße, Rahmen-Höhe, Farbe+Deckkraft). Migration `migrate_notice_style.php` (gelaufen auf VM). Marquee lief schon rechts→links; nur Styling war vorher hartkodiert.
-- Details je Feature in Memory `teamworkshow-status` (neueste Einträge oben).
+## ⚠️ Paket umbenannt: `com.example.teamworkshow` → **`de.teamworkshow.app`**
+- Alle `adb`/Pfad-Befehle nutzen jetzt **`de.teamworkshow.app`** (nicht mehr `com.example…`).
+- Medienordner am Gerät: `/sdcard/Android/data/de.teamworkshow.app/files/media`
+- Start: `adb shell am start -n de.teamworkshow.app/.SplashActivity`
+- **Coexistenz-Falle:** Wegen der Umbenennung können altes + neues Paket parallel installiert sein und sich **nicht** gegenseitig per In-App-Update aktualisieren. Über die Umbenennung hinweg ist **einmalig** ein manuelles `adb install` / Sideload nötig; danach laufen Updates wieder via `apk.php`.
+
+## Zuletzt ausgeliefert (2026-07-13/14, diese Session)
+Großer UI-/Feature-Block — Details je Punkt in Memory `teamworkshow-status` (neueste oben):
+- **Web-Dashboard + Login restyled** auf Lead-Manager-CI (slate/rose `#0F172A/#1E293B/#334155`, Akzent **`#D21A55`**, Text `#F1F5F9/#94A3B8`) + Logo-Wasserzeichen; Favicon/Tab-Icon (`assets/favicon.png` etc.). Android-App bewusst ausgenommen.
+- **In-App-Einstellmenü** (versteckter Trigger 5× oben rechts / MENU-Taste → PIN `0000`): Beenden · Hilfe & Kontakt (8 Felder zentral vom Server) · App aktualisieren · Speicherort wählen (fester Pfad, `MANAGE_EXTERNAL_STORAGE`) · Logs exportieren. Alle Dialoge gebrandet (Material3 `ThemeOverlay.TeamworkShow.Dialog`).
+- **Login-gated APK-Download:** APK liegt **außerhalb** des Webroots (`/var/www/teamworkshow-apk`), Auslieferung nur via `apk.php` (Dashboard-Session **oder** gültiger Pairing-Code `?device=CODE`). `app_update.json` bleibt öffentlich (nur Metadaten). Eigene Kachel „App-Installation" unter Geräte → `download.php` (login-gated).
+- **Globale Einstellungen-Seite** (`einstellungen.php`, volle Breite): Hilfe-&-Kontakt-Felder (4-Spalten-Grid) + Benutzerverwaltung; Header mit Account-Menü (`nav_user.php`: Passwort ändern / Abmelden).
+- **Admin-Slides als Master-Detail** (Liste ↔ Editor, Tab-Leiste bleibt oben). **Laufschrift** in eigenen Abschnitt getrennt + Schriftart/Schriftfarbe/Geschwindigkeit (`notices_font/color/speed`). Ticker-Truncation behoben (voller Text scrollt).
+- **Slide-Editor: direkter Bild-/Video-Upload** (analog Medienpool), Auto-Refresh + Vorauswahl.
+- **`upload.php` jetzt hinter Login** (`tw_require_manage()`, 401 ohne Auth) — letzter offener ungeschützter Schreib-Endpoint geschlossen.
+
+## Migrationen dieser Session (auf VM gelaufen)
+- `migrate_app_settings.php` (Key/Value-Tabelle `app_settings`, seedet `help_*`), `migrate_notice_font.php` (`widget_settings`: `notices_font/notices_color/notices_speed`). Idempotent.
 
 ## Umgebung (alles per CLI, keine Studio-Dialoge)
 - `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`
 - SDK: `~/Library/Android/sdk` · `adb` unter `$SDK/platform-tools/adb`
-- Emulator-AVD: **`TeamworkShow_Pixel`** (Pixel 7, API 36, arm64) → `$SDK/emulator/emulator -avd TeamworkShow_Pixel &`
-- Bauen/Installieren: `./gradlew installDebug` · Start: `adb shell am start -n com.example.teamworkshow/.SplashActivity`
-- Medienordner am Gerät: `/sdcard/Android/data/com.example.teamworkshow/files/media`
-- Wartungsmenü: 5× oben rechts tippen (2 s) → PIN **`0000`** → Server einrichten / Jetzt synchronisieren / Medien neu laden / App verlassen
-- Server-URL der App (SharedPreferences): aktuell `http://192.168.178.207/teamworkshow` (die VM)
+- Emulator-AVD: **`TeamworkShow_Pixel`** (Serial `emulator-5554`, Pairing `550-3B4`) → `$SDK/emulator/emulator -avd TeamworkShow_Pixel &`. Physisches Handy: Serial `TK02260501832`, Pairing `136-A54`.
+- Bauen: `./gradlew :app:compileDebugKotlin` / `:app:assembleRelease` · Installieren: `./gradlew installDebug` · Start s.o.
+- Wartungsmenü: 5× oben rechts tippen (2 s) → PIN **`0000`**. (adb-Tap-Automatik muss on-device als Shell-Loop laufen, um das 2-s-Fenster zu treffen.)
+- Server-URL der App (SharedPreferences `teamworkshow_settings`): `http://192.168.178.207/teamworkshow` (die VM)
 
 ## Server (Staging-VM)
 - Debian 12 LXC (`CT103`) auf **192.168.178.207**, LAMP (Apache · PHP 8.2 · **MariaDB konfiguriert**: DB+User `teamworkshow`).
-- Deployt unter `/var/www/html/teamworkshow/`: öffentlich `playlist.php`, `media.php`, `upload.php`, `delete.php`, `version.php`, `index.html`, `media/`; Backend `db.php`, `auth.php`, `tenants/devices/presentations/widgets.php`, `weather.php`; Admin `login.php`, `admin.php`; Secrets `config.php` (**nur VM**, gitignored).
+- Deployt unter `/var/www/html/teamworkshow/`: öffentlich `playlist.php`, `media.php`, `version.php`, `app_update.php`/`app_update.json`, `index.html`, `media/`; **login-gated** `upload.php`, `delete.php`, `apk.php`, `download.php`; Backend `db.php`, `auth.php`, `tenants/devices/presentations/widgets.php`, `weather.php`, `settings.php`, `nav_user.php`, `apk_path.php`; Admin `login.php`, `admin.php`, `einstellungen.php`, `benutzer.php`; Secrets `config.php` (**nur VM**, gitignored). **APK selbst liegt außerhalb des Webroots** unter `/var/www/teamworkshow-apk/app-release.apk` (nur via `apk.php`).
+  - `apk.php`/`upload.php`/`delete.php`/`widgets.php` nutzen `require_once auth.php` (auth.php `require_once`t db.php bereits — sonst Redeclare-Fatal/HTTP 500).
 - Status-Dashboard (Upload/Löschen + Version): `http://192.168.178.207/teamworkshow/` · **Admin-Dashboard**: `…/admin.php` (Login `login.php`, Passwort in VM-`config.php`).
 - Deploy: `scripts/deploy.sh` (deployt nur die öffentlichen PHP). Backend-Dateien per `scp` (Runbook). **OPcache**: nach scp ~3 s warten vor dem Curlen (validate_timestamps=On). SSH-Key `~/.ssh/teamworkshow_deploy` (root).
 - Gate: `TW_ADMIN_TOKEN=<admin-pw aus VM-config.php> bash server/tests/integration.sh` → muss `GATE: GREEN` (23 Checks) zeigen. DB: `ssh … "mariadb -e 'show tables' teamworkshow"`.
@@ -58,10 +72,13 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 - 🔐 **Root-Passwort der VM ändern** (wurde früher im Klartext gepostet) — vom Nutzer bewusst zurückgestellt, nur auf ausdrückliche Freigabe angehen.
 - 🔑 **Admin-Passwort** (Dashboard-Login) liegt in VM-`config.php` (2026-07-10 regeneriert) — bei Gelegenheit rotieren.
 - 🌤️ **OpenWeather-Key** ist in VM-`config.php` eingetragen, gab zuletzt aber HTTP 401 (Neu-Key-Aktivierungs-Lag). Sobald aktiv, geht Wetter automatisch live (kein Deploy nötig). Re-Check: `curl '…/weather.php?device=DEMO-01'` → `stub:false`.
-- ✅ Erledigt: Video-Upload-Limits (VM Apache-ini, 256M), Download-Overlay (Mock verifiziert), echtes Splash-Logo (`splash_logo.png`).
+- ✅ Erledigt: Video-Upload-Limits (VM Apache-ini, 256M), Download-Overlay (Mock verifiziert), echtes Splash-Logo (`splash_logo.png`), Upload-Endpoint hinter Login.
+- 💡 Nutzer-Hinweis (v1.0.15): „es kommen noch weitere Konfigurationen hinzu" für die Laufschrift — keine konkrete nächste genannt, auf explizite Ansage warten.
 
 ## Konventionen
-- UI: **nie** natives `alert`/`confirm`/`prompt` → gebrandetes Modal (`confirmDialog` im Dashboard). Schwarz + Magenta `#d81b60`.
+- UI: **nie** natives `alert`/`confirm`/`prompt` → gebrandetes Modal (`confirmDialog` im Dashboard, `MaterialAlertDialogBuilder` in der App). Dashboard-CI slate/rose, Akzent **`#D21A55`**.
+- **Kann keine eingeloggten Dashboard-Seiten screenshotten** (würde Login-Eingabe erfordern → verboten). Verifikation dort per `wget`/`php -l` auf der VM; App-Änderungen per Emulator-Screenshot.
+- Sicherheit: Keystore + Passwörter sind Nutzer-Credentials — **nicht** anfassen/committen (`*.jks`, `keystore.properties` gitignored). Admin-PW nur in VM-`config.php`. In-place-APK-Update braucht **gleiches Paket + gleichen Release-Key**.
 - Nach jedem Deploy die Version nennen (App=Gerät vs. Dashboard=Server vergleichbar).
 
 ## Projektgedächtnis (wird automatisch geladen)

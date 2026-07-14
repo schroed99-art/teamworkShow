@@ -693,6 +693,7 @@ function renderDetail(t, devices, presentations){
       <p class="muted" style="margin:-4px 0 12px">${IS_KUNDE
         ? 'Zugänge für Ihr Team. Jeder Zugang sieht genau diesen Bereich und darf Präsentationen, Medien und Laufschrift pflegen — aber keine Geräte oder Mandanten anlegen.'
         : `Kundenlogins für „${esc(t.name)}“. Ein Kunde sieht ausschließlich diesen Mandanten und darf dort Präsentationen, Medien und Laufschrift pflegen — aber keine Geräte, Mandanten oder Benutzer anlegen.`}</p>
+      <div id="usrNotice" style="display:none"></div>
       <div id="usrList" class="muted">Wird geladen…</div>
       <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
         <div class="grid2">
@@ -1000,8 +1001,10 @@ async function loadTenantUsers(t){
       <button class="ghost sm" data-del ${self?'disabled':''} style="border-color:#5a2230;color:#ff6b8a">Löschen</button>`;
     row.querySelector('[data-reset]').onclick=async()=>{
       const pw=genPw();
-      try{ await API.call('users.php','PUT',{id:u.id,action:'reset_password',temp_password:pw});
-        await confirmDialog('Neues Passwort für '+name, pw+'\n\nJetzt notieren — es lässt sich später nicht mehr auslesen.');
+      try{
+        await API.call('users.php','PUT',{id:u.id,action:'reset_password',temp_password:pw});
+        toast('Passwort zurückgesetzt');
+        showUserNotice('Passwort zurückgesetzt', name, u.email, pw);
       }catch(e){ toast(userErr(e)); }
     };
     row.querySelector('[data-act]').onclick=async()=>{
@@ -1017,19 +1020,53 @@ async function loadTenantUsers(t){
     box.appendChild(row);
   });
 }
+/**
+ * Confirmation banner above the list. It STAYS until dismissed: the temp password
+ * is shown exactly once, so a modal the user clicks away would take the only copy
+ * of it with them.
+ */
+function showUserNotice(title, name, email, pw){
+  const box=document.querySelector('#usrNotice'); if(!box) return;
+  box.style.cssText='display:block;border:1px solid var(--magenta);background:rgba(210,26,85,.08);'
+    +'border-radius:12px;padding:14px;margin-bottom:14px';
+  box.innerHTML=`<div class="row" style="align-items:flex-start;gap:10px">
+      <div class="grow">
+        <b>✅ ${esc(title)}</b>
+        <div style="margin-top:6px">${esc(name)} · ${esc(email)}</div>
+        <div class="row" style="margin-top:8px;align-items:center;gap:8px">
+          <span class="muted">Temp-Passwort:</span>
+          <code style="font-family:ui-monospace,monospace;font-size:14px;background:#0f172a;
+                border:1px solid var(--line);border-radius:8px;padding:5px 10px">${esc(pw)}</code>
+          <button class="ghost sm" data-copy>Kopieren</button>
+        </div>
+        <p class="muted" style="margin:8px 0 0">Jetzt notieren und weitergeben — das Passwort lässt sich später
+          nicht mehr auslesen, nur neu setzen. Beim ersten Login muss es geändert werden.</p>
+      </div>
+      <button class="ghost sm" data-close title="Hinweis schließen">✕</button>
+    </div>`;
+  box.querySelector('[data-copy]').onclick=async()=>{
+    try{ await navigator.clipboard.writeText(pw); toast('Passwort kopiert'); }
+    catch(e){ toast('Kopieren nicht möglich — bitte manuell notieren'); }
+  };
+  box.querySelector('[data-close]').onclick=()=>{ box.style.display='none'; box.innerHTML=''; };
+}
+
 async function createTenantUser(t, wrap){
   const g=id=>wrap.querySelector(id);
   const email=g('#uMail').value.trim(), pw=g('#uPw').value;
+  const fn=g('#uFn').value.trim(), ln=g('#uLn').value.trim();
   if(!email){ toast('E-Mail fehlt'); return; }
   try{
     await API.call('users.php','POST',{
       email, role:'kunde', tenant_id:t.id, temp_password:pw,
-      first_name:g('#uFn').value.trim(), last_name:g('#uLn').value.trim(), active:1,
+      first_name:fn, last_name:ln, active:1,
     });
   }catch(e){ toast(userErr(e)); return; }
   g('#uFn').value=''; g('#uLn').value=''; g('#uMail').value=''; g('#uPw').value=genPw();
-  await confirmDialog('Zugang angelegt', email+'\nPasswort: '+pw+'\n\nJetzt notieren — es lässt sich später nicht mehr auslesen.');
-  loadTenantUsers(t);
+  toast('Zugang angelegt');
+  // Refresh first, so the banner sits directly above the row it is talking about.
+  await loadTenantUsers(t);
+  showUserNotice('Zugang angelegt', [fn,ln].filter(Boolean).join(' ')||email, email, pw);
 }
 
 // ---- Medienpool (shared media folder: upload / preview / delete) ----

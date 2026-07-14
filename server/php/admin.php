@@ -21,6 +21,7 @@ if (!in_array($role, ['admin', 'koordinator', 'kunde'], true)) {
     exit;
 }
 $isKunde = $role === 'kunde';
+$actorId = (int) (tw_current_user_id() ?? 0);
 $version = '';
 $vfile = __DIR__ . '/version.php';
 // version.php echoes JSON; read the file's version string cheaply for display.
@@ -265,6 +266,7 @@ const DEEP_TENANT = <?= (int) ($_GET['tenant'] ?? 0) ?>;
 // Customer mode: authoring only. Every control this hides is also refused by the
 // endpoints, so IS_KUNDE is about not showing a customer a door they can't open.
 const IS_KUNDE = <?= $isKunde ? 'true' : 'false' ?>;
+const CURRENT_UID = <?= $actorId ?>;   // to keep someone from locking themselves out
 function fmtSize(b){ if(b==null||b<0)return '–'; if(b<1024)return b+' B'; if(b<1048576)return (b/1024).toFixed(0)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
@@ -431,7 +433,7 @@ function renderDetail(t, devices, presentations){
     tabs.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.tab===name)?'sm':'ghost sm'; });
   };
   const tabDefs = IS_KUNDE
-    ? [['pres','Präsentationen'],['dev','Geräte']]   // no tenant-level settings for a customer
+    ? [['pres','Präsentationen'],['dev','Geräte'],['usr','Zugänge']]   // no tenant-level settings for a customer
     : [['pres','Präsentationen'],['dev','Geräte'],['usr','Zugänge'],['set','Einstellungen']];
   tabDefs.forEach(([k,label])=>{
     const b=document.createElement('button'); b.dataset.tab=k; b.textContent=label; b.onclick=()=>showTab(k);
@@ -628,12 +630,15 @@ function renderDetail(t, devices, presentations){
   panels.dev=devPanel;
   body.appendChild(devPanel);
 
-  // Zugänge tab: the customer logins for THIS tenant. Creating one is staff work
-  // (users.php is staff-only); a customer managing their own colleagues comes later.
-  if (!IS_KUNDE) {
+  // Zugänge tab: the customer logins for THIS tenant. Staff manage them here, and
+  // a customer manages their own colleagues here — users.php confines a
+  // tenant-bound actor to role 'kunde' inside their own tenant.
+  {
     const uWrap=document.createElement('div'); uWrap.className='card';
     uWrap.innerHTML=`<h3>Zugänge</h3>
-      <p class="muted" style="margin:-4px 0 12px">Kundenlogins für „${esc(t.name)}“. Ein Kunde sieht ausschließlich diesen Mandanten und darf dort Präsentationen, Medien und Laufschrift pflegen — aber keine Geräte, Mandanten oder Benutzer anlegen.</p>
+      <p class="muted" style="margin:-4px 0 12px">${IS_KUNDE
+        ? 'Zugänge für Ihr Team. Jeder Zugang sieht genau diesen Bereich und darf Präsentationen, Medien und Laufschrift pflegen — aber keine Geräte oder Mandanten anlegen.'
+        : `Kundenlogins für „${esc(t.name)}“. Ein Kunde sieht ausschließlich diesen Mandanten und darf dort Präsentationen, Medien und Laufschrift pflegen — aber keine Geräte, Mandanten oder Benutzer anlegen.`}</p>
       <div id="usrList" class="muted">Wird geladen…</div>
       <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
         <div class="grid2">
@@ -911,7 +916,10 @@ function userErr(e){
   const map={ email_taken:'E-Mail bereits vergeben', invalid_email:'E-Mail ungültig',
     temp_password_too_short:'Temp-Passwort zu kurz (min. 8 Zeichen)',
     kunde_requires_tenant:'Ein Kundenzugang braucht einen Mandanten',
-    tenant_not_found:'Mandant nicht gefunden', forbidden:'Keine Berechtigung' };
+    tenant_not_found:'Mandant nicht gefunden', forbidden:'Keine Berechtigung',
+    forbidden_assign_role:'Sie können nur Zugänge für Ihren eigenen Bereich anlegen',
+    cannot_delete_self:'Das eigene Konto kann nicht gelöscht werden',
+    cannot_deactivate_self:'Das eigene Konto kann nicht deaktiviert werden' };
   return map[e.message] || ('Fehler: '+e.message);
 }
 async function loadTenantUsers(t){
@@ -923,16 +931,19 @@ async function loadTenantUsers(t){
   box.className=''; box.innerHTML='';
   list.forEach(u=>{
     const name=[u.first_name,u.last_name].filter(Boolean).join(' ')||u.email;
+    // Nobody deactivates or deletes the account they are signed in with (the
+    // server refuses it too) — otherwise a customer could lock their team out.
+    const self = u.id === CURRENT_UID;
     const row=document.createElement('div'); row.className='row wrap2';
     row.style.cssText='border-top:1px solid var(--line);padding-top:10px;margin-top:10px';
     row.innerHTML=`<div class="grow" style="min-width:180px">
-        <b>${esc(name)}</b>
+        <b>${esc(name)}</b>${self?' <span class="tag">(angemeldet)</span>':''}
         <div class="muted">${esc(u.email)}</div>
       </div>
       <span class="badge-on" style="${u.active?'':'color:var(--dim);border-color:var(--line)'}">${u.active?'aktiv':'inaktiv'}</span>
       <button class="ghost sm" data-reset title="Neues Temp-Passwort vergeben">⟳ Passwort</button>
-      <button class="ghost sm" data-act>${u.active?'Deaktivieren':'Aktivieren'}</button>
-      <button class="ghost sm" data-del style="border-color:#5a2230;color:#ff6b8a">Löschen</button>`;
+      <button class="ghost sm" data-act ${self?'disabled':''}>${u.active?'Deaktivieren':'Aktivieren'}</button>
+      <button class="ghost sm" data-del ${self?'disabled':''} style="border-color:#5a2230;color:#ff6b8a">Löschen</button>`;
     row.querySelector('[data-reset]').onclick=async()=>{
       const pw=genPw();
       try{ await API.call('users.php','PUT',{id:u.id,action:'reset_password',temp_password:pw});

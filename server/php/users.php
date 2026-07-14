@@ -1,6 +1,6 @@
 <?php
 /**
- * User CRUD for the dashboard (admin + koordinator).
+ * User CRUD for the dashboard (admin + koordinator; 'kunde' for own-tenant logins).
  *   GET                         -> { users:[{id,email,role,salutation,first_name,last_name,initials,note,active}] }
  *   POST  {email, role, temp_password, salutation?, first_name?, last_name?, initials?, note?, active?}
  *   PUT   {id, role?, salutation?, first_name?, last_name?, initials?, note?, active?}   (email is NOT changeable)
@@ -10,14 +10,42 @@
  * Role rules: a koordinator may never create, edit, delete or reset an ADMIN, and
  * may never assign the 'admin' role. The last remaining admin cannot be deleted,
  * demoted or deactivated.
+ *
+ * SELF-SERVICE: a 'kunde' may manage the logins of their OWN tenant — and nothing
+ * else. The three ways that could go wrong are each closed once, below:
+ *   - reaching a user outside the tenant  -> tw_scope_target() (staff have
+ *     tenant_id NULL, so tw_require_tenant() refuses them for a bound actor)
+ *   - creating//promoting to a staff role -> tw_scope_role()
+ *   - moving a user to another tenant     -> tw_owning_tenant()
  */
 require __DIR__ . '/auth.php';
-$actorRole = tw_require_staff();           // 'admin' or 'koordinator' — never 'kunde'
+$actorRole = tw_require_manage();          // 'admin', 'koordinator' or 'kunde'
 $actorId   = tw_current_user_id();
+$bound     = tw_is_tenant_bound();         // true => customer self-service
 
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
 const ROLES = ['admin', 'koordinator', 'betrachter', 'kunde'];
+
+/**
+ * Assert the actor may act on this user row. For a tenant-bound actor that means
+ * the target must live in their own tenant — which by construction excludes every
+ * staff account, since staff carry tenant_id NULL.
+ */
+function tw_scope_target(array $target): void
+{
+    $t = isset($target['tenant_id']) && $target['tenant_id'] !== null ? (int) $target['tenant_id'] : null;
+    tw_require_tenant($t);
+}
+
+/** The only role a tenant-bound actor may ever assign is 'kunde'. */
+function tw_scope_role(string $role): string
+{
+    if (tw_is_tenant_bound() && $role !== 'kunde') {
+        tw_json(['error' => 'forbidden_assign_role'], 403);
+    }
+    return $role;
+}
 
 /**
  * A 'kunde' is meaningless without a tenant — login.php refuses such an account
@@ -60,8 +88,12 @@ function tw_active_admin_count(PDO $pdo): int
 
 if ($method === 'GET') {
     // ?tenant_id= narrows the list to one tenant's customer logins (the Zugänge
-    // tab in admin.php); without it the caller gets every user.
+    // tab in admin.php); without it the caller gets every user. A tenant-bound
+    // actor is pinned to their own tenant whatever they ask for.
     $tenantId = (int) ($_GET['tenant_id'] ?? 0);
+    if ($bound) {
+        $tenantId = (int) tw_current_tenant_id();
+    }
     $where = $tenantId > 0 ? 'WHERE u.tenant_id = ?' : '';
     $args  = $tenantId > 0 ? [$tenantId] : [];
     $st = $pdo->prepare(
@@ -92,8 +124,11 @@ if ($method === 'POST') {
     if ($actorRole !== 'admin' && $role === 'admin') {
         tw_json(['error' => 'forbidden_assign_admin'], 403);
     }
+    $role = tw_scope_role($role);
     $tenantId = isset($b['tenant_id']) && $b['tenant_id'] !== '' && $b['tenant_id'] !== null
         ? (int) $b['tenant_id'] : null;
+    // A customer creates into their own tenant, whatever the body claims.
+    $tenantId = $bound ? tw_owning_tenant($tenantId) : $tenantId;
     $tenantId = tw_check_kunde_tenant($pdo, $role, $tenantId);
     $exists = $pdo->prepare('SELECT id FROM users WHERE email = ?');
     $exists->execute([$email]);
@@ -133,6 +168,7 @@ if ($method === 'PUT') {
     if ($actorRole !== 'admin' && $target['role'] === 'admin') {
         tw_json(['error' => 'forbidden'], 403);
     }
+    tw_scope_target($target); // customer: own tenant only
 
     // Password reset -> new temp password, forced change on next login.
     if (($b['action'] ?? '') === 'reset_password') {
@@ -153,7 +189,14 @@ if ($method === 'PUT') {
     if ($actorRole !== 'admin' && $role === 'admin') {
         tw_json(['error' => 'forbidden_assign_admin'], 403);
     }
+    $role = tw_scope_role($role);
     $active = array_key_exists('active', $b) ? (int) (bool) $b['active'] : (int) $target['active'];
+
+    // A customer deactivating their own login would lock themselves out of the
+    // dashboard with no way back except us.
+    if ($bound && $actorId !== null && $id === $actorId && $active !== 1) {
+        tw_json(['error' => 'cannot_deactivate_self'], 409);
+    }
 
     // Protect the last active admin from being demoted or deactivated.
     if ($target['role'] === 'admin' && (int) $target['active'] === 1
@@ -164,6 +207,10 @@ if ($method === 'PUT') {
     $tenantId = array_key_exists('tenant_id', $b)
         ? (($b['tenant_id'] === '' || $b['tenant_id'] === null) ? null : (int) $b['tenant_id'])
         : (isset($target['tenant_id']) && $target['tenant_id'] !== null ? (int) $target['tenant_id'] : null);
+    // A customer can never move a login out of (or into) another tenant.
+    if ($bound) {
+        $tenantId = tw_owning_tenant($tenantId);
+    }
     // Promoting someone to 'kunde' without a tenant would lock them out at login.
     $tenantId = tw_check_kunde_tenant($pdo, $role, $tenantId);
     // Only a customer is confined to a tenant; any other role sees everything.
@@ -201,6 +248,7 @@ if ($method === 'DELETE') {
     if ($actorRole !== 'admin' && $target['role'] === 'admin') {
         tw_json(['error' => 'forbidden'], 403);
     }
+    tw_scope_target($target); // customer: own tenant only
     if ($actorId !== null && $id === $actorId) {
         tw_json(['error' => 'cannot_delete_self'], 409);
     }

@@ -208,7 +208,76 @@ class SyncManager(context: Context, private val mediaDir: File) {
         (prefs.getString(KEY_META, "") ?: "") + "|" +
             (prefs.getString(KEY_WEATHER, "") ?: "") + "|" +
             (prefs.getString(KEY_WEATHER_LAYOUT, "") ?: "") + "|" +
-            (prefs.getString(KEY_FORMAT, "") ?: "")
+            (prefs.getString(KEY_FORMAT, "") ?: "") + "|" +
+            (prefs.getString(KEY_ZONES, "") ?: "")
+
+    // ---------- Screen zones (Phase 5.3) ----------
+
+    /** One slide of a zone. A weather interstitial has no file. */
+    data class ZoneSlide(val name: String, val weather: Boolean, val position: Int, val durationMs: Long)
+
+    /**
+     * A split screen: two independent slide lists, [splitPercent] being the company
+     * zone's share of the [axis] ("rows" = stacked, "cols" = side by side).
+     */
+    data class ZoneConfig(
+        val axis: String,
+        val splitPercent: Int,
+        val company: List<ZoneSlide>,
+        val customer: List<ZoneSlide>,
+    )
+
+    private fun saveZones(zones: JSONObject?) {
+        prefs.edit().apply {
+            if (zones == null) remove(KEY_ZONES) else putString(KEY_ZONES, zones.toString())
+        }.apply()
+    }
+
+    private fun parseZoneSlides(arr: org.json.JSONArray?): List<ZoneSlide> {
+        if (arr == null) return emptyList()
+        val out = ArrayList<ZoneSlide>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val weather = o.optString("kind", "media") == "weather"
+            val name = o.optString("name", "")
+            // Never let a zone name escape the media directory.
+            if (!weather && (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains(".."))) {
+                continue
+            }
+            out.add(
+                ZoneSlide(
+                    name = name,
+                    weather = weather,
+                    position = o.optInt("position", Int.MAX_VALUE),
+                    durationMs = o.optLong("duration_ms", 0L),
+                )
+            )
+        }
+        return out
+    }
+
+    /** The device's zone split, or null when it runs one full-screen slideshow. */
+    fun getZoneConfig(): ZoneConfig? {
+        val raw = prefs.getString(KEY_ZONES, null) ?: return null
+        return try {
+            val o = JSONObject(raw)
+            if (o.optString("mode", "single") != "split") return null
+            ZoneConfig(
+                axis = if (o.optString("axis", "rows") == "cols") "cols" else "rows",
+                splitPercent = o.optInt("split", 70).coerceIn(10, 90),
+                company = parseZoneSlides(o.optJSONArray("company")),
+                customer = parseZoneSlides(o.optJSONArray("customer")),
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Layout-affecting part of the zone config: a change here must rebuild the stages. */
+    fun zoneLayoutSignature(): String {
+        val z = getZoneConfig() ?: return "single"
+        return "split|${z.axis}|${z.splitPercent}"
+    }
 
     /** Widget settings from the last device playlist (empty in folder mode). */
     fun getWidgetSettings(): WidgetSettings {
@@ -470,6 +539,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
             saveHelpInfo(root.optJSONObject("help"))
             // Per-device display format from the `device` block (folder mode → default).
             saveDisplayFormat(root.optJSONObject("device")?.optString("display_format"))
+            // Zone split (null = single full-screen stage, i.e. everything before 5.3).
+            saveZones(root.optJSONObject("zones"))
             pendingWeatherAsset = root.optJSONObject("weather_asset")?.let { a ->
                 val name = a.optString("name", "")
                 if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) {
@@ -538,6 +609,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val KEY_WIDGETS = "widget_settings"
         private const val KEY_HELP = "help_info"
         private const val KEY_FORMAT = "display_format"
+        private const val KEY_ZONES = "zones"
         private const val DEFAULT_FORMAT = "portrait"
         private val DISPLAY_FORMATS = setOf("portrait", "phone", "landscape", "tablet")
         private const val CONNECT_TIMEOUT_MS = 10_000

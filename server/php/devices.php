@@ -23,6 +23,29 @@ function tw_display_format(mixed $v): string
     return in_array($v, TW_DISPLAY_FORMATS, true) ? $v : 'portrait';
 }
 
+/** Zone config (Phase 5.3). 'split' shows a company zone plus the customer zone. */
+const TW_ZONE_MODES = ['single', 'split'];
+const TW_ZONE_AXES  = ['rows', 'cols'];   // stacked vs. side by side
+
+function tw_zone_mode(mixed $v): string
+{
+    $v = strtolower(trim((string) $v));
+    return in_array($v, TW_ZONE_MODES, true) ? $v : 'single';
+}
+
+function tw_zone_axis(mixed $v): string
+{
+    $v = strtolower(trim((string) $v));
+    return in_array($v, TW_ZONE_AXES, true) ? $v : 'rows';
+}
+
+/** The company zone's share, clamped so neither zone can collapse to nothing. */
+function tw_zone_split(mixed $v): int
+{
+    $n = is_numeric($v) ? (int) $v : 70;
+    return max(10, min(90, $n));
+}
+
 function tw_gen_pairing(PDO $pdo): string
 {
     for ($i = 0; $i < 25; $i++) {
@@ -150,6 +173,34 @@ if ($method === 'PUT') {
         if (array_key_exists('display_format', $b)) {
             $set[] = 'display_format = ?';
             $vals[] = tw_display_format($b['display_format']);
+        }
+        // Zones are infrastructure: only we decide that a screen is split, how, and
+        // what runs in the company half. The customer keeps presentation_id above.
+        if (array_key_exists('zone_mode', $b)) {
+            $set[] = 'zone_mode = ?';
+            $vals[] = tw_zone_mode($b['zone_mode']);
+        }
+        if (array_key_exists('zone_axis', $b)) {
+            $set[] = 'zone_axis = ?';
+            $vals[] = tw_zone_axis($b['zone_axis']);
+        }
+        if (array_key_exists('zone_split', $b)) {
+            $set[] = 'zone_split = ?';
+            $vals[] = tw_zone_split($b['zone_split']);
+        }
+        if (array_key_exists('company_presentation_id', $b)) {
+            $cid = !empty($b['company_presentation_id']) ? (int) $b['company_presentation_id'] : null;
+            // Deliberately NOT restricted to the device's tenant: the company zone
+            // carries our own advertising presentation, which lives elsewhere.
+            if ($cid !== null) {
+                $cs = $pdo->prepare('SELECT id FROM presentations WHERE id = ?');
+                $cs->execute([$cid]);
+                if (!$cs->fetch()) {
+                    tw_json(['error' => 'company_presentation_not_found'], 422);
+                }
+            }
+            $set[] = 'company_presentation_id = ?';
+            $vals[] = $cid;
         }
     }
 

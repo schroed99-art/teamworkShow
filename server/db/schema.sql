@@ -29,15 +29,26 @@ CREATE TABLE IF NOT EXISTS devices (
     projektnummer   VARCHAR(32) NOT NULL DEFAULT '',
     anzeige_info    VARCHAR(255) NOT NULL DEFAULT '',
     display_format  VARCHAR(16) NOT NULL DEFAULT 'portrait',
+    -- Screen zones (Phase 5.3): 'single' = one full-screen slideshow;
+    -- 'split' = company zone (company_presentation_id) + customer zone
+    -- (presentation_id — the only one a customer may set). zone_axis: rows|cols;
+    -- zone_split = the company zone's share in percent.
+    zone_mode       VARCHAR(8) NOT NULL DEFAULT 'single',
+    zone_axis       VARCHAR(8) NOT NULL DEFAULT 'rows',
+    zone_split      TINYINT UNSIGNED NOT NULL DEFAULT 70,
+    company_presentation_id INT UNSIGNED NULL DEFAULT NULL,
     last_seen       TIMESTAMP NULL DEFAULT NULL,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_devices_pairing (pairing_code),
     KEY idx_devices_tenant (tenant_id),
     KEY idx_devices_presentation (presentation_id),
+    KEY idx_devices_company_presentation (company_presentation_id),
     CONSTRAINT fk_devices_tenant FOREIGN KEY (tenant_id)
         REFERENCES tenants (id) ON DELETE CASCADE,
     CONSTRAINT fk_devices_presentation FOREIGN KEY (presentation_id)
+        REFERENCES presentations (id) ON DELETE SET NULL,
+    CONSTRAINT fk_devices_company_presentation FOREIGN KEY (company_presentation_id)
         REFERENCES presentations (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -31,16 +31,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.media3.common.MediaItem as Media3Item
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import de.teamworkshow.app.model.MediaItem
 import de.teamworkshow.app.model.MediaType
 import de.teamworkshow.app.network.SyncManager
 import de.teamworkshow.app.update.UpdateManager
-import de.teamworkshow.app.player.PlayerCallback
-import de.teamworkshow.app.player.SlideShowController
+import de.teamworkshow.app.player.Stage
 import de.teamworkshow.app.playlist.PlaylistManager
 import de.teamworkshow.app.util.AppLog
 import java.io.File
@@ -49,25 +44,23 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
-class MainActivity : AppCompatActivity(), PlayerCallback {
+class MainActivity : AppCompatActivity() {
 
-    private lateinit var imageViewA: ImageView
-    private lateinit var imageViewB: ImageView
-    private lateinit var playerView: PlayerView
-    private lateinit var emptyView: View
-    private lateinit var slideProgress: ProgressBar
     private lateinit var noticesBar: android.widget.FrameLayout
     private lateinit var noticesText: TextView
     private var tickerAnimator: android.animation.ValueAnimator? = null
     private var tickerText: String? = null
     private var tickerSpeedDp: Int = 90
 
+    // The screen is one Stage (full screen) or two (company + customer zone). Each
+    // Stage owns its views, player and playlist; everything below is per-screen.
+    private lateinit var stageCustomer: Stage
+    private var stageCompany: Stage? = null
+    private var zoneLayoutSig: String = "single"
+
     // Weather forecast interstitial (a file-less slide); its contents are built at
-    // runtime from the global layout config (background + grid-positioned elements).
-    private lateinit var weatherView: View
-    private lateinit var wxBg: ImageView
-    private lateinit var wxScrim: View
-    private lateinit var wxLayer: android.widget.FrameLayout
+    // runtime from the global layout config (background + grid-positioned elements)
+    // into whichever zone is currently showing it.
     private val WX_ROWS = listOf("header", "1", "2", "3", "4", "5", "6", "footer")
     private var latestWeather: SyncManager.WeatherInfo? = null
     private var lastStructSig: String? = null
@@ -76,13 +69,6 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
     private lateinit var downloadProgress: ProgressBar
     private lateinit var pairingOverlay: View
     private lateinit var pairingCodeLabel: TextView
-
-    private var frontImageView: ImageView? = null
-    private var preloaded: Pair<File, Bitmap>? = null
-    private var slideAnimator: ObjectAnimator? = null
-
-    private lateinit var exoPlayer: ExoPlayer
-    private lateinit var slideShowController: SlideShowController
 
     private lateinit var syncManager: SyncManager
     private val updateManager = UpdateManager(this)
@@ -169,17 +155,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         setContentView(R.layout.activity_main)
         hideSystemBars()
 
-        imageViewA = findViewById(R.id.imageViewA)
-        imageViewB = findViewById(R.id.imageViewB)
-        playerView = findViewById(R.id.playerView)
-        emptyView = findViewById(R.id.emptyView)
-        slideProgress = findViewById(R.id.slideProgress)
         noticesBar = findViewById(R.id.noticesBar)
         noticesText = findViewById(R.id.noticesText)
-        weatherView = findViewById(R.id.weatherView)
-        wxBg = findViewById(R.id.wxBg)
-        wxScrim = findViewById(R.id.wxScrim)
-        wxLayer = findViewById(R.id.wxLayer)
         downloadOverlay = findViewById(R.id.downloadOverlay)
         downloadStatus = findViewById(R.id.downloadStatus)
         downloadProgress = findViewById(R.id.downloadProgress)
@@ -189,8 +166,6 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         updateBadge = findViewById(R.id.updateBadge)
         updateBadge.setOnClickListener { onUpdateBadgeClicked() }
 
-        setupExoPlayer()
-
         val mediaDir = resolveMediaDir()
         AppLog.i(TAG, "media dir: ${mediaDir.absolutePath}")
         syncManager = SyncManager(this, mediaDir)
@@ -199,20 +174,105 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         pairingCodeLabel.text = syncManager.getOrCreatePairingCode()
         updatePairingOverlay()
 
-        val playlist = PlaylistManager(mediaDir)
-        // Honor the server-defined order + per-slide duration when a device is paired.
-        playlist.metaProvider = { syncManager.getPlaylistMeta() }
-        // Weave in file-less weather interstitials at their server-defined positions.
-        playlist.weatherProvider = {
-            syncManager.getWeatherSlides().map {
-                MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, it.durationMs, it.position)
-            }
-        }
-        slideShowController = SlideShowController(playlist, this)
-        slideShowController.start()
+        buildStages(mediaDir)
 
         // Immediate sync on launch, then poll periodically.
         mainHandler.post(syncRunnable)
+    }
+
+    // ---------- Zones ----------
+
+    /**
+     * Creates the stage(s) for the device's current zone config: one full-screen
+     * stage, or a company zone plus a customer zone sized by the configured split.
+     * Called once per activity instance — a later zone change recreates the activity
+     * (see [syncNow]), which is the same route a display-format change takes.
+     */
+    private fun buildStages(mediaDir: File) {
+        val zones = syncManager.getZoneConfig()
+        zoneLayoutSig = syncManager.zoneLayoutSignature()
+
+        val container = findViewById<LinearLayout>(R.id.stageContainer)
+        val companyRoot = findViewById<View>(R.id.zoneCompany)
+        val customerRoot = findViewById<View>(R.id.zoneCustomer)
+
+        if (zones == null) {
+            // Single stage: the customer zone IS the screen, fed by the folder scan +
+            // server meta exactly as before zones existed.
+            companyRoot.visibility = View.GONE
+            container.orientation = LinearLayout.VERTICAL
+            sizeZone(customerRoot, 1f, vertical = true)
+
+            val playlist = PlaylistManager(mediaDir)
+            playlist.metaProvider = { syncManager.getPlaylistMeta() }
+            playlist.weatherProvider = {
+                syncManager.getWeatherSlides().map {
+                    MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, it.durationMs, it.position)
+                }
+            }
+            stageCustomer = newStage(customerRoot, playlist, mediaDir)
+            stageCustomer.start()
+            return
+        }
+
+        val vertical = zones.axis == "rows"
+        companyRoot.visibility = View.VISIBLE
+        container.orientation = if (vertical) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+        sizeZone(companyRoot, zones.splitPercent.toFloat(), vertical)
+        sizeZone(customerRoot, (100 - zones.splitPercent).toFloat(), vertical)
+
+        stageCompany = newStage(companyRoot, zonePlaylist(mediaDir) { it.company }, mediaDir)
+        stageCustomer = newStage(customerRoot, zonePlaylist(mediaDir) { it.customer }, mediaDir)
+        stageCompany?.start()
+        stageCustomer.start()
+        AppLog.i(TAG, "zones: ${zones.axis} ${zones.splitPercent}/${100 - zones.splitPercent}")
+    }
+
+    /** A zone's playlist: exactly the slides the server assigned to it, nothing else. */
+    private fun zonePlaylist(
+        mediaDir: File,
+        pick: (SyncManager.ZoneConfig) -> List<SyncManager.ZoneSlide>,
+    ) = PlaylistManager(mediaDir).apply {
+        itemsProvider = {
+            val cfg = syncManager.getZoneConfig()
+            if (cfg == null) emptyList() else pick(cfg).map { s ->
+                if (s.weather) {
+                    MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, s.durationMs, s.position)
+                } else {
+                    val file = File(mediaDir, s.name)
+                    val type = if (file.extension.lowercase() == "mp4") MediaType.VIDEO else MediaType.IMAGE
+                    MediaItem(file, type, s.durationMs, s.position)
+                }
+            }.filter { it.type == MediaType.WEATHER || it.file.isFile }
+        }
+    }
+
+    private fun newStage(root: View, playlist: PlaylistManager, mediaDir: File) = Stage(
+        context = this,
+        root = root,
+        playlist = playlist,
+        bitmapLoader = { file -> loadScaledBitmap(file) },
+        preloader = { file, done ->
+            syncExecutor.execute {
+                val bmp = loadScaledBitmap(file)
+                if (bmp != null) mainHandler.post { done(bmp) }
+            }
+        },
+        weatherPainter = { stage -> populateWeather(stage, latestWeather) },
+    )
+
+    /** Gives a zone its share of the container along the split axis. */
+    private fun sizeZone(zone: View, weight: Float, vertical: Boolean) {
+        zone.layoutParams = LinearLayout.LayoutParams(
+            if (vertical) LinearLayout.LayoutParams.MATCH_PARENT else 0,
+            if (vertical) 0 else LinearLayout.LayoutParams.MATCH_PARENT,
+            weight
+        )
+    }
+
+    private fun forEachStage(action: (Stage) -> Unit) {
+        stageCompany?.let(action)
+        action(stageCustomer)
     }
 
     // ---------- Server sync ----------
@@ -246,16 +306,28 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
             val changed = syncManager.sync()
             // Widget settings arrive with the playlist; weather is a separate live call.
             val widgets = syncManager.getWidgetSettings()
-            // Fetch the forecast when weather is enabled OR a weather interstitial is in the playlist.
-            val wantWeather = widgets.weatherEnabled || syncManager.getWeatherSlides().isNotEmpty()
-            val weather = if (wantWeather) syncManager.fetchWeather() else null
-            // Reload when media changed OR the slide structure (order/duration/weather) changed.
+            // Fetch the forecast when weather is enabled OR a weather interstitial runs
+            // anywhere — in single mode that is the playlist, in split mode either zone.
+            val zones = syncManager.getZoneConfig()
+            val hasWeatherSlide = if (zones == null) {
+                syncManager.getWeatherSlides().isNotEmpty()
+            } else {
+                zones.company.any { it.weather } || zones.customer.any { it.weather }
+            }
+            val weather = if (widgets.weatherEnabled || hasWeatherSlide) syncManager.fetchWeather() else null
+            // Reload when media changed OR the slide structure (order/duration/weather/zones) changed.
             val sig = syncManager.playlistSignature()
             mainHandler.post {
                 latestWeather = weather
+                // A changed zone split needs different views, not just a different list.
+                if (syncManager.zoneLayoutSignature() != zoneLayoutSig) {
+                    AppLog.i(TAG, "zone layout changed -> recreate")
+                    recreate()
+                    return@post
+                }
                 if (changed || sig != lastStructSig) {
                     lastStructSig = sig
-                    slideShowController.reload()
+                    forEachStage { it.reload() }
                 }
                 applyWidgets(widgets)
                 updatePairingOverlay()
@@ -430,90 +502,6 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         if (hasFocus) hideSystemBars()
     }
 
-    // ---------- ExoPlayer ----------
-
-    private fun setupExoPlayer() {
-        exoPlayer = ExoPlayer.Builder(this).build().apply {
-            volume = 0f
-            repeatMode = Player.REPEAT_MODE_OFF
-        }
-        playerView.player = exoPlayer
-        playerView.useController = false
-
-        exoPlayer.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
-                    slideShowController.onVideoDone()
-                }
-            }
-        })
-    }
-
-    // ---------- PlayerCallback ----------
-
-    override fun showImage(item: MediaItem) {
-        val bitmap = preloaded?.takeIf { it.first == item.file }?.second
-            ?: loadScaledBitmap(item.file) ?: return
-        preloaded = null
-
-        val backView = if (frontImageView == imageViewA) imageViewB else imageViewA
-        backView.setImageBitmap(bitmap)
-
-        if (playerView.alpha > 0f) {
-            playerView.animate().alpha(0f).setDuration(CROSSFADE_MS).withEndAction {
-                exoPlayer.stop()
-            }.start()
-        }
-
-        backView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
-        frontImageView?.animate()?.alpha(0f)?.setDuration(CROSSFADE_MS)?.start()
-        frontImageView = backView
-
-        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        emptyView.visibility = View.GONE
-    }
-
-    override fun showVideo(item: MediaItem) {
-        imageViewA.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        imageViewB.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        frontImageView = null
-
-        exoPlayer.stop()
-        exoPlayer.clearMediaItems()
-        exoPlayer.setMediaItem(Media3Item.fromUri(Uri.fromFile(item.file)))
-        exoPlayer.prepare()
-        exoPlayer.play()
-
-        playerView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
-        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        emptyView.visibility = View.GONE
-    }
-
-    override fun showWeather(item: MediaItem) {
-        populateWeather(latestWeather)
-
-        imageViewA.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        imageViewB.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        frontImageView = null
-        if (playerView.alpha > 0f) {
-            playerView.animate().alpha(0f).setDuration(CROSSFADE_MS).withEndAction { exoPlayer.stop() }.start()
-        }
-
-        weatherView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
-        emptyView.visibility = View.GONE
-    }
-
-    override fun showEmpty() {
-        imageViewA.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        imageViewB.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        playerView.animate().alpha(0f).setDuration(CROSSFADE_MS).withEndAction {
-            exoPlayer.stop()
-        }.start()
-        weatherView.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
-        frontImageView = null
-        emptyView.visibility = View.VISIBLE
-    }
-
     // ---------- Weather interstitial ----------
 
     /**
@@ -521,16 +509,17 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
      * enabled elements (city, 3-day forecast, analog clock, free texts) each placed by its
      * grid cell. Falls back to sensible defaults when no config is present.
      */
-    private fun populateWeather(w: SyncManager.WeatherInfo?) {
+    private fun populateWeather(stage: Stage, w: SyncManager.WeatherInfo?) {
         val cfg = syncManager.getWeatherLayout()
         val dm = resources.displayMetrics
         fun dp(v: Float) = (v * dm.density).toInt()
 
         // Background (downloaded pool image) + readability scrim.
         val bg = syncManager.getWeatherBackgroundFile()
-        wxBg.setImageBitmap(bg?.let { BitmapFactory.decodeFile(it.absolutePath) })
-        wxScrim.alpha = (cfg?.optInt("scrim", 20) ?: 20).coerceIn(0, 100) / 100f
+        stage.wxBg.setImageBitmap(bg?.let { BitmapFactory.decodeFile(it.absolutePath) })
+        stage.wxScrim.alpha = (cfg?.optInt("scrim", 20) ?: 20).coerceIn(0, 100) / 100f
 
+        val wxLayer = stage.wxLayer
         wxLayer.removeAllViews()
 
         // Vertical layout is a fixed stack of equal rows (Header, 1-6, Footer). Each element
@@ -663,31 +652,6 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         else -> "🌡️"
     }
 
-    override fun onSlideStarted(durationMs: Long, next: MediaItem?) {
-        // Discreet progress line for image slides (videos have an unknown duration).
-        slideAnimator?.cancel()
-        if (durationMs > 0) {
-            slideProgress.visibility = View.VISIBLE
-            slideProgress.progress = 0
-            slideAnimator = ObjectAnimator.ofInt(slideProgress, "progress", 0, slideProgress.max)
-                .apply {
-                    duration = durationMs
-                    interpolator = LinearInterpolator()
-                    start()
-                }
-        } else {
-            slideProgress.visibility = View.GONE
-        }
-        // Preload the next image so the upcoming crossfade is instant.
-        if (next != null && next.type == MediaType.IMAGE) {
-            val file = next.file
-            syncExecutor.execute {
-                val bmp = loadScaledBitmap(file)
-                if (bmp != null) mainHandler.post { preloaded = file to bmp }
-            }
-        }
-    }
-
     // ---------- Touch handling ----------
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
@@ -795,7 +759,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                     0 -> showServerUrlDialog()
                     1 -> showPairingDialog()
                     2 -> syncNow(userTriggered = true)
-                    3 -> slideShowController.reload()
+                    3 -> forEachStage { it.reload() }
                     4 -> checkForUpdateFromMenu()
                     5 -> showHelpDialog()
                     6 -> showStorageDialog()
@@ -985,10 +949,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     override fun onDestroy() {
         super.onDestroy()
-        slideAnimator?.cancel()
         mainHandler.removeCallbacksAndMessages(null)
         syncExecutor.shutdownNow()
-        slideShowController.stop()
-        exoPlayer.release()
+        forEachStage { it.release() }
     }
 }

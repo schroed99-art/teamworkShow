@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One slideshow stage. Included once per zone (see activity_main.xml), so the IDs
+  in here are NOT unique across the window: always look them up scoped to the
+  include's root view (Stage does), never via Activity.findViewById.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- A/B ImageViews for crossfade between images -->
+    <ImageView
+        android:id="@+id/imageViewA"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:alpha="0"
+        android:contentDescription="@null" />
+
+    <ImageView
+        android:id="@+id/imageViewB"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:alpha="0"
+        android:contentDescription="@null" />
+
+    <!-- TextureView mode required for alpha-based crossfade -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/playerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        app:use_controller="false"
+        app:resize_mode="fit"
+        app:surface_type="texture_view" />
+
+    <!-- Empty state: full-bleed branded start image, shown when no media is present -->
+    <ImageView
+        android:id="@+id/emptyView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/startbild"
+        android:scaleType="centerCrop"
+        android:contentDescription="@string/logo_desc"
+        android:visibility="gone" />
+
+    <!-- Weather interstitial: configurable background + scrim + a container whose children
+         (city / forecast / clock / free texts) are built at runtime from the layout config. -->
+    <FrameLayout
+        android:id="@+id/weatherView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:alpha="0">
+
+        <ImageView
+            android:id="@+id/wxBg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:contentDescription="@null" />
+
+        <View
+            android:id="@+id/wxScrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#000000"
+            android:alpha="0" />
+
+        <FrameLayout
+            android:id="@+id/wxLayer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="@dimen/weather_padding" />
+
+    </FrameLayout>
+
+    <!-- Discreet preloader line: shows elapsed time of the current slide -->
+    <ProgressBar
+        android:id="@+id/slideProgress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/slide_progress_height"
+        android:layout_gravity="bottom"
+        android:max="1000"
+        android:progress="0"
+        android:progressTint="@color/brand_magenta"
+        android:progressBackgroundTint="#22FFFFFF"
+        android:visibility="gone" />
+
+</FrameLayout>

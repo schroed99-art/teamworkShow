@@ -410,6 +410,9 @@ async function loadMedia(){
   } catch(e){ media=[]; }
 }
 
+// Every presentation in the system, for the company zone — that one may come from
+// another tenant (it carries OUR advertising), so it is not the tenant's list.
+let allPres = [];
 async function selectTenant(t){
   activeTenant=t; await loadTenants();
   $('#detailTitle').textContent = t.name;
@@ -417,8 +420,56 @@ async function selectTenant(t){
     API.call('devices.php?tenant_id='+t.id),
     API.call('presentations.php?tenant_id='+t.id),
   ]);
+  if(!IS_KUNDE){
+    try { allPres = (await API.call('presentations.php')).presentations||[]; } catch(e){ allPres=[]; }
+  }
   renderDetail(t, devs.devices||[], pres.presentations||[]);
 }
+
+<?php if (!$isKunde): ?>
+/**
+ * Zone controls for a device (staff only). 'Geteilt' puts our company slideshow
+ * next to the customer's — the customer keeps their own zone (the Präsentation
+ * field above) and never sees or changes any of this. PHP-gated rather than
+ * hidden at runtime, so a customer's browser is never even sent this markup.
+ */
+function zoneFields(d){
+  const mode = d.zone_mode||'single', axis = d.zone_axis||'rows', split = d.zone_split??70;
+  const cid = d.company_presentation_id;
+  const byTenant = {};
+  allPres.forEach(p=>{ (byTenant[p.tenant_id]=byTenant[p.tenant_id]||[]).push(p); });
+  const groups = Object.keys(byTenant).map(tid=>{
+    const tn = (tenants.find(x=>String(x.id)===String(tid))||{}).name || ('Mandant '+tid);
+    return `<optgroup label="${esc(tn)}">`
+      + byTenant[tid].map(p=>`<option value="${p.id}"${String(p.id)===String(cid)?' selected':''}>${esc(p.name)}</option>`).join('')
+      + `</optgroup>`;
+  }).join('');
+  return `
+    <div style="margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:14px">
+      <div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
+        <b>🗂 Bildschirm-Zonen</b>
+        <span class="muted">Firmen-Bereich neben dem Kunden-Bereich</span>
+      </div>
+      <div class="grid2">
+        <div><label class="f">Aufteilung</label>
+          <select data-f="zone_mode" style="width:100%">
+            <option value="single"${mode==='single'?' selected':''}>Eine Fläche (Kunde)</option>
+            <option value="split"${mode==='split'?' selected':''}>Geteilt: Firma + Kunde</option>
+          </select></div>
+        <div><label class="f">Teilung</label>
+          <select data-f="zone_axis" style="width:100%">
+            <option value="rows"${axis==='rows'?' selected':''}>Übereinander</option>
+            <option value="cols"${axis==='cols'?' selected':''}>Nebeneinander</option>
+          </select></div>
+        <div><label class="f">Anteil Firmen-Zone (%)</label>
+          <input type="number" min="10" max="90" step="5" data-f="zone_split" value="${split}" style="width:100%"></div>
+        <div><label class="f">Firmen-Präsentation</label>
+          <select data-f="company_presentation_id" style="width:100%"><option value="">—</option>${groups}</select></div>
+      </div>
+      <p class="muted" style="margin:8px 0 0">Bei „Eine Fläche“ läuft nur die Präsentation des Kunden — die übrigen Felder greifen dann nicht.</p>
+    </div>`;
+}
+<?php endif; ?>
 
 function renderDetail(t, devices, presentations){
   const body=$('#detailBody');
@@ -497,7 +548,8 @@ function renderDetail(t, devices, presentations){
         <div><label class="f">Anzeige-Info</label><input value="${esc(d.anzeige_info)}" data-f="anzeige_info" style="width:100%"></div>
         <div><label class="f">Präsentation</label><select data-f="presentation_id" style="width:100%"><option value="">—</option>${presOpts}</select></div>
         <div><label class="f">Anzeigeformat</label><select data-f="display_format" style="width:100%">${[['portrait','Hochkant-Signage'],['phone','Telefon'],['landscape','Querformat / TV'],['tablet','Tablet']].map(([v,l])=>`<option value="${v}"${(d.display_format||'portrait')===v?' selected':''}>${l}</option>`).join('')}</select></div>
-      </div>`;
+      </div>
+      ${zoneFields(d)}`;
     c.innerHTML=`
       <div class="row wrap2">
         <b>${esc(d.name||'(ohne Name)')}</b>
@@ -546,7 +598,9 @@ function renderDetail(t, devices, presentations){
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
       const devBody = IS_KUNDE
         ? {id:d.id, presentation_id:g('presentation_id')||null}
-        : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format')};
+        : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format'),
+           zone_mode:g('zone_mode'), zone_axis:g('zone_axis'), zone_split:+g('zone_split')||70,
+           company_presentation_id:g('company_presentation_id')||null};
       await API.call('devices.php','PUT',devBody);
       const w=f=>c.querySelector(`[data-w="${f}"]`);
       const nc=k=>c.querySelector(`[data-nc="${k}"]`);

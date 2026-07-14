@@ -1,4 +1,4 @@
-# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.34)
+# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.37)
 
 Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital-Signage-App** (Kotlin) + **PHP-Medienserver**. Die App spielt eine Endlos-Slideshow aus einem gerätespezifischen Medienordner, der alle 60 s per Hash vom Server synchronisiert wird.
 
@@ -7,7 +7,7 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 ## Repo & Version
 - Pfad: `~/Claude/teamworkshow` (Umzug 2026-07-14, vorher `~/AndroidStudioProjects/TeamworkShow`) · Git-Remote: GitHub `schroed99-art/teamworkShow`
 - Branch `main`. Alles zu GitHub **gepusht** (`main` = `origin/main`).
-- Version: Root-Datei `VERSION` (aktuell **1.0.34**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
+- Version: Root-Datei `VERSION` (aktuell **1.0.37**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
 - **Standing deploy-OK** (Memory `teamworkshow-autodeploy`): commit→deploy→migrate→smoke→push ohne Rückfrage. Ad-hoc-DB-Mutationen (außerhalb `deploy.sh` + benannter Migrationen) brauchen weiter explizite Freigabe.
 
 ## ⚠️ Paket umbenannt: `com.example.teamworkshow` → **`de.teamworkshow.app`**
@@ -31,12 +31,22 @@ Geplant in 4 Schritten: **5.1 Multi-Format → 5.2 Mandanten-Self-Service → 5.
 - **Kundenansicht:** `admin.php` läuft im reduzierten Modus (`IS_KUNDE`), `overview.php` ist die Landeseite. Beide Seiten fragen die DB direkt ab und wenden den Mandantenfilter **selbst** an — dasselbe gilt für `status.php`. Wer hier eine neue SQL-Abfrage ergänzt, muss `tw_tenant_filter()` mitziehen.
 - Dabei geschlossen: **`delete.php` war komplett unauthentifiziert** (jeder im Netz konnte Medien löschen) und `upload.php` überschrieb fremde Dateien bei Namensgleichheit.
 - Verifiziert mit zwei Angriffs-Proben gegen einen echten Kundenlogin: 27/27 auf den JSON-Endpoints, 14/14 auf den HTML-Seiten.
-- **Zugänge (v1.0.34):** Kundenlogins werden **beim Mandanten** angelegt — `admin.php` → Mandant → Tab **„Zugänge"** (Anlegen mit generiertem Temp-Passwort, Zurücksetzen, Aktiv/Inaktiv, Löschen). `users.php` GET kennt dafür `?tenant_id=` und liefert `tenant_name` mit. Die zentrale `benutzer.php` blendet die Rolle `kunde` bewusst aus: sie hätte keinen Mandanten-Wähler, und ihre Rollenauswahl kennt `kunde` nicht — ein Bearbeiten dort würde den Kunden stillschweigend degradieren und seine Mandantenbindung löschen.
-- **Selbstverwaltung (v1.0.34):** ein Kunde verwaltet sein eigenes Team im selben „Zugänge"-Tab (anlegen, Passwort zurücksetzen, aktiv/inaktiv, löschen). `users.php` läuft dafür auf `tw_require_manage()`; die drei Ausbruchswege sind je **einmal** geschlossen: `tw_scope_target()` (fremde Nutzer — Staff hat `tenant_id NULL` und fällt damit automatisch raus), `tw_scope_role()` (nur Rolle `kunde` zuweisbar) und `tw_owning_tenant()` (Mandant nicht verschiebbar). Zusätzlich: niemand deaktiviert/löscht das Konto, mit dem er angemeldet ist.
+- **Zugänge (v1.0.37):** Kundenlogins werden **beim Mandanten** angelegt — `admin.php` → Mandant → Tab **„Zugänge"** (Anlegen mit generiertem Temp-Passwort, Zurücksetzen, Aktiv/Inaktiv, Löschen). `users.php` GET kennt dafür `?tenant_id=` und liefert `tenant_name` mit. Die zentrale `benutzer.php` blendet die Rolle `kunde` bewusst aus: sie hätte keinen Mandanten-Wähler, und ihre Rollenauswahl kennt `kunde` nicht — ein Bearbeiten dort würde den Kunden stillschweigend degradieren und seine Mandantenbindung löschen.
+- **Selbstverwaltung (v1.0.37):** ein Kunde verwaltet sein eigenes Team im selben „Zugänge"-Tab (anlegen, Passwort zurücksetzen, aktiv/inaktiv, löschen). `users.php` läuft dafür auf `tw_require_manage()`; die drei Ausbruchswege sind je **einmal** geschlossen: `tw_scope_target()` (fremde Nutzer — Staff hat `tenant_id NULL` und fällt damit automatisch raus), `tw_scope_role()` (nur Rolle `kunde` zuweisbar) und `tw_owning_tenant()` (Mandant nicht verschiebbar). Zusätzlich: niemand deaktiviert/löscht das Konto, mit dem er angemeldet ist.
 - Verifiziert: 29/29 Angriffs-/Funktionsprobe auf die Selbstverwaltung; Regression 28/28 (Endpoints) + 15/15 (HTML-Seiten).
 - **`media/` ist bewusst keine Vertraulichkeitsgrenze:** `media.php` bleibt unauthentifiziert (ein Signage-Gerät hat keinen Login), Dateinamen sind also erratbar. Kunden können sich gegenseitig aber nicht auflisten, überschreiben oder löschen.
 
-**5.3 / 5.4 — offen.** Zonen: das Wetter-Grid (`WX_ROWS`, config-JSON) ist die Blaupause für eine allgemeine Mehr-Zonen-Bühne; `PlaylistManager`/`SlideShowController` sind bereits mehrfach instanziierbar.
+**5.3 Bildschirm-Zonen — FERTIG (v1.0.37, am Emulator verifiziert).**
+- Pro Gerät: `zone_mode` (`single|split`), `zone_axis` (`rows` = übereinander, `cols` = nebeneinander), `zone_split` (Anteil der Firmen-Zone in %, 10–90) und `company_presentation_id` (Migration `migrate_device_zones.php`). Alles **staff-only** — der Kunde behält allein seine `presentation_id`, die im Split seine eigene Zone füllt.
+- Die **Firmen-Präsentation darf aus einem anderen Mandanten kommen** (sie trägt unsere Werbung) — das ist die eine bewusste Ausnahme von der Mandantentrennung und steht so in `devices.php`.
+- `playlist.php` liefert `zones: {mode, axis, split, company[], customer[]}`; **`items` bleibt die flache Vereinigung** und ist weiterhin das, was die App herunterlädt und per Hash vergleicht (eine von beiden Zonen genutzte Datei erscheint dort genau einmal). In `single` ist `zones` null → alter Vertrag unverändert.
+- **App-Umbau:** neue Klasse `player/Stage.kt` = eine Bühne mit eigenen Views (`res/layout/zone_stage.xml`, zweimal per `<include>` eingebunden), eigenem ExoPlayer, eigener `PlaylistManager` + `SlideShowController`. `MainActivity` ist nicht mehr `PlayerCallback`, sondern hält 1–2 Stages; Laufschrift, Overlays, Wetter-**Inhalt** und Sync bleiben pro Gerät.
+  - **Achtung:** die IDs in `zone_stage.xml` sind pro Fenster **doppelt**. Immer über die Wurzel des `<include>` suchen (`stage.root.findViewById`), **nie** `Activity.findViewById` — sonst trifft man stumm die falsche Zone.
+  - Im Zonenmodus scannt `PlaylistManager` den Medienordner **nicht** (`itemsProvider`): der Ordner ist geteilt, eine Zone darf nur ihre eigenen Slides spielen.
+- Eine geänderte Zonen-Aufteilung erzeugt die Activity neu (`zoneLayoutSignature`) — derselbe Weg wie beim Formatwechsel, greift innerhalb eines Sync-Intervalls ohne Neustart.
+- Verifiziert: 20/20 Backend-Probe; am Emulator 60/40 übereinander, Livewechsel auf 50/50 nebeneinander und zurück auf eine Fläche (dort weiterhin inkl. Wetter-Zwischenbild).
+
+**5.4 Nachrichten — offen.** Naheliegend: eine Slide-`kind='news'` analog zum dateilosen `kind='weather'`, pro Zone authorbar. Die Laufschrift bleibt bewusst geräteweit (unter beiden Zonen); erst 5.4 würde sie ggf. pro Zone brauchen.
 
 ## Zuletzt ausgeliefert (2026-07-13/14, diese Session)
 Großer UI-/Feature-Block — Details je Punkt in Memory `teamworkshow-status` (neueste oben):

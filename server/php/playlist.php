@@ -6,9 +6,16 @@
  *        { "items": [ { name, hash, size }, ... ] }
  *  - GET playlist.php?device=<pairing>    -> device-specific, DB-backed:
  *        { "items": [ { name, hash, size, position, duration_ms }, ... ],
- *          "device": { pairing_code, name, standort, anzeige_info },
+ *          "device": { pairing_code, name, standort, anzeige_info, display_format },
+ *          "zones": null | { mode:'split', axis:'rows'|'cols', split:<company %>,
+ *                            company:[slides], customer:[slides] },
  *          "tenant": { id, name },
  *          "widgets": { weather_enabled, weather_location, notices_enabled, notices_text, schedule } }
+ *
+ * `items` is always the flat union of every zone's slides: it is what the app
+ * downloads and hash-compares. `zones` only says which of those files each zone
+ * plays, in what order. In single mode `zones` is null and `items` is the whole
+ * (and only) slideshow — the legacy contract, unchanged.
  *
  * Slides whose media file is missing on disk are skipped so the app's hash sync stays consistent.
  */
@@ -25,6 +32,49 @@ function tw_media_meta(string $dir, string $name): ?array
         return null;
     }
     return ['hash' => hash_file('sha256', $path), 'size' => filesize($path)];
+}
+
+/**
+ * The ordered slide list of one presentation. Media files missing on disk are
+ * skipped so the app's hash sync stays consistent; weather slides are file-less.
+ * $hasWeather is raised when the list contains a weather interstitial.
+ */
+function tw_slides_of(PDO $pdo, string $dir, ?int $presentationId, bool &$hasWeather): array
+{
+    if (empty($presentationId)) {
+        return [];
+    }
+    $ss = $pdo->prepare(
+        'SELECT media_name, kind, position, duration_ms FROM slides
+         WHERE presentation_id = ? ORDER BY position, id'
+    );
+    $ss->execute([$presentationId]);
+    $out = [];
+    foreach ($ss as $row) {
+        if (($row['kind'] ?? 'media') === 'weather') {
+            $hasWeather = true;
+            $out[] = [
+                'name'        => '',
+                'kind'        => 'weather',
+                'position'    => (int) $row['position'],
+                'duration_ms' => (int) $row['duration_ms'],
+            ];
+            continue;
+        }
+        $meta = tw_media_meta($dir, $row['media_name']);
+        if ($meta === null) {
+            continue;
+        }
+        $out[] = [
+            'name'        => $row['media_name'],
+            'kind'        => 'media',
+            'hash'        => $meta['hash'],
+            'size'        => $meta['size'],
+            'position'    => (int) $row['position'],
+            'duration_ms' => (int) $row['duration_ms'],
+        ];
+    }
+    return $out;
 }
 
 $device = isset($_GET['device']) ? trim((string) $_GET['device']) : '';
@@ -61,6 +111,7 @@ try {
     $pdo = tw_db();
     $stmt = $pdo->prepare(
         'SELECT d.id, d.pairing_code, d.name, d.standort, d.anzeige_info, d.display_format, d.presentation_id,
+                d.zone_mode, d.zone_axis, d.zone_split, d.company_presentation_id,
                 t.id AS tenant_id, t.name AS tenant_name
          FROM devices d JOIN tenants t ON t.id = d.tenant_id
          WHERE d.pairing_code = ?'
@@ -74,39 +125,43 @@ try {
 
     $pdo->prepare('UPDATE devices SET last_seen = NOW() WHERE id = ?')->execute([$dev['id']]);
 
-    $items = [];
     $hasWeather = false;
-    if (!empty($dev['presentation_id'])) {
-        $ss = $pdo->prepare(
-            'SELECT media_name, kind, position, duration_ms FROM slides
-             WHERE presentation_id = ? ORDER BY position, id'
-        );
-        $ss->execute([$dev['presentation_id']]);
-        foreach ($ss as $row) {
-            // Weather interstitial: file-less slide, kept in order with its duration.
-            if (($row['kind'] ?? 'media') === 'weather') {
-                $hasWeather = true;
-                $items[] = [
-                    'name'        => '',
-                    'kind'        => 'weather',
-                    'position'    => (int) $row['position'],
-                    'duration_ms' => (int) $row['duration_ms'],
-                ];
-                continue;
+    $zoneMode = (string) ($dev['zone_mode'] ?? 'single');
+
+    // The customer zone is the device's own presentation — in single mode it simply
+    // is the whole screen, which keeps the legacy contract intact.
+    $customer = tw_slides_of($pdo, $dir, $dev['presentation_id'] ?? null, $hasWeather);
+    $company  = $zoneMode === 'split'
+        ? tw_slides_of($pdo, $dir, $dev['company_presentation_id'] ?? null, $hasWeather)
+        : [];
+
+    // `items` stays the flat union: it is what the app downloads and hashes, so a
+    // file used by either zone must appear here exactly once.
+    $items = $customer;
+    if ($zoneMode === 'split') {
+        $seen = [];
+        foreach ($customer as $it) {
+            if ($it['name'] !== '') {
+                $seen[$it['name']] = true;
             }
-            $meta = tw_media_meta($dir, $row['media_name']);
-            if ($meta === null) {
-                continue;
-            }
-            $items[] = [
-                'name'        => $row['media_name'],
-                'kind'        => 'media',
-                'hash'        => $meta['hash'],
-                'size'        => $meta['size'],
-                'position'    => (int) $row['position'],
-                'duration_ms' => (int) $row['duration_ms'],
-            ];
         }
+        foreach ($company as $it) {
+            if ($it['name'] !== '' && !isset($seen[$it['name']])) {
+                $seen[$it['name']] = true;
+                $items[] = $it;
+            }
+        }
+    }
+
+    $zones = null;
+    if ($zoneMode === 'split') {
+        $zones = [
+            'mode'    => 'split',
+            'axis'    => (string) ($dev['zone_axis'] ?? 'rows'),
+            'split'   => (int) ($dev['zone_split'] ?? 70),  // the company zone's share, %
+            'company' => $company,
+            'customer' => $customer,
+        ];
     }
 
     $ws = $pdo->prepare(
@@ -167,6 +222,7 @@ try {
             'anzeige_info'   => $dev['anzeige_info'],
             'display_format' => $dev['display_format'] ?: 'portrait',
         ],
+        'zones' => $zones,   // null in single mode — the app then plays `items` full-screen
         'tenant' => [
             'id'   => (int) $dev['tenant_id'],
             'name' => $dev['tenant_name'],

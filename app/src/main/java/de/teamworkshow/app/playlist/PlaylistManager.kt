@@ -22,7 +22,20 @@ class PlaylistManager(private val mediaDir: File) {
      */
     var weatherProvider: () -> List<MediaItem> = { emptyList() }
 
+    /**
+     * Zone mode: supplies the complete, already-resolved item list for this zone.
+     * When set, the media folder is NOT scanned — the folder is shared by both
+     * zones, so a zone must play exactly the slides the server assigned to it and
+     * nothing else. [metaProvider] and [weatherProvider] are then unused.
+     */
+    var itemsProvider: (() -> List<MediaItem>)? = null
+
     fun reload() {
+        itemsProvider?.let { provider ->
+            items = provider().sortedWith(compareBy({ it.position }, { it.file.name.lowercase() }))
+            index = 0
+            return
+        }
         val meta = metaProvider()
         val fileItems = if (mediaDir.exists() && mediaDir.isDirectory) {
             mediaDir.listFiles()

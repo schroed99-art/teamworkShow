@@ -1,5 +1,11 @@
 <?php
-/** Tenant CRUD. GET list · POST create{name} · PUT update{id,name} · DELETE ?id= (cascades). */
+/**
+ * Tenant CRUD. GET list · POST create{name} · PUT update{id,name} · DELETE ?id= (cascades).
+ *
+ * A customer may read their own tenant (the dashboard needs its name) but never
+ * create, rename or delete one — tenants are infrastructure, so mutations are
+ * staff-only.
+ */
 require __DIR__ . '/auth.php';
 tw_require_manage();
 
@@ -7,10 +13,14 @@ $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
-    tw_json(['tenants' => $pdo->query('SELECT id, name, created_at FROM tenants ORDER BY id')->fetchAll()]);
+    [$scope, $args] = tw_tenant_filter('id');
+    $st = $pdo->prepare("SELECT id, name, created_at FROM tenants WHERE 1=1 $scope ORDER BY id");
+    $st->execute($args);
+    tw_json(['tenants' => $st->fetchAll()]);
 }
 
 if ($method === 'POST') {
+    tw_require_staff();
     $name = trim((string) (tw_body()['name'] ?? ''));
     if ($name === '') {
         tw_json(['error' => 'name_required'], 422);
@@ -20,6 +30,7 @@ if ($method === 'POST') {
 }
 
 if ($method === 'PUT') {
+    tw_require_staff();
     $b = tw_body();
     $id = (int) ($b['id'] ?? 0);
     $name = trim((string) ($b['name'] ?? ''));
@@ -31,6 +42,7 @@ if ($method === 'PUT') {
 }
 
 if ($method === 'DELETE') {
+    tw_require_staff();
     $id = (int) ($_GET['id'] ?? (tw_body()['id'] ?? 0));
     if ($id <= 0) {
         tw_json(['error' => 'id_required'], 422);

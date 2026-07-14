@@ -8,7 +8,7 @@
  * and per-element grid position/size for city / forecast / clock plus free texts.
  */
 require __DIR__ . '/auth.php';
-tw_require_manage();
+tw_require_staff(); // one global template shared by every tenant — not a customer's to edit
 
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];

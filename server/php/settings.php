@@ -23,7 +23,7 @@ $keys = [
 $pdo = tw_db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    tw_require_manage(); // admin/koordinator only
+    tw_require_staff(); // global app settings — admin/koordinator only, never a customer
     $raw = file_get_contents('php://input');
     $body = json_decode($raw, true);
     if (!is_array($body)) {

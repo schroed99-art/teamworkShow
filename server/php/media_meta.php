@@ -10,50 +10,75 @@
  * tenant has a device at that Standort" using the standorte map above.
  */
 require __DIR__ . '/auth.php';
+require __DIR__ . '/media_scope.php';
 tw_require_manage();
 
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
-    $items = $pdo->query(
-        'SELECT m.filename, m.tenant_id, t.name AS tenant_name, m.note
+    // A customer sees only files assigned to their own tenant — never another
+    // tenant's, and never our unassigned company pool.
+    [$scope, $args] = tw_tenant_filter('m.tenant_id');
+    $st = $pdo->prepare(
+        "SELECT m.filename, m.tenant_id, t.name AS tenant_name, m.note
            FROM media_meta m LEFT JOIN tenants t ON t.id = m.tenant_id
-          ORDER BY m.filename'
-    )->fetchAll();
+          WHERE 1=1 $scope
+          ORDER BY m.filename"
+    );
+    $st->execute($args);
+    $items = $st->fetchAll();
     foreach ($items as &$it) {
         $it['tenant_id'] = $it['tenant_id'] !== null ? (int) $it['tenant_id'] : null;
     }
     unset($it);
-    $tenants = $pdo->query('SELECT id, name FROM tenants ORDER BY id')->fetchAll();
+
+    [$tScope, $tArgs] = tw_tenant_filter('id');
+    $st = $pdo->prepare("SELECT id, name FROM tenants WHERE 1=1 $tScope ORDER BY id");
+    $st->execute($tArgs);
+    $tenants = $st->fetchAll();
     foreach ($tenants as &$t) {
         $t['id'] = (int) $t['id'];
     }
     unset($t);
-    $standorte = $pdo->query(
-        "SELECT DISTINCT tenant_id, standort FROM devices WHERE standort <> '' ORDER BY standort"
-    )->fetchAll();
+
+    [$dScope, $dArgs] = tw_tenant_filter('tenant_id');
+    $st = $pdo->prepare(
+        "SELECT DISTINCT tenant_id, standort FROM devices
+          WHERE standort <> '' $dScope ORDER BY standort"
+    );
+    $st->execute($dArgs);
+    $standorte = $st->fetchAll();
     foreach ($standorte as &$s) {
         $s['tenant_id'] = (int) $s['tenant_id'];
     }
     unset($s);
+
     // Projektnummer lives on the device; expose per-tenant so the pool can search by it.
-    $projekte = $pdo->query(
-        "SELECT DISTINCT tenant_id, projektnummer FROM devices WHERE projektnummer <> '' ORDER BY projektnummer"
-    )->fetchAll();
+    $st = $pdo->prepare(
+        "SELECT DISTINCT tenant_id, projektnummer FROM devices
+          WHERE projektnummer <> '' $dScope ORDER BY projektnummer"
+    );
+    $st->execute($dArgs);
+    $projekte = $st->fetchAll();
     foreach ($projekte as &$p) {
         $p['tenant_id'] = (int) $p['tenant_id'];
     }
     unset($p);
+
     tw_json(['items' => $items, 'tenants' => $tenants, 'standorte' => $standorte, 'projekte' => $projekte]);
 }
 
 if ($method === 'PUT') {
     $b = tw_body();
     $filename = (string) ($b['filename'] ?? '');
-    if ($filename === '' || strpbrk($filename, "/\\") !== false || strpos($filename, '..') !== false) {
+    if (!tw_media_name_ok($filename)) {
         tw_json(['error' => 'bad_filename'], 422);
     }
+    // Customers may only re-note files they already own, and may not reassign
+    // them to a different tenant (tw_require_tenant rejects any other target).
+    tw_require_media_access($pdo, $filename);
+
     $tenantId = null;
     if (array_key_exists('tenant_id', $b) && $b['tenant_id'] !== null && $b['tenant_id'] !== '') {
         $tenantId = (int) $b['tenant_id'];
@@ -63,6 +88,7 @@ if ($method === 'PUT') {
             tw_json(['error' => 'tenant_not_found'], 422);
         }
     }
+    tw_require_tenant($tenantId);
     $note = (string) ($b['note'] ?? '');
     $pdo->prepare(
         'INSERT INTO media_meta (filename, tenant_id, note) VALUES (?, ?, ?)

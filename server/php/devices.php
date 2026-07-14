@@ -37,15 +37,28 @@ function tw_gen_pairing(PDO $pdo): string
     throw new RuntimeException('could not generate a unique pairing code');
 }
 
+/** Tenant that owns $id, or null when the device does not exist. */
+function tw_device_tenant(PDO $pdo, int $id): ?int
+{
+    $s = $pdo->prepare('SELECT tenant_id FROM devices WHERE id = ?');
+    $s->execute([$id]);
+    $v = $s->fetchColumn();
+    return $v === false ? null : (int) $v;
+}
+
 if ($method === 'GET') {
     $tenantId = (int) ($_GET['tenant_id'] ?? 0);
     $sel = 'SELECT d.*, TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) AS seconds_since_seen FROM devices d';
     if ($tenantId > 0) {
+        tw_require_tenant($tenantId);
         $s = $pdo->prepare($sel . ' WHERE d.tenant_id = ? ORDER BY d.id');
         $s->execute([$tenantId]);
         $rows = $s->fetchAll();
     } else {
-        $rows = $pdo->query($sel . ' ORDER BY d.id')->fetchAll();
+        [$scope, $args] = tw_tenant_filter('d.tenant_id');
+        $s = $pdo->prepare($sel . " WHERE 1=1 $scope ORDER BY d.id");
+        $s->execute($args);
+        $rows = $s->fetchAll();
     }
     foreach ($rows as &$r) {
         $secs = $r['seconds_since_seen'] === null ? null : (int) $r['seconds_since_seen'];
@@ -57,6 +70,7 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    tw_require_staff(); // devices are provisioned by us, not by the customer
     $b = tw_body();
     $tenantId = (int) ($b['tenant_id'] ?? 0);
     if ($tenantId <= 0) {
@@ -95,26 +109,50 @@ if ($method === 'PUT') {
     if ($id <= 0) {
         tw_json(['error' => 'id_required'], 422);
     }
+    $owner = tw_device_tenant($pdo, $id);
+    if ($owner === null) {
+        tw_json(['error' => 'not_found'], 404);
+    }
+    tw_require_tenant($owner);
+
     $set = [];
     $vals = [];
-    foreach (['name', 'standort', 'projektnummer', 'anzeige_info'] as $f) {
-        if (array_key_exists($f, $b)) {
-            $set[] = "$f = ?";
-            $vals[] = (string) $b[$f];
+
+    // A customer may point their device at one of their own presentations, but
+    // everything else about the device (naming, location, format, ownership) is
+    // ours to set.
+    if (array_key_exists('presentation_id', $b)) {
+        $presId = !empty($b['presentation_id']) ? (int) $b['presentation_id'] : null;
+        if ($presId !== null) {
+            $ps = $pdo->prepare('SELECT tenant_id FROM presentations WHERE id = ?');
+            $ps->execute([$presId]);
+            $presOwner = $ps->fetchColumn();
+            // Never let a device show a presentation from a different tenant.
+            if ($presOwner === false || (int) $presOwner !== $owner) {
+                tw_json(['error' => 'presentation_not_in_tenant'], 422);
+            }
+        }
+        $set[] = 'presentation_id = ?';
+        $vals[] = $presId;
+    }
+
+    if (!tw_is_tenant_bound()) {
+        foreach (['name', 'standort', 'projektnummer', 'anzeige_info'] as $f) {
+            if (array_key_exists($f, $b)) {
+                $set[] = "$f = ?";
+                $vals[] = (string) $b[$f];
+            }
+        }
+        if (array_key_exists('tenant_id', $b)) {
+            $set[] = 'tenant_id = ?';
+            $vals[] = (int) $b['tenant_id'];
+        }
+        if (array_key_exists('display_format', $b)) {
+            $set[] = 'display_format = ?';
+            $vals[] = tw_display_format($b['display_format']);
         }
     }
-    if (array_key_exists('presentation_id', $b)) {
-        $set[] = 'presentation_id = ?';
-        $vals[] = !empty($b['presentation_id']) ? (int) $b['presentation_id'] : null;
-    }
-    if (array_key_exists('tenant_id', $b)) {
-        $set[] = 'tenant_id = ?';
-        $vals[] = (int) $b['tenant_id'];
-    }
-    if (array_key_exists('display_format', $b)) {
-        $set[] = 'display_format = ?';
-        $vals[] = tw_display_format($b['display_format']);
-    }
+
     if (!$set) {
         tw_json(['error' => 'nothing_to_update'], 422);
     }
@@ -124,6 +162,7 @@ if ($method === 'PUT') {
 }
 
 if ($method === 'DELETE') {
+    tw_require_staff();
     $id = (int) ($_GET['id'] ?? (tw_body()['id'] ?? 0));
     if ($id <= 0) {
         tw_json(['error' => 'id_required'], 422);

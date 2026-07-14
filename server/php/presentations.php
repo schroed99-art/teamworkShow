@@ -13,6 +13,15 @@ tw_require_manage();
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
+/** Tenant that owns $id, or null when the presentation does not exist. */
+function tw_presentation_tenant(PDO $pdo, int $id): ?int
+{
+    $s = $pdo->prepare('SELECT tenant_id FROM presentations WHERE id = ?');
+    $s->execute([$id]);
+    $v = $s->fetchColumn();
+    return $v === false ? null : (int) $v;
+}
+
 if ($method === 'GET') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id > 0) {
@@ -22,6 +31,7 @@ if ($method === 'GET') {
         if (!$p) {
             tw_json(['error' => 'not_found'], 404);
         }
+        tw_require_tenant((int) $p['tenant_id']);
         $ss = $pdo->prepare('SELECT id, media_name, kind, position, duration_ms FROM slides WHERE presentation_id = ? ORDER BY position, id');
         $ss->execute([$id]);
         $p['slides'] = $ss->fetchAll();
@@ -29,18 +39,23 @@ if ($method === 'GET') {
     }
     $tenantId = (int) ($_GET['tenant_id'] ?? 0);
     if ($tenantId > 0) {
+        tw_require_tenant($tenantId);
         $s = $pdo->prepare('SELECT * FROM presentations WHERE tenant_id = ? ORDER BY id');
         $s->execute([$tenantId]);
         $rows = $s->fetchAll();
     } else {
-        $rows = $pdo->query('SELECT * FROM presentations ORDER BY id')->fetchAll();
+        [$scope, $args] = tw_tenant_filter('tenant_id');
+        $s = $pdo->prepare("SELECT * FROM presentations WHERE 1=1 $scope ORDER BY id");
+        $s->execute($args);
+        $rows = $s->fetchAll();
     }
     tw_json(['presentations' => $rows]);
 }
 
 if ($method === 'POST') {
     $b = tw_body();
-    $tenantId = (int) ($b['tenant_id'] ?? 0);
+    // A customer creates only inside their own tenant, whatever the body claims.
+    $tenantId = (int) tw_owning_tenant($b['tenant_id'] ?? 0);
     $name = trim((string) ($b['name'] ?? ''));
     if ($tenantId <= 0 || $name === '') {
         tw_json(['error' => 'tenant_id_and_name_required'], 422);
@@ -55,6 +70,11 @@ if ($method === 'PUT') {
     if ($id <= 0) {
         tw_json(['error' => 'id_required'], 422);
     }
+    $owner = tw_presentation_tenant($pdo, $id);
+    if ($owner === null) {
+        tw_json(['error' => 'not_found'], 404);
+    }
+    tw_require_tenant($owner);
     if (array_key_exists('name', $b)) {
         $newName = trim((string) $b['name']);
         if ($newName === '') {
@@ -66,15 +86,12 @@ if ($method === 'PUT') {
     // of the tenant's devices to this presentation; active=false switches off only
     // the devices currently showing it (-> NULL = folder fallback).
     if (array_key_exists('active', $b)) {
-        $tenantId = (int) ($pdo->query('SELECT tenant_id FROM presentations WHERE id = ' . $id)->fetchColumn() ?: 0);
-        if ($tenantId > 0) {
-            if ($b['active']) {
-                $pdo->prepare('UPDATE devices SET presentation_id = ? WHERE tenant_id = ?')
-                    ->execute([$id, $tenantId]);
-            } else {
-                $pdo->prepare('UPDATE devices SET presentation_id = NULL WHERE tenant_id = ? AND presentation_id = ?')
-                    ->execute([$tenantId, $id]);
-            }
+        if ($b['active']) {
+            $pdo->prepare('UPDATE devices SET presentation_id = ? WHERE tenant_id = ?')
+                ->execute([$id, $owner]);
+        } else {
+            $pdo->prepare('UPDATE devices SET presentation_id = NULL WHERE tenant_id = ? AND presentation_id = ?')
+                ->execute([$owner, $id]);
         }
     }
     if (array_key_exists('slides', $b) && is_array($b['slides'])) {
@@ -110,6 +127,11 @@ if ($method === 'DELETE') {
     if ($id <= 0) {
         tw_json(['error' => 'id_required'], 422);
     }
+    $owner = tw_presentation_tenant($pdo, $id);
+    if ($owner === null) {
+        tw_json(['error' => 'not_found'], 404);
+    }
+    tw_require_tenant($owner);
     $pdo->prepare('DELETE FROM presentations WHERE id = ?')->execute([$id]);
     tw_json(['deleted' => $id]);
 }

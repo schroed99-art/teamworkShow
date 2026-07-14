@@ -11,11 +11,27 @@ tw_require_manage();
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
+/**
+ * Widget rows hang off a device, so they inherit that device's tenant. 404 on a
+ * device that does not exist, 403 on one belonging to someone else.
+ */
+function tw_require_device_tenant(PDO $pdo, int $deviceId): void
+{
+    $s = $pdo->prepare('SELECT tenant_id FROM devices WHERE id = ?');
+    $s->execute([$deviceId]);
+    $owner = $s->fetchColumn();
+    if ($owner === false) {
+        tw_json(['error' => 'device_not_found'], 404);
+    }
+    tw_require_tenant((int) $owner);
+}
+
 if ($method === 'GET') {
     $deviceId = (int) ($_GET['device_id'] ?? 0);
     if ($deviceId <= 0) {
         tw_json(['error' => 'device_id_required'], 422);
     }
+    tw_require_device_tenant($pdo, $deviceId);
     $s = $pdo->prepare('SELECT * FROM widget_settings WHERE device_id = ?');
     $s->execute([$deviceId]);
     $w = $s->fetch();
@@ -31,6 +47,7 @@ if ($method === 'PUT' || $method === 'POST') {
     if ($deviceId <= 0) {
         tw_json(['error' => 'device_id_required'], 422);
     }
+    tw_require_device_tenant($pdo, $deviceId);
     $exists = $pdo->prepare('SELECT id FROM widget_settings WHERE device_id = ?');
     $exists->execute([$deviceId]);
     if (!$exists->fetch()) {

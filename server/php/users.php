@@ -12,18 +12,39 @@
  * demoted or deactivated.
  */
 require __DIR__ . '/auth.php';
-$actorRole = tw_require_manage();          // 'admin' or 'koordinator'
+$actorRole = tw_require_staff();           // 'admin' or 'koordinator' — never 'kunde'
 $actorId   = tw_current_user_id();
 
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
-const ROLES = ['admin', 'koordinator', 'betrachter'];
+const ROLES = ['admin', 'koordinator', 'betrachter', 'kunde'];
+
+/**
+ * A 'kunde' is meaningless without a tenant — login.php refuses such an account
+ * outright — so reject the combination at the point it would be created.
+ */
+function tw_check_kunde_tenant(PDO $pdo, string $role, ?int $tenantId): ?int
+{
+    if ($role !== 'kunde') {
+        return $tenantId;
+    }
+    if ($tenantId === null || $tenantId <= 0) {
+        tw_json(['error' => 'kunde_requires_tenant'], 422);
+    }
+    $chk = $pdo->prepare('SELECT id FROM tenants WHERE id = ?');
+    $chk->execute([$tenantId]);
+    if (!$chk->fetch()) {
+        tw_json(['error' => 'tenant_not_found'], 422);
+    }
+    return $tenantId;
+}
 
 function tw_public_user(array $u): array
 {
     unset($u['pass_hash'], $u['must_change_pw']);
-    $u['id']     = (int) $u['id'];
-    $u['active'] = (int) $u['active'];
+    $u['id']        = (int) $u['id'];
+    $u['active']    = (int) $u['active'];
+    $u['tenant_id'] = isset($u['tenant_id']) && $u['tenant_id'] !== null ? (int) $u['tenant_id'] : null;
     return $u;
 }
 function tw_find_user(PDO $pdo, int $id): ?array
@@ -39,7 +60,7 @@ function tw_active_admin_count(PDO $pdo): int
 
 if ($method === 'GET') {
     $rows = $pdo->query(
-        'SELECT id, email, role, salutation, first_name, last_name, initials, note, active, must_change_pw
+        'SELECT id, email, role, tenant_id, salutation, first_name, last_name, initials, note, active, must_change_pw
            FROM users ORDER BY role, last_name, first_name, id'
     )->fetchAll();
     tw_json(['users' => array_map(fn ($u) => tw_public_user($u), $rows)]);
@@ -62,19 +83,23 @@ if ($method === 'POST') {
     if ($actorRole !== 'admin' && $role === 'admin') {
         tw_json(['error' => 'forbidden_assign_admin'], 403);
     }
+    $tenantId = isset($b['tenant_id']) && $b['tenant_id'] !== '' && $b['tenant_id'] !== null
+        ? (int) $b['tenant_id'] : null;
+    $tenantId = tw_check_kunde_tenant($pdo, $role, $tenantId);
     $exists = $pdo->prepare('SELECT id FROM users WHERE email = ?');
     $exists->execute([$email]);
     if ($exists->fetch()) {
         tw_json(['error' => 'email_taken'], 409);
     }
     $st = $pdo->prepare(
-        'INSERT INTO users (email, pass_hash, role, salutation, first_name, last_name, initials, note, active, must_change_pw)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
+        'INSERT INTO users (email, pass_hash, role, tenant_id, salutation, first_name, last_name, initials, note, active, must_change_pw)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
     );
     $st->execute([
         $email,
         password_hash($temp, PASSWORD_DEFAULT),
         $role,
+        $tenantId,
         trim((string) ($b['salutation'] ?? '')),
         trim((string) ($b['first_name'] ?? '')),
         trim((string) ($b['last_name'] ?? '')),
@@ -127,12 +152,23 @@ if ($method === 'PUT') {
         tw_json(['error' => 'last_admin'], 409);
     }
 
+    $tenantId = array_key_exists('tenant_id', $b)
+        ? (($b['tenant_id'] === '' || $b['tenant_id'] === null) ? null : (int) $b['tenant_id'])
+        : (isset($target['tenant_id']) && $target['tenant_id'] !== null ? (int) $target['tenant_id'] : null);
+    // Promoting someone to 'kunde' without a tenant would lock them out at login.
+    $tenantId = tw_check_kunde_tenant($pdo, $role, $tenantId);
+    // Only a customer is confined to a tenant; any other role sees everything.
+    if ($role !== 'kunde') {
+        $tenantId = null;
+    }
+
     $st = $pdo->prepare(
-        'UPDATE users SET role = ?, salutation = ?, first_name = ?, last_name = ?, initials = ?, note = ?, active = ?
+        'UPDATE users SET role = ?, tenant_id = ?, salutation = ?, first_name = ?, last_name = ?, initials = ?, note = ?, active = ?
            WHERE id = ?'
     );
     $st->execute([
         $role,
+        $tenantId,
         trim((string) ($b['salutation'] ?? $target['salutation'])),
         trim((string) ($b['first_name'] ?? $target['first_name'])),
         trim((string) ($b['last_name'] ?? $target['last_name'])),

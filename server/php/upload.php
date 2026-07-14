@@ -7,9 +7,15 @@
  * X-Admin-Token. Used by the Medienpool and the slide editor.
  */
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/media_scope.php';
 tw_require_manage();
 
 header('Content-Type: application/json; charset=utf-8');
+
+$pdo = tw_db();
+// A tenant-bound customer's uploads land in their tenant automatically, and may
+// only overwrite files they already own (see tw_require_media_access).
+$ownTenant = tw_current_tenant_id();
 
 $allowed = ['jpg', 'jpeg', 'png', 'webp', 'mp4'];
 $dir = __DIR__ . '/media';
@@ -43,12 +49,30 @@ for ($i = 0; $i < count($names); $i++) {
         $errors[] = ['name' => $names[$i], 'error' => 'invalid'];
         continue;
     }
+    // Uploading an existing name overwrites it. For a customer that must never
+    // reach across tenants: they may replace their own file, but not one owned
+    // by another tenant and not one from our unassigned company pool.
+    if ($ownTenant !== null && is_file($dir . '/' . $name)
+        && tw_media_owner($pdo, $name) !== $ownTenant) {
+        $errors[] = ['name' => $name, 'error' => 'forbidden'];
+        continue;
+    }
+
     $dest = $dir . '/' . $name;
     if (!move_uploaded_file($tmps[$i], $dest)) {
         $errors[] = ['name' => $name, 'error' => 'save_failed'];
         continue;
     }
     @chmod($dest, 0664);
+
+    // Stamp ownership so the file is visible to — and only to — its tenant.
+    if ($ownTenant !== null) {
+        $pdo->prepare(
+            'INSERT INTO media_meta (filename, tenant_id) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE tenant_id = VALUES(tenant_id)'
+        )->execute([$name, $ownTenant]);
+    }
+
     $saved[] = $name;
 }
 

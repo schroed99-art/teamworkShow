@@ -33,6 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = null; // e.g. table missing before migration
         }
     }
+    // Fail closed: a customer without a tenant binding would slip past every
+    // tenant filter and see all tenants. Refuse the login instead of leaking.
+    if ($user && ($user['role'] ?? '') === 'kunde' && ($user['tenant_id'] ?? null) === null) {
+        $user = null;
+    }
     if ($user && (int) $user['active'] === 1 && password_verify($pass, $user['pass_hash'])) {
         session_regenerate_id(true);
         $_SESSION['tw_user_id'] = (int) $user['id'];

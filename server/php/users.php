@@ -59,11 +59,20 @@ function tw_active_admin_count(PDO $pdo): int
 }
 
 if ($method === 'GET') {
-    $rows = $pdo->query(
-        'SELECT id, email, role, tenant_id, salutation, first_name, last_name, initials, note, active, must_change_pw
-           FROM users ORDER BY role, last_name, first_name, id'
-    )->fetchAll();
-    tw_json(['users' => array_map(fn ($u) => tw_public_user($u), $rows)]);
+    // ?tenant_id= narrows the list to one tenant's customer logins (the Zugänge
+    // tab in admin.php); without it the caller gets every user.
+    $tenantId = (int) ($_GET['tenant_id'] ?? 0);
+    $where = $tenantId > 0 ? 'WHERE u.tenant_id = ?' : '';
+    $args  = $tenantId > 0 ? [$tenantId] : [];
+    $st = $pdo->prepare(
+        "SELECT u.id, u.email, u.role, u.tenant_id, t.name AS tenant_name, u.salutation,
+                u.first_name, u.last_name, u.initials, u.note, u.active, u.must_change_pw
+           FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
+           $where
+          ORDER BY u.role, u.last_name, u.first_name, u.id"
+    );
+    $st->execute($args);
+    tw_json(['users' => array_map(fn ($u) => tw_public_user($u), $st->fetchAll())]);
 }
 
 if ($method === 'POST') {

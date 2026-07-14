@@ -1,4 +1,4 @@
-# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.32)
+# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.33)
 
 Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital-Signage-App** (Kotlin) + **PHP-Medienserver**. Die App spielt eine Endlos-Slideshow aus einem gerätespezifischen Medienordner, der alle 60 s per Hash vom Server synchronisiert wird.
 
@@ -7,7 +7,7 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 ## Repo & Version
 - Pfad: `~/Claude/teamworkshow` (Umzug 2026-07-14, vorher `~/AndroidStudioProjects/TeamworkShow`) · Git-Remote: GitHub `schroed99-art/teamworkShow`
 - Branch `main`. Alles zu GitHub **gepusht** (`main` = `origin/main`).
-- Version: Root-Datei `VERSION` (aktuell **1.0.32**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
+- Version: Root-Datei `VERSION` (aktuell **1.0.33**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
 - **Standing deploy-OK** (Memory `teamworkshow-autodeploy`): commit→deploy→migrate→smoke→push ohne Rückfrage. Ad-hoc-DB-Mutationen (außerhalb `deploy.sh` + benannter Migrationen) brauchen weiter explizite Freigabe.
 
 ## ⚠️ Paket umbenannt: `com.example.teamworkshow` → **`de.teamworkshow.app`**
@@ -31,6 +31,8 @@ Geplant in 4 Schritten: **5.1 Multi-Format → 5.2 Mandanten-Self-Service → 5.
 - **Kundenansicht:** `admin.php` läuft im reduzierten Modus (`IS_KUNDE`), `overview.php` ist die Landeseite. Beide Seiten fragen die DB direkt ab und wenden den Mandantenfilter **selbst** an — dasselbe gilt für `status.php`. Wer hier eine neue SQL-Abfrage ergänzt, muss `tw_tenant_filter()` mitziehen.
 - Dabei geschlossen: **`delete.php` war komplett unauthentifiziert** (jeder im Netz konnte Medien löschen) und `upload.php` überschrieb fremde Dateien bei Namensgleichheit.
 - Verifiziert mit zwei Angriffs-Proben gegen einen echten Kundenlogin: 27/27 auf den JSON-Endpoints, 14/14 auf den HTML-Seiten.
+- **Zugänge (v1.0.33):** Kundenlogins werden **beim Mandanten** angelegt — `admin.php` → Mandant → Tab **„Zugänge"** (Anlegen mit generiertem Temp-Passwort, Zurücksetzen, Aktiv/Inaktiv, Löschen). `users.php` GET kennt dafür `?tenant_id=` und liefert `tenant_name` mit. Die zentrale `benutzer.php` blendet die Rolle `kunde` bewusst aus: sie hätte keinen Mandanten-Wähler, und ihre Rollenauswahl kennt `kunde` nicht — ein Bearbeiten dort würde den Kunden stillschweigend degradieren und seine Mandantenbindung löschen.
+- **Noch offen (gewünscht):** der Kunde soll später **eigene** Nutzer in seinem Bereich anlegen können. Dafür muss `users.php` von `tw_require_staff()` auf eine mandantengebundene Variante gehen (Kunde darf nur Rolle `kunde` im **eigenen** Mandanten anlegen/verwalten, nie Staff, nie fremd) — die Prüfung gehört wieder in `auth.php`, nicht in den Endpoint.
 - **`media/` ist bewusst keine Vertraulichkeitsgrenze:** `media.php` bleibt unauthentifiziert (ein Signage-Gerät hat keinen Login), Dateinamen sind also erratbar. Kunden können sich gegenseitig aber nicht auflisten, überschreiben oder löschen.
 
 **5.3 / 5.4 — offen.** Zonen: das Wetter-Grid (`WX_ROWS`, config-JSON) ist die Blaupause für eine allgemeine Mehr-Zonen-Bühne; `PlaylistManager`/`SlideShowController` sind bereits mehrfach instanziierbar.

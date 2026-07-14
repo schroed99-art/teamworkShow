@@ -124,7 +124,8 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .modal-bg.show { display:flex; }
   .modal { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; width:min(400px,92vw); }
   .modal h3 { margin:0 0 8px; }
-  .modal p { color:var(--dim); margin:0 0 18px; }
+  /* pre-line so a generated password can be shown on its own line */
+  .modal p { color:var(--dim); margin:0 0 18px; white-space:pre-line; }
   .modal .row { justify-content:flex-end; }
   .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel2);
            border:1px solid var(--magenta); color:var(--text); padding:10px 16px; border-radius:10px; display:none; z-index:60; }
@@ -431,7 +432,7 @@ function renderDetail(t, devices, presentations){
   };
   const tabDefs = IS_KUNDE
     ? [['pres','Präsentationen'],['dev','Geräte']]   // no tenant-level settings for a customer
-    : [['pres','Präsentationen'],['dev','Geräte'],['set','Einstellungen']];
+    : [['pres','Präsentationen'],['dev','Geräte'],['usr','Zugänge'],['set','Einstellungen']];
   tabDefs.forEach(([k,label])=>{
     const b=document.createElement('button'); b.dataset.tab=k; b.textContent=label; b.onclick=()=>showTab(k);
     tabs.appendChild(b);
@@ -626,6 +627,32 @@ function renderDetail(t, devices, presentations){
   devPanel.appendChild(dWrap);
   panels.dev=devPanel;
   body.appendChild(devPanel);
+
+  // Zugänge tab: the customer logins for THIS tenant. Creating one is staff work
+  // (users.php is staff-only); a customer managing their own colleagues comes later.
+  if (!IS_KUNDE) {
+    const uWrap=document.createElement('div'); uWrap.className='card';
+    uWrap.innerHTML=`<h3>Zugänge</h3>
+      <p class="muted" style="margin:-4px 0 12px">Kundenlogins für „${esc(t.name)}“. Ein Kunde sieht ausschließlich diesen Mandanten und darf dort Präsentationen, Medien und Laufschrift pflegen — aber keine Geräte, Mandanten oder Benutzer anlegen.</p>
+      <div id="usrList" class="muted">Wird geladen…</div>
+      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+        <div class="grid2">
+          <div><label class="f">Vorname</label><input id="uFn" style="width:100%" placeholder="Max"></div>
+          <div><label class="f">Nachname</label><input id="uLn" style="width:100%" placeholder="Mustermann"></div>
+        </div>
+        <label class="f">E-Mail (Login)</label><input id="uMail" type="email" style="width:100%" placeholder="kunde@firma.de">
+        <label class="f">Temp-Passwort</label>
+        <div class="row"><input id="uPw" class="grow" style="font-family:ui-monospace,monospace"><button class="ghost sm" id="uGen">Generieren</button></div>
+        <p class="muted" style="margin:6px 0 0">Muss beim ersten Login geändert werden. Jetzt notieren und dem Kunden weitergeben — später ist es nur noch zurücksetzbar, nicht auslesbar.</p>
+        <div class="row" style="margin-top:12px"><span class="spacer" style="flex:1"></span><button class="sm" id="uAdd">+ Zugang anlegen</button></div>
+      </div>`;
+    panels.usr=uWrap;
+    body.appendChild(uWrap);
+    uWrap.querySelector('#uPw').value=genPw();
+    uWrap.querySelector('#uGen').onclick=()=>{ uWrap.querySelector('#uPw').value=genPw(); };
+    uWrap.querySelector('#uAdd').onclick=()=>createTenantUser(t, uWrap);
+    loadTenantUsers(t);
+  }
 
   // Settings tab: tenant-level actions (global settings moved to einstellungen.php)
   if (!IS_KUNDE) {
@@ -873,6 +900,72 @@ async function openWeatherLayout(){
 // Absent in customer mode — tenants are infrastructure.
 $('#addTenant')?.addEventListener('click', async()=>{ const name=$('#newTenant').value.trim(); if(!name)return;
   await API.call('tenants.php','POST',{name}); $('#newTenant').value=''; toast('Mandant erstellt'); loadTenants(); });
+
+// ---- Zugänge: Kundenlogins eines Mandanten ----
+function genPw(n=10){
+  const a='ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const arr=new Uint32Array(n); crypto.getRandomValues(arr);
+  let s=''; for(let i=0;i<n;i++) s+=a[arr[i]%a.length]; return s;
+}
+function userErr(e){
+  const map={ email_taken:'E-Mail bereits vergeben', invalid_email:'E-Mail ungültig',
+    temp_password_too_short:'Temp-Passwort zu kurz (min. 8 Zeichen)',
+    kunde_requires_tenant:'Ein Kundenzugang braucht einen Mandanten',
+    tenant_not_found:'Mandant nicht gefunden', forbidden:'Keine Berechtigung' };
+  return map[e.message] || ('Fehler: '+e.message);
+}
+async function loadTenantUsers(t){
+  const box=document.querySelector('#usrList'); if(!box) return;
+  let list=[];
+  try { list=((await API.call('users.php?tenant_id='+t.id)).users||[]).filter(u=>u.role==='kunde'); }
+  catch(e){ box.textContent='Zugänge konnten nicht geladen werden.'; return; }
+  if(!list.length){ box.className='muted'; box.textContent='Noch kein Zugang für diesen Mandanten.'; return; }
+  box.className=''; box.innerHTML='';
+  list.forEach(u=>{
+    const name=[u.first_name,u.last_name].filter(Boolean).join(' ')||u.email;
+    const row=document.createElement('div'); row.className='row wrap2';
+    row.style.cssText='border-top:1px solid var(--line);padding-top:10px;margin-top:10px';
+    row.innerHTML=`<div class="grow" style="min-width:180px">
+        <b>${esc(name)}</b>
+        <div class="muted">${esc(u.email)}</div>
+      </div>
+      <span class="badge-on" style="${u.active?'':'color:var(--dim);border-color:var(--line)'}">${u.active?'aktiv':'inaktiv'}</span>
+      <button class="ghost sm" data-reset title="Neues Temp-Passwort vergeben">⟳ Passwort</button>
+      <button class="ghost sm" data-act>${u.active?'Deaktivieren':'Aktivieren'}</button>
+      <button class="ghost sm" data-del style="border-color:#5a2230;color:#ff6b8a">Löschen</button>`;
+    row.querySelector('[data-reset]').onclick=async()=>{
+      const pw=genPw();
+      try{ await API.call('users.php','PUT',{id:u.id,action:'reset_password',temp_password:pw});
+        await confirmDialog('Neues Passwort für '+name, pw+'\n\nJetzt notieren — es lässt sich später nicht mehr auslesen.');
+      }catch(e){ toast(userErr(e)); }
+    };
+    row.querySelector('[data-act]').onclick=async()=>{
+      try{ await API.call('users.php','PUT',{id:u.id,role:'kunde',tenant_id:t.id,active:u.active?0:1});
+        toast(u.active?'Deaktiviert':'Aktiviert'); loadTenantUsers(t); }
+      catch(e){ toast(userErr(e)); }
+    };
+    row.querySelector('[data-del]').onclick=async()=>{
+      if(!(await confirmDialog('Zugang löschen?', name+' ('+u.email+')'))) return;
+      try{ await API.call('users.php?id='+u.id,'DELETE'); toast('Gelöscht'); loadTenantUsers(t); }
+      catch(e){ toast(userErr(e)); }
+    };
+    box.appendChild(row);
+  });
+}
+async function createTenantUser(t, wrap){
+  const g=id=>wrap.querySelector(id);
+  const email=g('#uMail').value.trim(), pw=g('#uPw').value;
+  if(!email){ toast('E-Mail fehlt'); return; }
+  try{
+    await API.call('users.php','POST',{
+      email, role:'kunde', tenant_id:t.id, temp_password:pw,
+      first_name:g('#uFn').value.trim(), last_name:g('#uLn').value.trim(), active:1,
+    });
+  }catch(e){ toast(userErr(e)); return; }
+  g('#uFn').value=''; g('#uLn').value=''; g('#uMail').value=''; g('#uPw').value=genPw();
+  await confirmDialog('Zugang angelegt', email+'\nPasswort: '+pw+'\n\nJetzt notieren — es lässt sich später nicht mehr auslesen.');
+  loadTenantUsers(t);
+}
 
 // ---- Medienpool (shared media folder: upload / preview / delete) ----
 let poolItems=[], poolMeta={}, poolTenants=[], poolById={}, tenantStand={}, tenantProj={};

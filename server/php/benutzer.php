@@ -109,7 +109,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <div class="head">
     <div class="title">
       <h2>Benutzerverwaltung</h2>
-      <p>Benutzer anlegen, bearbeiten und Rollen verwalten.</p>
+      <p>Interne Benutzer anlegen, bearbeiten und Rollen verwalten. Kundenzugänge werden beim jeweiligen Mandanten verwaltet (Übersicht → Konfigurieren → Zugänge).</p>
     </div>
     <span class="spacer"></span>
     <button id="btnNew">+ Benutzer anlegen</button>
@@ -159,7 +159,13 @@ function roleOptions(sel){ return ROLE_ORDER
 function salutationOptions(sel){ return ['','Herr','Frau','Divers']
   .map(s=>`<option value="${esc(s)}" ${s===(sel||'')?'selected':''}>${s===''?'Bitte wählen':s}</option>`).join(''); }
 
-async function load(){ users=(await API.call('users.php')).users||[]; render(); }
+// Customer logins ('kunde') belong to a tenant and are managed there (admin.php
+// → Mandant → Zugänge). Listing them here would also offer a role picker that
+// has no 'kunde' entry, which would silently demote them and drop their tenant.
+async function load(){
+  users=((await API.call('users.php')).users||[]).filter(u=>u.role!=='kunde');
+  render();
+}
 
 function render(){
   const counts={ alle:users.length, admin:0, koordinator:0, betrachter:0 };

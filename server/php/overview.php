@@ -4,6 +4,10 @@
  * One card per tenant with a media preview collage, counts and a
  * "Konfigurieren" deep-link into admin.php?tenant=<id>. Media management
  * lives in the admin; this page is view + create + navigate only.
+ *
+ * This page queries the DB directly instead of going through the CRUD
+ * endpoints, so it must apply the tenant scope itself — a customer landing here
+ * would otherwise see every tenant's name, counts and media collage.
  */
 require __DIR__ . '/auth.php';
 require __DIR__ . '/status_util.php';
@@ -14,6 +18,9 @@ if ($role === null) {
 }
 // Betrachter may view the tenant list but not configure anything.
 $canManage = in_array($role, ['admin', 'koordinator'], true);
+// A customer configures their own content, but provisions nothing.
+$isKunde = $role === 'kunde';
+$canConfigure = $canManage || $isKunde;
 
 $version = '';
 $vfile = __DIR__ . '/version.php';
@@ -22,11 +29,14 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 }
 
 $pdo = tw_db();
-$tenants = $pdo->query(
-    'SELECT t.id, t.name,
+[$scope, $args] = tw_tenant_filter('t.id');
+$tStmt = $pdo->prepare(
+    "SELECT t.id, t.name,
             (SELECT COUNT(*) FROM presentations p WHERE p.tenant_id = t.id) AS pres_count
-       FROM tenants t ORDER BY t.id'
-)->fetchAll();
+       FROM tenants t WHERE 1=1 $scope ORDER BY t.id"
+);
+$tStmt->execute($args);
+$tenants = $tStmt->fetchAll();
 
 // Per tenant: distinct slides (media files + file-less weather slides).
 $mediaStmt = $pdo->prepare(
@@ -166,17 +176,23 @@ function tw_weather_pictogram(): string
 <header>
   <h1>Teamwork<span>Show</span></h1>
   <?php if ($version !== ''): ?><span class="ver">v<?= h($version) ?></span><?php endif; ?>
-  <span class="stat"><?= count($tenants) ?> Mandanten · <?= $totalMedia ?> Medien</span>
+  <span class="stat"><?= $isKunde
+      ? $totalMedia . ' Medien'
+      : count($tenants) . ' Mandanten · ' . $totalMedia . ' Medien' ?></span>
   <?php if ($canManage): ?>
     <a class="pool" href="einstellungen.php" title="Einstellungen &amp; Benutzerverwaltung">Einstellungen</a>
-    <a class="pool" href="admin.php#media" title="Medienpool im Admin">Medienpool</a>
+  <?php endif; ?>
+  <?php if ($canConfigure): ?>
+    <a class="pool" href="admin.php#media" title="Medienpool">Medienpool</a>
   <?php endif; ?>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
 
-<div class="h2">Mandanten</div>
+<div class="h2"><?= $isKunde ? 'Mein Bereich' : 'Mandanten' ?></div>
 <?php if (!$tenants): ?>
-  <div class="empty-all">Noch keine Mandanten angelegt. Lege unten den ersten an.</div>
+  <div class="empty-all"><?= $isKunde
+      ? 'Für Ihr Konto ist noch kein Bereich freigeschaltet. Bitte wenden Sie sich an Ihren Ansprechpartner.'
+      : 'Noch keine Mandanten angelegt. Lege unten den ersten an.' ?></div>
 <?php endif; ?>
 <div class="grid">
   <?php foreach ($tenants as $t): ?>
@@ -210,7 +226,7 @@ function tw_weather_pictogram(): string
       <div class="body">
         <div class="name"><?= tw_status_dot($t['dev_status'], (int) $t['device_count'], (int) $t['id']) ?><?= h($t['name']) ?></div>
         <div class="sub"><?= (int) $t['pres_count'] ?> Präsentation<?= (int) $t['pres_count'] === 1 ? '' : 'en' ?> · <?= (int) $t['media_count'] ?> Medien</div>
-        <?php if ($canManage): ?>
+        <?php if ($canConfigure): ?>
           <button onclick="location.href='admin.php?tenant=<?= (int) $t['id'] ?>'">Konfigurieren</button>
         <?php endif; ?>
       </div>
@@ -225,6 +241,7 @@ function tw_weather_pictogram(): string
   <?php endif; ?>
 </div>
 
+<?php if ($canManage): // the create-tenant dialog is never delivered to anyone who can't create one ?>
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <h3>Neuer Mandant</h3>
@@ -255,7 +272,10 @@ async function create(){
   const j = await r.json().catch(()=>({}));
   if (j.id) location.href = 'admin.php?tenant=' + j.id; else location.reload();
 }
+</script>
+<?php endif; ?>
 
+<script>
 // Live status: poll status.php and update the per-tenant dots without a reload.
 const DOT_TITLES = {online:'Gerät online', offline:'Gerät offline',
   alarm:'Gerät seit über 30 min offline', none:'Kein Gerät gekoppelt'};

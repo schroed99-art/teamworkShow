@@ -8,7 +8,9 @@
  *     tenants: [{id, status, device_count}]   // rollup, worst device wins
  *   }
  *
- * Read-only; any logged-in role may read it (mirrors overview visibility).
+ * Read-only; any logged-in role may read it (mirrors overview visibility) — and
+ * like the overview it is tenant-scoped, so a customer only ever polls the
+ * status of their own devices.
  */
 require __DIR__ . '/auth.php';
 require __DIR__ . '/status_util.php';
@@ -18,9 +20,12 @@ if (tw_role() === null) {
 }
 
 $pdo = tw_db();
-$rows = $pdo->query(
-    'SELECT id, tenant_id, TIMESTAMPDIFF(SECOND, last_seen, NOW()) AS s FROM devices'
-)->fetchAll();
+[$scope, $args] = tw_tenant_filter('tenant_id');
+$st = $pdo->prepare(
+    "SELECT id, tenant_id, TIMESTAMPDIFF(SECOND, last_seen, NOW()) AS s FROM devices WHERE 1=1 $scope"
+);
+$st->execute($args);
+$rows = $st->fetchAll();
 
 $devices = [];
 $byTenant = [];

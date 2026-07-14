@@ -3,6 +3,12 @@
  * Multi-tenant admin dashboard (session-guarded).
  * Manages tenants, devices, presentations (drag-order + per-slide duration) and
  * per-device widgets. Talks to the CRUD endpoints via same-origin fetch (session cookie).
+ *
+ * A 'kunde' shares this page but sees a reduced version of it: their own tenant
+ * only, content authoring (presentations, slides, media, Laufschrift) and the
+ * choice of which presentation runs on their device — no provisioning. Hiding
+ * those controls is cosmetic; the endpoints enforce the same limits server-side
+ * (see auth.php), so this page never has to be the thing that gets it right.
  */
 require __DIR__ . '/auth.php';
 $role = tw_role();
@@ -10,10 +16,11 @@ if ($role === null) {
     header('Location: login.php');
     exit;
 }
-if (!in_array($role, ['admin', 'koordinator'], true)) {
+if (!in_array($role, ['admin', 'koordinator', 'kunde'], true)) {
     header('Location: overview.php');
     exit;
 }
+$isKunde = $role === 'kunde';
 $version = '';
 $vfile = __DIR__ . '/version.php';
 // version.php echoes JSON; read the file's version string cheaply for display.
@@ -175,32 +182,36 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 <body>
 <header>
   <h1>Teamwork<span>Show</span></h1>
-  <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?> · Admin</span>
+  <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?> · <?= $isKunde ? 'Mein Bereich' : 'Admin' ?></span>
   <span class="spacer"></span>
   <a class="logout" href="overview.php">← Übersicht</a>
-  <a class="logout" href="einstellungen.php">Einstellungen</a>
+  <?php if (!$isKunde): ?><a class="logout" href="einstellungen.php">Einstellungen</a><?php endif; ?>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
 
 <div class="wrap">
   <div class="panel">
-    <h2>Mandanten</h2>
+    <h2><?= $isKunde ? 'Mein Bereich' : 'Mandanten' ?></h2>
     <ul class="list" id="tenantList"></ul>
+    <?php if (!$isKunde): ?>
     <div class="row" style="margin-top:12px">
       <input class="grow" id="newTenant" placeholder="Neuer Mandant…">
       <button class="sm" id="addTenant">+</button>
     </div>
+    <?php endif; ?>
   </div>
 
   <div class="panel" id="detail">
-    <h2 id="detailTitle">Bitte einen Mandanten wählen</h2>
+    <h2 id="detailTitle"><?= $isKunde ? 'Wird geladen…' : 'Bitte einen Mandanten wählen' ?></h2>
     <div id="detailBody"></div>
   </div>
 </div>
 
 <div class="panel" id="media" style="display:none; margin:18px">
   <h2>Medienpool <span class="muted" id="poolCount"></span></h2>
-  <p class="muted" style="margin:-6px 0 10px">Von allen Mandanten geteilt. Präsentationen wählen aus diesem Pool.</p>
+  <p class="muted" style="margin:-6px 0 10px"><?= $isKunde
+      ? 'Ihre Bilder und Videos. Ihre Präsentationen wählen aus diesem Pool.'
+      : 'Von allen Mandanten geteilt. Präsentationen wählen aus diesem Pool.' ?></p>
   <div class="drop" id="drop">
     <button class="sm" id="pickBtn">Dateien wählen</button>
     <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.webp,.mp4" multiple hidden>
@@ -208,8 +219,8 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
     <span id="upStatus"></span>
   </div>
   <div class="poolbar">
-    <input class="grow" id="poolSearch" placeholder="Bildname, Mandant oder Projektnummer…">
-    <select id="poolTenant"></select>
+    <input class="grow" id="poolSearch" placeholder="<?= $isKunde ? 'Bildname…' : 'Bildname, Mandant oder Projektnummer…' ?>">
+    <select id="poolTenant"<?= $isKunde ? ' style="display:none"' : '' ?>></select>
     <select id="poolStand"></select>
   </div>
   <div id="poolGroups"></div>
@@ -250,6 +261,9 @@ const API = {
 const $ = s => document.querySelector(s);
 let tenants = [], activeTenant = null, media = [];
 const DEEP_TENANT = <?= (int) ($_GET['tenant'] ?? 0) ?>;
+// Customer mode: authoring only. Every control this hides is also refused by the
+// endpoints, so IS_KUNDE is about not showing a customer a door they can't open.
+const IS_KUNDE = <?= $isKunde ? 'true' : 'false' ?>;
 function fmtSize(b){ if(b==null||b<0)return '–'; if(b<1024)return b+' B'; if(b<1048576)return (b/1024).toFixed(0)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
@@ -349,11 +363,12 @@ async function loadTenants(){
   tenants.forEach(t=>{
     const li=document.createElement('li');
     if (activeTenant && t.id===activeTenant.id) li.className='active';
-    li.innerHTML = `<span class="name">${esc(t.name)}</span><button class="ghost sm" data-x="1">✎</button>`;
+    li.innerHTML = `<span class="name">${esc(t.name)}</span>`
+      + (IS_KUNDE?'':`<button class="ghost sm" data-x="1">✎</button>`);
     li.querySelector('.name').onclick=()=>selectTenant(t);
-    li.querySelector('[data-x]').onclick=async(e)=>{ e.stopPropagation();
+    li.querySelector('[data-x]')?.addEventListener('click', async(e)=>{ e.stopPropagation();
       const name=await promptInline('Mandant umbenennen', t.name); if(name===null)return;
-      await API.call('tenants.php','PUT',{id:t.id,name}); toast('Gespeichert'); await loadTenants(); };
+      await API.call('tenants.php','PUT',{id:t.id,name}); toast('Gespeichert'); await loadTenants(); });
     ul.appendChild(li);
   });
 }
@@ -371,7 +386,26 @@ function promptInline(title, val=''){
   });
 }
 
-async function loadMedia(){ try { media = (await API.call('playlist.php')).items.map(i=>i.name); } catch(e){ media=[]; } }
+/**
+ * The media folder is physically shared. playlist.php is the device endpoint and
+ * lists every file in it; media_meta.php is tenant-filtered. For a customer we
+ * intersect the two, so the pool and the slide picker only ever offer their own
+ * files instead of every tenant's filenames.
+ */
+async function scopeToOwn(items){
+  if (!IS_KUNDE) return items;
+  try {
+    const m = await API.call('media_meta.php');
+    const own = new Set((m.items||[]).map(i=>i.filename));
+    return items.filter(i=>own.has(i.name));
+  } catch(e){ return []; }
+}
+async function loadMedia(){
+  try {
+    const items = await scopeToOwn((await API.call('playlist.php')).items||[]);
+    media = items.map(i=>i.name);
+  } catch(e){ media=[]; }
+}
 
 async function selectTenant(t){
   activeTenant=t; await loadTenants();
@@ -395,7 +429,10 @@ function renderDetail(t, devices, presentations){
     Object.keys(panels).forEach(k=>{ panels[k].style.display=(k===name)?'':'none'; });
     tabs.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.tab===name)?'sm':'ghost sm'; });
   };
-  [['pres','Präsentationen'],['dev','Geräte'],['set','Einstellungen']].forEach(([k,label])=>{
+  const tabDefs = IS_KUNDE
+    ? [['pres','Präsentationen'],['dev','Geräte']]   // no tenant-level settings for a customer
+    : [['pres','Präsentationen'],['dev','Geräte'],['set','Einstellungen']];
+  tabDefs.forEach(([k,label])=>{
     const b=document.createElement('button'); b.dataset.tab=k; b.textContent=label; b.onclick=()=>showTab(k);
     tabs.appendChild(b);
   });
@@ -443,15 +480,13 @@ function renderDetail(t, devices, presentations){
   devices.forEach(d=>{
     const c=document.createElement('div'); c.style.cssText='border-top:1px solid var(--line);padding-top:10px;margin-top:10px';
     const presOpts = presentations.map(p=>`<option value="${p.id}" ${String(p.id)===String(d.presentation_id)?'selected':''}>${esc(p.name)}</option>`).join('');
-    c.innerHTML=`
-      <div class="row wrap2">
-        <b>${esc(d.name||'(ohne Name)')}</b>
-        <span class="pair">${esc(d.pairing_code)}</span>
-        ${statusPill(d)}
-        <span class="tag">${d.last_seen?('zuletzt: '+esc(d.last_seen)):'nie gesehen'}</span>
-        <span class="spacer" style="flex:1"></span>
-        <button class="ghost sm" data-deldev>Löschen</button>
-      </div>
+    // Customers pick what runs on their screen; the screen itself (name, place,
+    // format, pairing) is ours to configure, so they get a read-only summary.
+    const fields = IS_KUNDE ? `
+      <div class="grid2" style="margin-top:8px">
+        <div><label class="f">Präsentation</label><select data-f="presentation_id" style="width:100%"><option value="">—</option>${presOpts}</select></div>
+        <div><label class="f">Standort</label><div class="muted" style="padding:9px 0">${esc(d.standort)||'—'}</div></div>
+      </div>` : `
       <div class="grid2" style="margin-top:8px">
         <div><label class="f">Name</label><input value="${esc(d.name)}" data-f="name" style="width:100%"></div>
         <div><label class="f">Standort</label><input value="${esc(d.standort)}" data-f="standort" style="width:100%"></div>
@@ -459,7 +494,17 @@ function renderDetail(t, devices, presentations){
         <div><label class="f">Anzeige-Info</label><input value="${esc(d.anzeige_info)}" data-f="anzeige_info" style="width:100%"></div>
         <div><label class="f">Präsentation</label><select data-f="presentation_id" style="width:100%"><option value="">—</option>${presOpts}</select></div>
         <div><label class="f">Anzeigeformat</label><select data-f="display_format" style="width:100%">${[['portrait','Hochkant-Signage'],['phone','Telefon'],['landscape','Querformat / TV'],['tablet','Tablet']].map(([v,l])=>`<option value="${v}"${(d.display_format||'portrait')===v?' selected':''}>${l}</option>`).join('')}</select></div>
+      </div>`;
+    c.innerHTML=`
+      <div class="row wrap2">
+        <b>${esc(d.name||'(ohne Name)')}</b>
+        ${IS_KUNDE?'':`<span class="pair">${esc(d.pairing_code)}</span>`}
+        ${statusPill(d)}
+        <span class="tag">${d.last_seen?('zuletzt: '+esc(d.last_seen)):'nie gesehen'}</span>
+        <span class="spacer" style="flex:1"></span>
+        ${IS_KUNDE?'':'<button class="ghost sm" data-deldev>Löschen</button>'}
       </div>
+      ${fields}
       <div class="grid2" style="margin-top:8px">
         <div><label class="f">Wetter-Ort</label><input value="${esc(d._w_loc||'')}" data-w="weather_location" style="width:100%" placeholder="z.B. Berlin,DE"></div>
         <div style="display:flex;align-items:flex-end;padding-bottom:8px"><label class="f" style="margin:0"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> Wetter aktiv</label></div>
@@ -496,7 +541,10 @@ function renderDetail(t, devices, presentations){
       <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Änderungen speichern</button></div>`;
     c.querySelector('[data-savedev]').onclick=async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
-      await API.call('devices.php','PUT',{id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format')});
+      const devBody = IS_KUNDE
+        ? {id:d.id, presentation_id:g('presentation_id')||null}
+        : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format')};
+      await API.call('devices.php','PUT',devBody);
       const w=f=>c.querySelector(`[data-w="${f}"]`);
       const nc=k=>c.querySelector(`[data-nc="${k}"]`);
       const op=Math.max(0,Math.min(100,parseInt(nc('op').value||'0',10)||0));
@@ -510,8 +558,8 @@ function renderDetail(t, devices, presentations){
         notices_color:(nc('fg').value||'#FFFFFF')});
       toast('Gerät gespeichert');
     };
-    c.querySelector('[data-deldev]').onclick=async()=>{ if(await confirmDialog('Gerät löschen?', d.name||d.pairing_code)){
-      await API.call('devices.php?id='+d.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } };
+    c.querySelector('[data-deldev]')?.addEventListener('click', async()=>{ if(await confirmDialog('Gerät löschen?', d.name||d.pairing_code)){
+      await API.call('devices.php?id='+d.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } });
     dWrap.appendChild(c);
     // fetch widget values lazily
     API.call('widgets.php?device_id='+d.id).then(r=>{ const w=r.widget||{};
@@ -533,52 +581,66 @@ function renderDetail(t, devices, presentations){
       if(nc('op')) nc('op').value=Math.round(a/255*100);
     }).catch(()=>{});
   });
-  const dAdd=document.createElement('div'); dAdd.className='row wrap2'; dAdd.style.marginTop='12px';
-  const dAddPres=presentations.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  dAdd.innerHTML=`<input id="newDevCode" placeholder="Code vom Gerät (optional)…" style="width:190px;text-transform:uppercase">`+
-    `<input class="grow" id="newDev" placeholder="Gerätename…">`+
-    `<select id="newDevPres" style="width:170px"><option value="">Präsentation…</option>${dAddPres}</select>`+
-    `<button class="sm">+ Gerät</button>`;
-  dAdd.querySelector('button').onclick=async()=>{
-    const name=$('#newDev').value.trim();
-    const code=$('#newDevCode').value.trim().toUpperCase();
-    const pid=$('#newDevPres').value;
-    const body={tenant_id:t.id,name}; if(code) body.pairing_code=code; if(pid) body.presentation_id=pid;
-    try{
-      const r=await API.call('devices.php','POST',body);
-      toast(code?('Gekoppelt · '+r.pairing_code):('Gerät angelegt · Code '+r.pairing_code)); selectTenant(t);
-    }catch(e){ toast('Fehler – Code evtl. schon vergeben'); }
-  };
-  dWrap.appendChild(dAdd);
-
-  // Separate "App-Installation" tile: link to the login-gated download page.
-  const aWrap=document.createElement('div'); aWrap.className='card';
-  aWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06);margin-bottom:14px';
-  aWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">📲 App-Installation</h3>
-    <p class="muted" style="margin:0 0 12px">Neues Gerät einrichten oder die App manuell aktualisieren – öffnet die Download-Seite (nur für angemeldete Nutzer erreichbar).</p>
-    <a href="download.php" target="_blank" rel="noopener"
-       style="display:inline-flex;align-items:center;gap:8px;background:var(--magenta);color:#fff;
-              padding:11px 18px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">
-       ⬇ Download-Seite öffnen</a>`;
+  // Devices are provisioned by us (devices.php POST is staff-only), so a customer
+  // gets no create row — and a hint when we haven't paired a screen for them yet.
+  if (IS_KUNDE) {
+    if (!devices.length) {
+      const hint=document.createElement('p'); hint.className='muted'; hint.style.marginTop='10px';
+      hint.textContent='Für Sie ist noch kein Bildschirm eingerichtet. Ihr Ansprechpartner richtet ihn ein.';
+      dWrap.appendChild(hint);
+    }
+  } else {
+    const dAdd=document.createElement('div'); dAdd.className='row wrap2'; dAdd.style.marginTop='12px';
+    const dAddPres=presentations.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    dAdd.innerHTML=`<input id="newDevCode" placeholder="Code vom Gerät (optional)…" style="width:190px;text-transform:uppercase">`+
+      `<input class="grow" id="newDev" placeholder="Gerätename…">`+
+      `<select id="newDevPres" style="width:170px"><option value="">Präsentation…</option>${dAddPres}</select>`+
+      `<button class="sm">+ Gerät</button>`;
+    dAdd.querySelector('button').onclick=async()=>{
+      const name=$('#newDev').value.trim();
+      const code=$('#newDevCode').value.trim().toUpperCase();
+      const pid=$('#newDevPres').value;
+      const body={tenant_id:t.id,name}; if(code) body.pairing_code=code; if(pid) body.presentation_id=pid;
+      try{
+        const r=await API.call('devices.php','POST',body);
+        toast(code?('Gekoppelt · '+r.pairing_code):('Gerät angelegt · Code '+r.pairing_code)); selectTenant(t);
+      }catch(e){ toast('Fehler – Code evtl. schon vergeben'); }
+    };
+    dWrap.appendChild(dAdd);
+  }
 
   const devPanel=document.createElement('div');
-  devPanel.appendChild(aWrap);
+  if (!IS_KUNDE) {
+    // "App-Installation" tile: link to the login-gated download page. Installing
+    // and pairing a screen is our job, so a customer never needs the APK.
+    const aWrap=document.createElement('div'); aWrap.className='card';
+    aWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06);margin-bottom:14px';
+    aWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">📲 App-Installation</h3>
+      <p class="muted" style="margin:0 0 12px">Neues Gerät einrichten oder die App manuell aktualisieren – öffnet die Download-Seite (nur für angemeldete Nutzer erreichbar).</p>
+      <a href="download.php" target="_blank" rel="noopener"
+         style="display:inline-flex;align-items:center;gap:8px;background:var(--magenta);color:#fff;
+                padding:11px 18px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">
+         ⬇ Download-Seite öffnen</a>`;
+    devPanel.appendChild(aWrap);
+  }
   devPanel.appendChild(dWrap);
   panels.dev=devPanel;
   body.appendChild(devPanel);
 
   // Settings tab: tenant-level actions (global settings moved to einstellungen.php)
-  const sWrap=document.createElement('div'); sWrap.className='card';
-  sWrap.innerHTML='<h3>Einstellungen</h3>'
-    +'<p class="muted" style="margin:0 0 8px">Globale Hilfe- &amp; Kontaktdaten unter <a href="einstellungen.php" style="color:var(--magenta)">Einstellungen</a>.</p>';
+  if (!IS_KUNDE) {
+    const sWrap=document.createElement('div'); sWrap.className='card';
+    sWrap.innerHTML='<h3>Einstellungen</h3>'
+      +'<p class="muted" style="margin:0 0 8px">Globale Hilfe- &amp; Kontaktdaten unter <a href="einstellungen.php" style="color:var(--magenta)">Einstellungen</a>.</p>';
 
-  const tDel=document.createElement('div'); tDel.className='row'; tDel.style.marginTop='6px';
-  tDel.innerHTML=`<button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;
-  tDel.querySelector('button').onclick=async()=>{ if(await confirmDialog('Mandant löschen?', t.name+' — inkl. Geräte & Präsentationen')){
-    await API.call('tenants.php?id='+t.id,'DELETE'); activeTenant=null; $('#detailTitle').textContent='Bitte einen Mandanten wählen'; $('#detailBody').innerHTML=''; toast('Gelöscht'); loadTenants(); } };
-  sWrap.appendChild(tDel);
-  panels.set=sWrap;
-  body.appendChild(sWrap);
+    const tDel=document.createElement('div'); tDel.className='row'; tDel.style.marginTop='6px';
+    tDel.innerHTML=`<button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;
+    tDel.querySelector('button').onclick=async()=>{ if(await confirmDialog('Mandant löschen?', t.name+' — inkl. Geräte & Präsentationen')){
+      await API.call('tenants.php?id='+t.id,'DELETE'); activeTenant=null; $('#detailTitle').textContent='Bitte einen Mandanten wählen'; $('#detailBody').innerHTML=''; toast('Gelöscht'); loadTenants(); } };
+    sWrap.appendChild(tDel);
+    panels.set=sWrap;
+    body.appendChild(sWrap);
+  }
 
   showTab('pres');
 }
@@ -598,7 +660,7 @@ async function editPresentation(p){
       <input type="file" id="slUpload" accept=".jpg,.jpeg,.png,.webp,.mp4" multiple hidden>
       <button class="sm ghost" id="slUploadBtn" title="Bild/Video hochladen und in die Auswahl übernehmen">⬆ Hochladen</button>
       <button class="sm" id="addWeather" title="Wetter-Zwischenbild einfügen">+ 🌤 Wetter</button>
-      <button class="sm ghost" id="editWxLayout" title="Wetter-Layout gestalten">🌤 Layout…</button>
+      ${IS_KUNDE?'':'<button class="sm ghost" id="editWxLayout" title="Wetter-Layout gestalten">🌤 Layout…</button>'}
     </div>
     <div class="row" style="margin-top:12px"><button id="saveSlides">Reihenfolge speichern</button>
       <button class="ghost" id="closeSlides">Schließen</button></div>`;
@@ -658,7 +720,9 @@ async function editPresentation(p){
   render();
   card.querySelector('#addSlide').onclick=()=>{ const m=mp.value; if(m){ slides.push({media_name:m,duration_ms:8000,kind:'media'}); render(); } };
   card.querySelector('#addWeather').onclick=()=>{ slides.push({kind:'weather',media_name:'',duration_ms:8000}); render(); };
-  card.querySelector('#editWxLayout').onclick=openWeatherLayout;
+  // The weather template is one global design shared by every tenant (weather_layout.php
+  // is staff-only), so the customer never gets this entry point.
+  card.querySelector('#editWxLayout')?.addEventListener('click', openWeatherLayout);
   card.querySelector('#saveSlides').onclick=async()=>{ await API.call('presentations.php','PUT',{id:p.id,slides}); toast('Slides gespeichert'); };
   const closeEditor=()=>{ card.remove(); const pp=document.getElementById('panelPres'); if(pp) pp.style.display=''; };
   card.querySelector('#closeSlides').onclick=closeEditor;
@@ -806,14 +870,16 @@ async function openWeatherLayout(){
   renderTexts(); preview();
 }
 
-$('#addTenant').onclick=async()=>{ const name=$('#newTenant').value.trim(); if(!name)return;
-  await API.call('tenants.php','POST',{name}); $('#newTenant').value=''; toast('Mandant erstellt'); loadTenants(); };
+// Absent in customer mode — tenants are infrastructure.
+$('#addTenant')?.addEventListener('click', async()=>{ const name=$('#newTenant').value.trim(); if(!name)return;
+  await API.call('tenants.php','POST',{name}); $('#newTenant').value=''; toast('Mandant erstellt'); loadTenants(); });
 
 // ---- Medienpool (shared media folder: upload / preview / delete) ----
 let poolItems=[], poolMeta={}, poolTenants=[], poolById={}, tenantStand={}, tenantProj={};
 async function loadPool(){
   let items=[]; try { items=(await API.call('playlist.php')).items||[]; } catch(e){}
   let meta={items:[],tenants:[],standorte:[]}; try { meta=await API.call('media_meta.php'); } catch(e){}
+  items = await scopeToOwn(items);
   poolItems=items; media=items.map(i=>i.name); // keep the slide-editor picker in sync
   poolMeta={}; (meta.items||[]).forEach(m=>poolMeta[m.filename]={tenant_id:m.tenant_id, tenant_name:m.tenant_name, note:m.note});
   poolTenants=meta.tenants||[];
@@ -858,14 +924,16 @@ function poolCard(it){
   const opts = `<option value="">— nicht zugeordnet</option>`
     + poolTenants.map(t=>`<option value="${t.id}" ${t.id===tid?'selected':''}>${esc(t.name)}</option>`).join('');
   const card=document.createElement('div'); card.className='pcard';
+  // A customer's files are theirs by definition; reassigning to another tenant
+  // (or to the unassigned company pool) is refused server-side, so no picker.
   card.innerHTML=`<button class="pdel" title="Löschen">✕</button>
     <div class="pthumb">${inner}</div>
     <div class="pmeta"><div class="pn">${esc(it.name)}</div>
       <div class="psub"><span class="pill">${v?'VIDEO':'BILD'}</span><span>${fmtSize(it.size)}</span></div>
-      <select class="passign">${opts}</select></div>`;
+      ${IS_KUNDE?'':`<select class="passign">${opts}</select>`}</div>`;
   card.querySelector('.pthumb').onclick=()=>openLightbox(it.name);
   card.querySelector('.pdel').onclick=()=>delMedia(it.name);
-  card.querySelector('.passign').onchange=e=>assignTenant(it.name, e.target.value);
+  card.querySelector('.passign')?.addEventListener('change', e=>assignTenant(it.name, e.target.value));
   return card;
 }
 function renderPool(){
@@ -926,9 +994,12 @@ drop.addEventListener('drop',ev=>{ev.preventDefault();drop.classList.remove('ove
   }
   await loadTenants();
   await loadMedia();
-  if (DEEP_TENANT) {
-    const t = tenants.find(x => x.id == DEEP_TENANT);
-    if (t) await selectTenant(t);
+  const deep = DEEP_TENANT ? tenants.find(x => x.id == DEEP_TENANT) : null;
+  if (deep) { await selectTenant(deep); return; }
+  // A customer has exactly one tenant — open it instead of asking them to pick.
+  if (IS_KUNDE) {
+    if (tenants.length) await selectTenant(tenants[0]);
+    else $('#detailTitle').textContent = 'Für Ihr Konto ist noch kein Bereich freigeschaltet.';
   }
 })();
 </script>

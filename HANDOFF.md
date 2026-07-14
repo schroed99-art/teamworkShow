@@ -1,4 +1,4 @@
-# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.29)
+# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.32)
 
 Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital-Signage-App** (Kotlin) + **PHP-Medienserver**. Die App spielt eine Endlos-Slideshow aus einem gerätespezifischen Medienordner, der alle 60 s per Hash vom Server synchronisiert wird.
 
@@ -6,8 +6,8 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 
 ## Repo & Version
 - Pfad: `~/Claude/teamworkshow` (Umzug 2026-07-14, vorher `~/AndroidStudioProjects/TeamworkShow`) · Git-Remote: GitHub `schroed99-art/teamworkShow`
-- Branch `main`, letzter Commit **`9897ba9`** (upload.php hinter Login). Alles zu GitHub **gepusht** (`main` = `origin/main`). Working tree clean.
-- Version: Root-Datei `VERSION` (aktuell **1.0.29**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
+- Branch `main`. Alles zu GitHub **gepusht** (`main` = `origin/main`).
+- Version: Root-Datei `VERSION` (aktuell **1.0.32**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
 - **Standing deploy-OK** (Memory `teamworkshow-autodeploy`): commit→deploy→migrate→smoke→push ohne Rückfrage. Ad-hoc-DB-Mutationen (außerhalb `deploy.sh` + benannter Migrationen) brauchen weiter explizite Freigabe.
 
 ## ⚠️ Paket umbenannt: `com.example.teamworkshow` → **`de.teamworkshow.app`**
@@ -15,6 +15,25 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 - Medienordner am Gerät: `/sdcard/Android/data/de.teamworkshow.app/files/media`
 - Start: `adb shell am start -n de.teamworkshow.app/.SplashActivity`
 - **Coexistenz-Falle:** Wegen der Umbenennung können altes + neues Paket parallel installiert sein und sich **nicht** gegenseitig per In-App-Update aktualisieren. Über die Umbenennung hinweg ist **einmalig** ein manuelles `adb install` / Sideload nötig; danach laufen Updates wieder via `apk.php`.
+
+## Phase 5 — Roadmap & Stand (2026-07-14)
+Geplant in 4 Schritten: **5.1 Multi-Format → 5.2 Mandanten-Self-Service → 5.3 Bildschirm-Zonen → 5.4 Nachrichten.**
+
+**5.1 Multi-Format — FERTIG (v1.0.30, am Emulator verifiziert).**
+- Neues Feld `devices.display_format` (`portrait|phone|landscape|tablet`, Whitelist serverseitig, Migration `migrate_device_format.php`), im Dashboard pro Gerät wählbar, via `playlist.php` → 60-s-Sync in die App.
+- App setzt `requestedOrientation` zur Laufzeit; `layout-land/`, `values-land/`, `values-sw600dp/`, `dimens.xml`. Formatwechsel greift innerhalb eines Sync-Intervalls (Activity wird neu erstellt — bewusst akzeptiert).
+- **Nicht verifiziert:** das Tablet-Format (`values-sw600dp`) — es existiert kein Tablet-AVD.
+
+**5.2 Mandanten-Self-Service — FERTIG (v1.0.32).**
+- `users.tenant_id` (NULL = interner Staff/global) + Rolle **`kunde`** (Migration `migrate_user_tenant.php`).
+- **Mandantentrennung liegt zentral in `auth.php`**: `tw_current_tenant_id()` (DB-gelesen, nicht Session — Umbindung wirkt sofort), `tw_require_tenant()`, `tw_tenant_filter()`, `tw_owning_tenant()`, `tw_require_staff()` vs. `tw_require_manage()`. **Endpoints implementieren die Prüfung nicht selbst nach** — genau eine Stelle kann falsch sein.
+- Kunde darf: eigene Präsentationen/Slides, eigene Medien (Upload/Löschen), Laufschrift + Wetter am eigenen Gerät, und sein Gerät auf eine **eigene** Präsentation zeigen lassen. Kunde darf **nicht**: Mandanten/Geräte/Benutzer anlegen oder löschen, globale Einstellungen oder Wetter-Layout ändern.
+- **Kundenansicht:** `admin.php` läuft im reduzierten Modus (`IS_KUNDE`), `overview.php` ist die Landeseite. Beide Seiten fragen die DB direkt ab und wenden den Mandantenfilter **selbst** an — dasselbe gilt für `status.php`. Wer hier eine neue SQL-Abfrage ergänzt, muss `tw_tenant_filter()` mitziehen.
+- Dabei geschlossen: **`delete.php` war komplett unauthentifiziert** (jeder im Netz konnte Medien löschen) und `upload.php` überschrieb fremde Dateien bei Namensgleichheit.
+- Verifiziert mit zwei Angriffs-Proben gegen einen echten Kundenlogin: 27/27 auf den JSON-Endpoints, 14/14 auf den HTML-Seiten.
+- **`media/` ist bewusst keine Vertraulichkeitsgrenze:** `media.php` bleibt unauthentifiziert (ein Signage-Gerät hat keinen Login), Dateinamen sind also erratbar. Kunden können sich gegenseitig aber nicht auflisten, überschreiben oder löschen.
+
+**5.3 / 5.4 — offen.** Zonen: das Wetter-Grid (`WX_ROWS`, config-JSON) ist die Blaupause für eine allgemeine Mehr-Zonen-Bühne; `PlaylistManager`/`SlideShowController` sind bereits mehrfach instanziierbar.
 
 ## Zuletzt ausgeliefert (2026-07-13/14, diese Session)
 Großer UI-/Feature-Block — Details je Punkt in Memory `teamworkshow-status` (neueste oben):

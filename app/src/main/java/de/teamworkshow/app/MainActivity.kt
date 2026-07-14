@@ -3,6 +3,7 @@ package de.teamworkshow.app
 import android.animation.ObjectAnimator
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -133,6 +134,7 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         private const val WEATHER_PLACEHOLDER = "__weather__"
         private const val PREFS = "teamworkshow_settings"
         private const val KEY_STORAGE_BASE = "storage_base"
+        private const val KEY_FORMAT = "display_format"
     }
 
     /** Shared with SyncManager's prefs; holds the optional custom storage base path. */
@@ -160,6 +162,10 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        // Lock the activity to the orientation configured for this device (from the
+        // last playlist sync). Set before setContentView so the right layout-*/values-*
+        // resources are inflated. A later format change recreates the activity.
+        applyDisplayOrientation()
         setContentView(R.layout.activity_main)
         hideSystemBars()
 
@@ -211,6 +217,23 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
 
     // ---------- Server sync ----------
 
+    /**
+     * Applies the device's configured display format as a locked activity orientation.
+     * Reads the pref directly so it works both in onCreate (before SyncManager exists)
+     * and after a sync. Portrait/phone → portrait, landscape → landscape, tablet →
+     * unspecified (follows the panel). Changing it recreates the activity, which
+     * re-inflates the matching format-specific layout and dimen resources.
+     */
+    private fun applyDisplayOrientation() {
+        val format = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_FORMAT, "portrait")
+        val orientation = when (format) {
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            "tablet" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT // portrait, phone
+        }
+        if (requestedOrientation != orientation) requestedOrientation = orientation
+    }
+
     /** Runs a sync on a background thread; reloads the slideshow if media changed. */
     private fun syncNow(userTriggered: Boolean) {
         if (syncManager.getServerUrl() == null) {
@@ -236,6 +259,8 @@ class MainActivity : AppCompatActivity(), PlayerCallback {
                 }
                 applyWidgets(widgets)
                 updatePairingOverlay()
+                // A changed display format recreates the activity to load its layout.
+                applyDisplayOrientation()
                 if (userTriggered) {
                     val msg = if (changed) R.string.sync_updated else R.string.sync_no_change
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()

@@ -60,7 +60,7 @@ if ($device === '') {
 try {
     $pdo = tw_db();
     $stmt = $pdo->prepare(
-        'SELECT d.id, d.pairing_code, d.name, d.standort, d.anzeige_info, d.presentation_id,
+        'SELECT d.id, d.pairing_code, d.name, d.standort, d.anzeige_info, d.display_format, d.presentation_id,
                 t.id AS tenant_id, t.name AS tenant_name
          FROM devices d JOIN tenants t ON t.id = d.tenant_id
          WHERE d.pairing_code = ?'
@@ -161,10 +161,11 @@ try {
         'items'  => $items,
         'help'   => $help,
         'device' => [
-            'pairing_code' => $dev['pairing_code'],
-            'name'         => $dev['name'],
-            'standort'     => $dev['standort'],
-            'anzeige_info' => $dev['anzeige_info'],
+            'pairing_code'   => $dev['pairing_code'],
+            'name'           => $dev['name'],
+            'standort'       => $dev['standort'],
+            'anzeige_info'   => $dev['anzeige_info'],
+            'display_format' => $dev['display_format'] ?: 'portrait',
         ],
         'tenant' => [
             'id'   => (int) $dev['tenant_id'],

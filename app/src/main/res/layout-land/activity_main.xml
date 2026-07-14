@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Landscape / TV variant of the stage. Same view IDs as the portrait layout
+     (MainActivity.findViewById relies on them); landscape-specific spacing comes
+     from values-land/dimens.xml, plus the ticker gets horizontal insets here. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
@@ -133,6 +136,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:layout_marginBottom="@dimen/notices_bar_margin_bottom"
+        android:layout_marginStart="@dimen/notices_bar_margin_horizontal"
+        android:layout_marginEnd="@dimen/notices_bar_margin_horizontal"
         android:background="#66000000"
         android:paddingVertical="@dimen/notices_bar_padding_vertical"
         android:clipChildren="true"

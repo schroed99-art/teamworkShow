@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Landscape / TV overrides: more breathing room horizontally; the ticker no
+     longer spans the full ultra-wide width, and the weather grid gets larger padding. -->
+<resources>
+    <dimen name="weather_padding">40dp</dimen>
+    <dimen name="notices_bar_margin_bottom">10dp</dimen>
+    <dimen name="notices_bar_padding_vertical">10dp</dimen>
+    <dimen name="notices_bar_margin_horizontal">48dp</dimen>
+</resources>

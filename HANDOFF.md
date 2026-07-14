@@ -5,7 +5,7 @@ Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital
 > Ältere Feature-Abschnitte weiter unten (v1.0.3–v1.0.15) sind Historie; die aktuellen Stände stehen hier oben.
 
 ## Repo & Version
-- Pfad: `~/AndroidStudioProjects/TeamworkShow` · Git-Remote: GitHub `schroed99-art/teamworkShow`
+- Pfad: `~/Claude/teamworkshow` (Umzug 2026-07-14, vorher `~/AndroidStudioProjects/TeamworkShow`) · Git-Remote: GitHub `schroed99-art/teamworkShow`
 - Branch `main`, letzter Commit **`9897ba9`** (upload.php hinter Login). Alles zu GitHub **gepusht** (`main` = `origin/main`). Working tree clean.
 - Version: Root-Datei `VERSION` (aktuell **1.0.29**). `scripts/deploy.sh` bumpt Patch → baut App → deployt Server; `scripts/publish-apk.sh` baut signiertes Release + lädt APK in den **privaten** VM-Ordner.
 - **Standing deploy-OK** (Memory `teamworkshow-autodeploy`): commit→deploy→migrate→smoke→push ohne Rückfrage. Ad-hoc-DB-Mutationen (außerhalb `deploy.sh` + benannter Migrationen) brauchen weiter explizite Freigabe.

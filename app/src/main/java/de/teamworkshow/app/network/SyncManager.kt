@@ -207,7 +207,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
     fun playlistSignature(): String =
         (prefs.getString(KEY_META, "") ?: "") + "|" +
             (prefs.getString(KEY_WEATHER, "") ?: "") + "|" +
-            (prefs.getString(KEY_WEATHER_LAYOUT, "") ?: "")
+            (prefs.getString(KEY_WEATHER_LAYOUT, "") ?: "") + "|" +
+            (prefs.getString(KEY_FORMAT, "") ?: "")
 
     /** Widget settings from the last device playlist (empty in folder mode). */
     fun getWidgetSettings(): WidgetSettings {
@@ -244,6 +245,15 @@ class SyncManager(context: Context, private val mediaDir: File) {
             .put("nc", w?.optString("notices_color", "#FFFFFFFF") ?: "#FFFFFFFF")
             .put("nsp", w?.optInt("notices_speed", 90) ?: 90)
         prefs.edit().putString(KEY_WIDGETS, out.toString()).apply()
+    }
+
+    /** Device display format (portrait|phone|landscape|tablet); drives orientation + layout. */
+    fun getDisplayFormat(): String =
+        prefs.getString(KEY_FORMAT, DEFAULT_FORMAT)?.takeIf { it in DISPLAY_FORMATS } ?: DEFAULT_FORMAT
+
+    private fun saveDisplayFormat(value: String?) {
+        val clean = value?.trim()?.lowercase()?.takeIf { it in DISPLAY_FORMATS } ?: DEFAULT_FORMAT
+        prefs.edit().putString(KEY_FORMAT, clean).apply()
     }
 
     /**
@@ -458,6 +468,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
             saveWeatherLayout(root.optJSONObject("weather_layout"))
             // Central help/contact info (device mode only); folder mode clears it.
             saveHelpInfo(root.optJSONObject("help"))
+            // Per-device display format from the `device` block (folder mode → default).
+            saveDisplayFormat(root.optJSONObject("device")?.optString("display_format"))
             pendingWeatherAsset = root.optJSONObject("weather_asset")?.let { a ->
                 val name = a.optString("name", "")
                 if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) {
@@ -525,6 +537,9 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val KEY_WEATHER_LAYOUT = "weather_layout"
         private const val KEY_WIDGETS = "widget_settings"
         private const val KEY_HELP = "help_info"
+        private const val KEY_FORMAT = "display_format"
+        private const val DEFAULT_FORMAT = "portrait"
+        private val DISPLAY_FORMATS = setOf("portrait", "phone", "landscape", "tablet")
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 30_000
     }

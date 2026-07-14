@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Format-aware dimensions. The default set targets portrait signage + phones.
+  Landscape/TV overrides live in values-land/, tablet overrides in values-sw600dp/.
+  Keeping these here lets each display format tune spacing without touching the layout.
+-->
+<resources>
+    <!-- Discreet slide-progress line at the very bottom of the stage. -->
+    <dimen name="slide_progress_height">3dp</dimen>
+
+    <!-- Padding around the weather interstitial's content grid. -->
+    <dimen name="weather_padding">24dp</dimen>
+
+    <!-- Version label (also the maintenance tap corner), top-right. -->
+    <dimen name="version_margin_top">6dp</dimen>
+    <dimen name="version_margin_end">10dp</dimen>
+
+    <!-- Update-available badge, just below the version label. -->
+    <dimen name="update_badge_margin_top">24dp</dimen>
+
+    <!-- Notices ticker bar at the bottom. -->
+    <dimen name="notices_bar_margin_bottom">6dp</dimen>
+    <dimen name="notices_bar_padding_vertical">8dp</dimen>
+    <dimen name="notices_bar_margin_horizontal">0dp</dimen>
+</resources>

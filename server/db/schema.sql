@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS devices (
     standort        VARCHAR(160) NOT NULL DEFAULT '',
     projektnummer   VARCHAR(32) NOT NULL DEFAULT '',
     anzeige_info    VARCHAR(255) NOT NULL DEFAULT '',
+    display_format  VARCHAR(16) NOT NULL DEFAULT 'portrait',
     last_seen       TIMESTAMP NULL DEFAULT NULL,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),

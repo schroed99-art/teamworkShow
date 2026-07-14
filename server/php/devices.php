@@ -14,6 +14,15 @@ tw_require_manage();
 $pdo = tw_db();
 $method = $_SERVER['REQUEST_METHOD'];
 
+/** Allowed device display formats; anything else falls back to portrait. */
+const TW_DISPLAY_FORMATS = ['portrait', 'phone', 'landscape', 'tablet'];
+
+function tw_display_format(mixed $v): string
+{
+    $v = strtolower(trim((string) $v));
+    return in_array($v, TW_DISPLAY_FORMATS, true) ? $v : 'portrait';
+}
+
 function tw_gen_pairing(PDO $pdo): string
 {
     for ($i = 0; $i < 25; $i++) {
@@ -60,8 +69,8 @@ if ($method === 'POST') {
     $presId = !empty($b['presentation_id']) ? (int) $b['presentation_id'] : null;
     try {
         $pdo->prepare(
-            'INSERT INTO devices (tenant_id, presentation_id, pairing_code, name, standort, projektnummer, anzeige_info)
-             VALUES (?,?,?,?,?,?,?)'
+            'INSERT INTO devices (tenant_id, presentation_id, pairing_code, name, standort, projektnummer, anzeige_info, display_format)
+             VALUES (?,?,?,?,?,?,?,?)'
         )->execute([
             $tenantId,
             $presId,
@@ -70,6 +79,7 @@ if ($method === 'POST') {
             (string) ($b['standort'] ?? ''),
             (string) ($b['projektnummer'] ?? ''),
             (string) ($b['anzeige_info'] ?? ''),
+            tw_display_format($b['display_format'] ?? 'portrait'),
         ]);
     } catch (PDOException $e) {
         tw_json(['error' => 'pairing_taken'], 409);
@@ -100,6 +110,10 @@ if ($method === 'PUT') {
     if (array_key_exists('tenant_id', $b)) {
         $set[] = 'tenant_id = ?';
         $vals[] = (int) $b['tenant_id'];
+    }
+    if (array_key_exists('display_format', $b)) {
+        $set[] = 'display_format = ?';
+        $vals[] = tw_display_format($b['display_format']);
     }
     if (!$set) {
         tw_json(['error' => 'nothing_to_update'], 422);

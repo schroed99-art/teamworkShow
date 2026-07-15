@@ -30,6 +30,10 @@
     <string name="pairing_hint">Pairing-Code (z. B. DEMO-01)</string>
     <string name="pairing_saved">Gerät gekoppelt: %1$s</string>
     <string name="pairing_cleared">Kopplung entfernt (Ordner-Modus)</string>
+    <!-- %1$s = current server URL, shown on the pairing overlay so a typo is visible -->
+    <string name="pairing_server_label">Server: %1$s</string>
+    <string name="pairing_no_server">Kein Server eingetragen</string>
+    <string name="pairing_settings_btn">Einstellungen / Wartung</string>
     <!-- %1$s = temperature, %2$s = description -->
     <string name="weather_chip">%1$s°C · %2$s</string>
     <string name="weather_title">Wetter</string>

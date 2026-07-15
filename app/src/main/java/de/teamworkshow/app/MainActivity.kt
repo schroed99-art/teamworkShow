@@ -70,6 +70,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var downloadProgress: ProgressBar
     private lateinit var pairingOverlay: View
     private lateinit var pairingCodeLabel: TextView
+    private lateinit var pairingServerLabel: TextView
 
     private lateinit var syncManager: SyncManager
     private val updateManager = UpdateManager(this)
@@ -164,6 +165,10 @@ class MainActivity : AppCompatActivity() {
         downloadProgress = findViewById(R.id.downloadProgress)
         pairingOverlay = findViewById(R.id.pairingOverlay)
         pairingCodeLabel = findViewById(R.id.pairingCode)
+        pairingServerLabel = findViewById(R.id.pairingServerLabel)
+        // Always-visible way out of the pairing screen (fixes "stuck in Gerät koppeln"):
+        // the same PIN-gated maintenance entry as the discreet 5-tap corner.
+        findViewById<View>(R.id.pairingSettingsBtn).setOnClickListener { showPinDialog() }
         findViewById<TextView>(R.id.versionLabel).text = appVersionText()
         updateBadge = findViewById(R.id.updateBadge)
         updateBadge.setOnClickListener { onUpdateBadgeClicked() }
@@ -460,6 +465,16 @@ class MainActivity : AppCompatActivity() {
     private fun updatePairingOverlay() {
         val show = syncManager.pairingStatus == SyncManager.Pairing.UNPAIRED
         pairingOverlay.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) {
+            // Surface the configured server URL so a typo (the usual reason a device
+            // never pairs) is visible right on the overlay, not hidden in a dialog.
+            val url = syncManager.getServerUrl()
+            pairingServerLabel.text = if (url.isNullOrBlank()) {
+                getString(R.string.pairing_no_server)
+            } else {
+                getString(R.string.pairing_server_label, url)
+            }
+        }
     }
 
     /** Renders the notices ticker from the device's widget settings. Weather is shown as an interstitial slide. */
@@ -713,7 +728,13 @@ class MainActivity : AppCompatActivity() {
             val inCorner = ev.x >= (window.decorView.width - cornerPx) && ev.y <= cornerPx
             if (inCorner) recordTap()
         }
-        // Consume all events; AlertDialog windows are unaffected (separate Window)
+        // While the pairing overlay is up, let touches reach its controls (the
+        // "Einstellungen / Wartung" button) so the operator is never stuck. Otherwise
+        // consume everything so the kiosk slideshow can't be interacted with.
+        // (AlertDialog windows are separate Windows and unaffected either way.)
+        if (::pairingOverlay.isInitialized && pairingOverlay.visibility == View.VISIBLE) {
+            return super.dispatchTouchEvent(ev)
+        }
         return true
     }
 

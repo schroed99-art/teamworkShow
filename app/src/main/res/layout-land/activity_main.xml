@@ -10,29 +10,14 @@
     android:background="#000000">
 
     <!-- The stage(s) — see the portrait layout. Orientation, weights and visibility
-         come from the synced zone config at runtime (MainActivity.applyZones), so
-         this file only has to provide the container and the two includes. -->
+         come from the synced zone tree at runtime (MainActivity.buildStages), so
+         this file only provides the empty container; orientation, weights and
+         nesting are all built in code. -->
     <LinearLayout
         android:id="@+id/stageContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical">
-
-        <include
-            android:id="@+id/zoneCompany"
-            layout="@layout/zone_stage"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="70" />
-
-        <include
-            android:id="@+id/zoneCustomer"
-            layout="@layout/zone_stage"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="30" />
-
-    </LinearLayout>
+        android:orientation="vertical" />
 
     <!-- Discreet version label, top-right (also the maintenance tap corner) -->
     <TextView

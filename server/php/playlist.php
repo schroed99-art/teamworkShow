@@ -7,8 +7,12 @@
  *  - GET playlist.php?device=<pairing>    -> device-specific, DB-backed:
  *        { "items": [ { name, hash, size, position, duration_ms }, ... ],
  *          "device": { pairing_code, name, standort, anzeige_info, display_format },
- *          "zones": null | { mode:'split', axis:'rows'|'cols', split:<company %>,
- *                            company:[slides], customer:[slides] },
+ *          "zones": null
+ *                 | { mode:'split', axis:'rows'|'cols', split:<company %>,
+ *                     company:[slides], customer:[slides] }
+ *                 | { mode:'custom', v:1, tree:<Node> } where Node is a split
+ *                   { axis:'rows'|'cols', children:[{ size:<num>, node:<Node> }] }
+ *                   or a leaf { slides:[slides] } (sizes are relative weights),
  *          "tenant": { id, name },
  *          "widgets": { weather_enabled, weather_location, notices_enabled, notices_text, schedule } }
  *
@@ -90,6 +94,62 @@ function tw_slides_of(PDO $pdo, string $dir, ?int $presentationId, bool &$hasWea
     return $out;
 }
 
+/**
+ * The app's download list: every real media file, each exactly once. File-less
+ * weather/news slides carry no name and drop out (they live only inside `zones`).
+ */
+function tw_dedup_files(array $slides): array
+{
+    $items = [];
+    $seen = [];
+    foreach ($slides as $it) {
+        $name = $it['name'] ?? '';
+        if ($name === '' || isset($seen[$name])) {
+            continue;
+        }
+        $seen[$name] = true;
+        $items[] = $it;
+    }
+    return $items;
+}
+
+/**
+ * Resolve one node of a stored custom zone tree (Phase 5.3 Vollausbau) into its
+ * playable form. A split mirrors its structure (axis + weighted children); a leaf
+ * carries the ordered `slides` of its bound presentation — "customer" resolves to
+ * the device's own presentation_id, a number to that presentation. Every real-file
+ * slide is also appended to $flat (for the deduplicated download list) and
+ * $hasWeather is raised via tw_slides_of when a leaf holds a weather interstitial.
+ */
+function tw_resolve_zone_node(
+    PDO $pdo,
+    string $dir,
+    array $node,
+    ?int $customerPresId,
+    array &$flat,
+    bool &$hasWeather
+): array {
+    if (isset($node['children']) && is_array($node['children'])) {
+        $children = [];
+        foreach ($node['children'] as $ch) {
+            $sub = (isset($ch['node']) && is_array($ch['node'])) ? $ch['node'] : [];
+            $children[] = [
+                'size' => 0 + ($ch['size'] ?? 1),
+                'node' => tw_resolve_zone_node($pdo, $dir, $sub, $customerPresId, $flat, $hasWeather),
+            ];
+        }
+        return ['axis' => (string) ($node['axis'] ?? 'rows'), 'children' => $children];
+    }
+    // Leaf: a zone bound to a source.
+    $src = $node['zone']['source'] ?? null;
+    $presId = ($src === 'customer') ? $customerPresId : (is_numeric($src) ? (int) $src : null);
+    $slides = tw_slides_of($pdo, $dir, $presId, $hasWeather);
+    foreach ($slides as $s) {
+        $flat[] = $s;
+    }
+    return ['slides' => $slides];
+}
+
 $device = isset($_GET['device']) ? trim((string) $_GET['device']) : '';
 
 // --- Folder-scan fallback (no device): unchanged legacy contract. ---
@@ -124,7 +184,7 @@ try {
     $pdo = tw_db();
     $stmt = $pdo->prepare(
         'SELECT d.id, d.pairing_code, d.name, d.standort, d.anzeige_info, d.display_format, d.presentation_id,
-                d.zone_mode, d.zone_axis, d.zone_split, d.company_presentation_id,
+                d.zone_mode, d.zone_axis, d.zone_split, d.company_presentation_id, d.zone_layout,
                 t.id AS tenant_id, t.name AS tenant_name
          FROM devices d JOIN tenants t ON t.id = d.tenant_id
          WHERE d.pairing_code = ?'
@@ -141,9 +201,27 @@ try {
     $hasWeather = false;
     $zoneMode = (string) ($dev['zone_mode'] ?? 'single');
 
+    $customerPresId = !empty($dev['presentation_id']) ? (int) $dev['presentation_id'] : null;
+
+    // Custom (Vollausbau): a free-form zone tree per display format. Resolve this
+    // device's format; a format with no tree falls back to single (customer full
+    // screen). $flat gathers every leaf's slides for the deduplicated download list.
+    $customTree = null;
+    $flat = [];
+    if ($zoneMode === 'custom') {
+        $parsed = is_string($dev['zone_layout'] ?? null) ? json_decode($dev['zone_layout'], true) : null;
+        $fmt = $dev['display_format'] ?: 'portrait';
+        if (is_array($parsed) && isset($parsed['layouts'][$fmt]) && is_array($parsed['layouts'][$fmt])) {
+            $customTree = tw_resolve_zone_node($pdo, $dir, $parsed['layouts'][$fmt], $customerPresId, $flat, $hasWeather);
+        } else {
+            $zoneMode = 'single'; // no tree for this format -> customer full screen
+        }
+    }
+
     // The customer zone is the device's own presentation — in single mode it simply
-    // is the whole screen, which keeps the legacy contract intact.
-    $customer = tw_slides_of($pdo, $dir, $dev['presentation_id'] ?? null, $hasWeather);
+    // is the whole screen, which keeps the legacy contract intact. Custom draws its
+    // customer slides through the tree instead, so it needs no top-level list.
+    $customer = $zoneMode === 'custom' ? [] : tw_slides_of($pdo, $dir, $customerPresId, $hasWeather);
     $company  = $zoneMode === 'split'
         ? tw_slides_of($pdo, $dir, $dev['company_presentation_id'] ?? null, $hasWeather)
         : [];
@@ -151,20 +229,14 @@ try {
     // `items` is the app's download list.
     //  - single: it is ALSO the whole playlist, so the file-less weather/news slides
     //    stay in it — the app builds its slideshow from exactly this array.
-    //  - split:  the playlist lives in `zones`, so `items` carries only real files,
-    //    each exactly once, even when both zones use the same one.
-    if ($zoneMode !== 'split') {
-        $items = $customer;
+    //  - split/custom: the playlist lives in `zones`, so `items` carries only real
+    //    files, each exactly once, even when several zones use the same one.
+    if ($zoneMode === 'split') {
+        $items = tw_dedup_files(array_merge($customer, $company));
+    } elseif ($zoneMode === 'custom') {
+        $items = tw_dedup_files($flat);
     } else {
-        $items = [];
-        $seen = [];
-        foreach (array_merge($customer, $company) as $it) {
-            if ($it['name'] === '' || isset($seen[$it['name']])) {
-                continue;
-            }
-            $seen[$it['name']] = true;
-            $items[] = $it;
-        }
+        $items = $customer;
     }
 
     $zones = null;
@@ -176,6 +248,10 @@ try {
             'company' => $company,
             'customer' => $customer,
         ];
+    } elseif ($zoneMode === 'custom') {
+        // The resolved tree: splits mirror axis + weighted children, leaves carry
+        // `slides`. The app renders it recursively; sizes are relative weights.
+        $zones = ['mode' => 'custom', 'v' => 1, 'tree' => $customTree];
     }
 
     $ws = $pdo->prepare(

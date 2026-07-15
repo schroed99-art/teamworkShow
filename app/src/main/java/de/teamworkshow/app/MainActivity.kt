@@ -53,10 +53,10 @@ class MainActivity : AppCompatActivity() {
     private var tickerText: String? = null
     private var tickerSpeedDp: Int = 90
 
-    // The screen is one Stage (full screen) or two (company + customer zone). Each
-    // Stage owns its views, player and playlist; everything below is per-screen.
-    private lateinit var stageCustomer: Stage
-    private var stageCompany: Stage? = null
+    // The screen is one Stage (full screen) or a tree of them (one per zone leaf).
+    // Each Stage owns its views, player and playlist; everything below is per-screen.
+    // Built in pre-order (see buildStages); the list order matches leaf indices.
+    private val stages = ArrayList<Stage>()
     private var zoneLayoutSig: String = "single"
 
     // Weather forecast interstitial (a file-less slide); its contents are built at
@@ -185,25 +185,24 @@ class MainActivity : AppCompatActivity() {
     // ---------- Zones ----------
 
     /**
-     * Creates the stage(s) for the device's current zone config: one full-screen
-     * stage, or a company zone plus a customer zone sized by the configured split.
-     * Called once per activity instance — a later zone change recreates the activity
-     * (see [syncNow]), which is the same route a display-format change takes.
+     * Creates the stage(s) for the device's current zone tree: one full-screen stage
+     * (single), or one Stage per leaf of a nested split/custom tree. Called once per
+     * activity instance — a later structural change recreates the activity (see
+     * [syncNow]), the same route a display-format change takes.
      */
     private fun buildStages(mediaDir: File) {
-        val zones = syncManager.getZoneConfig()
+        val tree = syncManager.getZoneTree()
         zoneLayoutSig = syncManager.zoneLayoutSignature()
 
         val container = findViewById<LinearLayout>(R.id.stageContainer)
-        val companyRoot = findViewById<View>(R.id.zoneCompany)
-        val customerRoot = findViewById<View>(R.id.zoneCustomer)
+        container.removeAllViews()
+        stages.clear()
 
-        if (zones == null) {
-            // Single stage: the customer zone IS the screen, fed by the folder scan +
-            // server meta exactly as before zones existed.
-            companyRoot.visibility = View.GONE
+        if (tree == null) {
+            // Single stage: it IS the screen, fed by the folder scan + server meta
+            // exactly as before zones existed.
             container.orientation = LinearLayout.VERTICAL
-            sizeZone(customerRoot, 1f, vertical = true)
+            val root = inflateZoneStage(container, 1f, vertical = true)
 
             val playlist = PlaylistManager(mediaDir)
             playlist.metaProvider = { syncManager.getPlaylistMeta() }
@@ -217,47 +216,97 @@ class MainActivity : AppCompatActivity() {
                     MediaItem(File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, it.durationMs, it.position, news = it)
                 }
             }
-            stageCustomer = newStage(customerRoot, playlist, mediaDir)
-            stageCustomer.start()
+            val stage = newStage(root, playlist, mediaDir)
+            stages.add(stage)
+            stage.start()
             return
         }
 
-        val vertical = zones.axis == "rows"
-        companyRoot.visibility = View.VISIBLE
-        container.orientation = if (vertical) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-        sizeZone(companyRoot, zones.splitPercent.toFloat(), vertical)
-        sizeZone(customerRoot, (100 - zones.splitPercent).toFloat(), vertical)
-
-        stageCompany = newStage(companyRoot, zonePlaylist(mediaDir) { it.company }, mediaDir)
-        stageCustomer = newStage(customerRoot, zonePlaylist(mediaDir) { it.customer }, mediaDir)
-        stageCompany?.start()
-        stageCustomer.start()
-        AppLog.i(TAG, "zones: ${zones.axis} ${zones.splitPercent}/${100 - zones.splitPercent}")
+        // Zone tree (split or custom): nested LinearLayouts, one Stage per leaf. Each
+        // leaf's playlist re-reads its slides by pre-order index, so a periodic sync
+        // reloads content smoothly; a structural change recreates the whole activity.
+        container.orientation = LinearLayout.VERTICAL
+        val leafIndex = intArrayOf(0)
+        addZoneNode(container, parentVertical = true, node = tree, weight = 1f, mediaDir = mediaDir, leafIndex = leafIndex)
+        stages.forEach { it.start() }
+        AppLog.i(TAG, "zones: ${stages.size} stage(s), sig=$zoneLayoutSig")
     }
 
-    /** A zone's playlist: exactly the slides the server assigned to it, nothing else. */
-    private fun zonePlaylist(
+    /**
+     * Adds one zone node into [parent] (a LinearLayout laid out along its own axis).
+     * A leaf inflates a zone_stage and gets a Stage bound to its pre-order index; a
+     * split adds a nested LinearLayout and recurses. [weight] is this node's share of
+     * the parent; [parentVertical] decides whether weight applies to height or width.
+     */
+    private fun addZoneNode(
+        parent: LinearLayout,
+        parentVertical: Boolean,
+        node: SyncManager.ZoneNode,
+        weight: Float,
         mediaDir: File,
-        pick: (SyncManager.ZoneConfig) -> List<SyncManager.ZoneSlide>,
-    ) = PlaylistManager(mediaDir).apply {
-        itemsProvider = {
-            val cfg = syncManager.getZoneConfig()
-            if (cfg == null) emptyList() else pick(cfg).map { s ->
-                when (s.kind) {
-                    "weather" ->
-                        MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, s.durationMs, s.position)
-                    "news" -> MediaItem(
-                        File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, s.durationMs, s.position,
-                        news = NewsSlide(s.title, s.body, s.position, s.durationMs)
-                    )
-                    else -> {
-                        val file = File(mediaDir, s.name)
-                        val type = if (file.extension.lowercase() == "mp4") MediaType.VIDEO else MediaType.IMAGE
-                        MediaItem(file, type, s.durationMs, s.position)
-                    }
+        leafIndex: IntArray,
+    ) {
+        when (node) {
+            is SyncManager.ZoneNode.Leaf -> {
+                val root = inflateZoneStage(parent, weight, parentVertical)
+                val index = leafIndex[0]++
+                stages.add(newStage(root, leafPlaylist(mediaDir, index), mediaDir))
+            }
+            is SyncManager.ZoneNode.Split -> {
+                val vertical = node.axis == "rows"
+                val box = LinearLayout(this).apply {
+                    orientation = if (vertical) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+                    layoutParams = zoneWeightParams(weight, parentVertical)
                 }
-                // File-less slides always play; a media slide only once its file is here.
-            }.filter { it.type == MediaType.WEATHER || it.type == MediaType.NEWS || it.file.isFile }
+                parent.addView(box)
+                node.children.forEach { addZoneNode(box, vertical, it.node, it.size, mediaDir, leafIndex) }
+            }
+        }
+    }
+
+    /** Inflates a zone_stage into [parent], weighted along the parent's axis. */
+    private fun inflateZoneStage(parent: LinearLayout, weight: Float, vertical: Boolean): View {
+        val v = layoutInflater.inflate(R.layout.zone_stage, parent, false)
+        v.layoutParams = zoneWeightParams(weight, vertical)
+        parent.addView(v)
+        return v
+    }
+
+    /** LayoutParams that give a child [weight] along its parent's orientation. */
+    private fun zoneWeightParams(weight: Float, parentVertical: Boolean) = LinearLayout.LayoutParams(
+        if (parentVertical) LinearLayout.LayoutParams.MATCH_PARENT else 0,
+        if (parentVertical) 0 else LinearLayout.LayoutParams.MATCH_PARENT,
+        weight
+    )
+
+    /**
+     * A leaf's playlist: exactly the slides the server assigned to leaf #[index] of
+     * the current zone tree, re-read on each reload so periodic syncs pick up content
+     * (or source) changes without recreating the activity.
+     */
+    private fun leafPlaylist(mediaDir: File, index: Int) = PlaylistManager(mediaDir).apply {
+        itemsProvider = {
+            val tree = syncManager.getZoneTree()
+            val slides = if (tree == null) emptyList()
+            else syncManager.leavesOf(tree).getOrNull(index)?.slides ?: emptyList()
+            // File-less slides always play; a media slide only once its file is here.
+            slides.map { zoneSlideToItem(mediaDir, it) }
+                .filter { it.type == MediaType.WEATHER || it.type == MediaType.NEWS || it.file.isFile }
+        }
+    }
+
+    /** Maps one zone slide to a playable item (weather/news are file-less). */
+    private fun zoneSlideToItem(mediaDir: File, s: SyncManager.ZoneSlide): MediaItem = when (s.kind) {
+        "weather" ->
+            MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, s.durationMs, s.position)
+        "news" -> MediaItem(
+            File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, s.durationMs, s.position,
+            news = NewsSlide(s.title, s.body, s.position, s.durationMs)
+        )
+        else -> {
+            val file = File(mediaDir, s.name)
+            val type = if (file.extension.lowercase() == "mp4") MediaType.VIDEO else MediaType.IMAGE
+            MediaItem(file, type, s.durationMs, s.position)
         }
     }
 
@@ -275,18 +324,8 @@ class MainActivity : AppCompatActivity() {
         weatherPainter = { stage -> populateWeather(stage, latestWeather) },
     )
 
-    /** Gives a zone its share of the container along the split axis. */
-    private fun sizeZone(zone: View, weight: Float, vertical: Boolean) {
-        zone.layoutParams = LinearLayout.LayoutParams(
-            if (vertical) LinearLayout.LayoutParams.MATCH_PARENT else 0,
-            if (vertical) 0 else LinearLayout.LayoutParams.MATCH_PARENT,
-            weight
-        )
-    }
-
     private fun forEachStage(action: (Stage) -> Unit) {
-        stageCompany?.let(action)
-        action(stageCustomer)
+        stages.forEach(action)
     }
 
     // ---------- Server sync ----------
@@ -322,11 +361,11 @@ class MainActivity : AppCompatActivity() {
             val widgets = syncManager.getWidgetSettings()
             // Fetch the forecast when weather is enabled OR a weather interstitial runs
             // anywhere — in single mode that is the playlist, in split mode either zone.
-            val zones = syncManager.getZoneConfig()
-            val hasWeatherSlide = if (zones == null) {
+            val tree = syncManager.getZoneTree()
+            val hasWeatherSlide = if (tree == null) {
                 syncManager.getWeatherSlides().isNotEmpty()
             } else {
-                zones.company.any { it.kind == "weather" } || zones.customer.any { it.kind == "weather" }
+                syncManager.leavesOf(tree).any { leaf -> leaf.slides.any { it.kind == "weather" } }
             }
             val weather = if (widgets.weatherEnabled || hasWeatherSlide) syncManager.fetchWeather() else null
             // Reload when media changed OR the slide structure (order/duration/weather/zones) changed.

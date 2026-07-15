@@ -6,31 +6,15 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- The stage(s). In single mode only the customer zone is visible and fills the
-         screen; in split mode the company zone is shown above/beside it, sized by
-         the device's zone_split. Orientation, weights and visibility are set at
-         runtime from the synced zone config (MainActivity.applyZones). -->
+    <!-- The stage(s). Filled at runtime from the synced zone tree (see
+         MainActivity.buildStages): one full-screen stage in single mode, or a nested
+         tree of zone_stage views (one per leaf) in split/custom mode. Left empty here
+         so the whole hierarchy — orientation, weights, nesting — is built in code. -->
     <LinearLayout
         android:id="@+id/stageContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical">
-
-        <include
-            android:id="@+id/zoneCompany"
-            layout="@layout/zone_stage"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="70" />
-
-        <include
-            android:id="@+id/zoneCustomer"
-            layout="@layout/zone_stage"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="30" />
-
-    </LinearLayout>
+        android:orientation="vertical" />
 
     <!-- Discreet version label, top-right (also the maintenance tap corner) -->
     <TextView

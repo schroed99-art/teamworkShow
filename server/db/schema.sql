@@ -37,6 +37,13 @@ CREATE TABLE IF NOT EXISTS devices (
     zone_axis       VARCHAR(8) NOT NULL DEFAULT 'rows',
     zone_split      TINYINT UNSIGNED NOT NULL DEFAULT 70,
     company_presentation_id INT UNSIGNED NULL DEFAULT NULL,
+    -- Phase 5.3 Vollausbau: free-form zone tree per display format, used when
+    -- zone_mode = 'custom'. JSON blob (like weather_layout.config):
+    -- { "v":1, "layouts": { "portrait": <Node>, ... } } where Node is a split
+    -- { "axis":"rows|cols", "children":[{ "size":<num>, "node":<Node> }] } or a
+    -- leaf { "zone":{ "source":"customer" | <presentation_id> } }. A missing
+    -- format falls back to 'single'. single/split ignore this column.
+    zone_layout     TEXT NULL DEFAULT NULL,
     last_seen       TIMESTAMP NULL DEFAULT NULL,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),

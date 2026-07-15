@@ -260,15 +260,18 @@ class SyncManager(context: Context, private val mediaDir: File) {
     )
 
     /**
-     * A split screen: two independent slide lists, [splitPercent] being the company
-     * zone's share of the [axis] ("rows" = stacked, "cols" = side by side).
+     * A node of the zone tree (Phase 5.3 Vollausbau). A [Split] divides its area
+     * along [axis] ("rows" = stacked, "cols" = side by side) among weighted
+     * [children]; a [Leaf] is one independent slideshow. The legacy fixed split is
+     * mapped onto this same tree (two leaves) so one renderer serves both.
      */
-    data class ZoneConfig(
-        val axis: String,
-        val splitPercent: Int,
-        val company: List<ZoneSlide>,
-        val customer: List<ZoneSlide>,
-    )
+    sealed class ZoneNode {
+        data class Split(val axis: String, val children: List<ZoneChild>) : ZoneNode()
+        data class Leaf(val slides: List<ZoneSlide>) : ZoneNode()
+    }
+
+    /** One weighted child of a split; [size] is a relative weight, not a percent. */
+    data class ZoneChild(val size: Float, val node: ZoneNode)
 
     private fun saveZones(zones: JSONObject?) {
         prefs.edit().apply {
@@ -303,27 +306,79 @@ class SyncManager(context: Context, private val mediaDir: File) {
         return out
     }
 
-    /** The device's zone split, or null when it runs one full-screen slideshow. */
-    fun getZoneConfig(): ZoneConfig? {
+    /** One node of the server's resolved zone tree. Splits carry >=2 weighted
+     *  children; anything else is a leaf slideshow (its `slides`, possibly empty). */
+    private fun parseZoneNode(o: JSONObject?): ZoneNode? {
+        if (o == null) return null
+        val children = o.optJSONArray("children")
+        if (children != null && children.length() > 0) {
+            val list = ArrayList<ZoneChild>(children.length())
+            for (i in 0 until children.length()) {
+                val c = children.optJSONObject(i) ?: continue
+                val node = parseZoneNode(c.optJSONObject("node")) ?: continue
+                val size = c.optDouble("size", 1.0).toFloat().let { if (it > 0f) it else 1f }
+                list.add(ZoneChild(size, node))
+            }
+            if (list.size < 2) return null // a split needs at least two children
+            val axis = if (o.optString("axis", "rows") == "cols") "cols" else "rows"
+            return ZoneNode.Split(axis, list)
+        }
+        return ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("slides")))
+    }
+
+    /** The device's zone tree, or null when it runs one full-screen slideshow. */
+    fun getZoneTree(): ZoneNode? {
         val raw = prefs.getString(KEY_ZONES, null) ?: return null
         return try {
             val o = JSONObject(raw)
-            if (o.optString("mode", "single") != "split") return null
-            ZoneConfig(
-                axis = if (o.optString("axis", "rows") == "cols") "cols" else "rows",
-                splitPercent = o.optInt("split", 70).coerceIn(10, 90),
-                company = parseZoneSlides(o.optJSONArray("company")),
-                customer = parseZoneSlides(o.optJSONArray("customer")),
-            )
+            when (o.optString("mode", "single")) {
+                "custom" -> parseZoneNode(o.optJSONObject("tree"))
+                "split" -> {
+                    // Legacy fixed split -> two leaves, so the tree renderer serves both.
+                    val axis = if (o.optString("axis", "rows") == "cols") "cols" else "rows"
+                    val pct = o.optInt("split", 70).coerceIn(10, 90)
+                    ZoneNode.Split(
+                        axis,
+                        listOf(
+                            ZoneChild(pct.toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("company")))),
+                            ZoneChild((100 - pct).toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("customer")))),
+                        )
+                    )
+                }
+                else -> null
+            }
         } catch (e: Exception) {
             null
         }
     }
 
-    /** Layout-affecting part of the zone config: a change here must rebuild the stages. */
+    /** Every leaf of the tree in a stable pre-order — the order stages are built in. */
+    fun leavesOf(node: ZoneNode): List<ZoneNode.Leaf> = when (node) {
+        is ZoneNode.Leaf -> listOf(node)
+        is ZoneNode.Split -> node.children.flatMap { leavesOf(it.node) }
+    }
+
+    /**
+     * Layout-affecting shape of the zone tree: axes, weights and leaf arrangement.
+     * A change here must rebuild the stages (recreate the activity). Slide-content
+     * changes are NOT part of it — they ride the lighter reload path, because the
+     * whole zones payload is already in [playlistSignature].
+     */
     fun zoneLayoutSignature(): String {
-        val z = getZoneConfig() ?: return "single"
-        return "split|${z.axis}|${z.splitPercent}"
+        val root = getZoneTree() ?: return "single"
+        val sb = StringBuilder()
+        fun walk(n: ZoneNode) {
+            when (n) {
+                is ZoneNode.Leaf -> sb.append("L;")
+                is ZoneNode.Split -> {
+                    sb.append("S:").append(n.axis).append('[')
+                    n.children.forEach { sb.append(it.size).append(','); walk(it.node) }
+                    sb.append(']')
+                }
+            }
+        }
+        walk(root)
+        return sb.toString()
     }
 
     /** Widget settings from the last device playlist (empty in folder mode). */

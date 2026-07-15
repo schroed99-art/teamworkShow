@@ -22,7 +22,8 @@ Geplant in 4 Schritten: **5.1 Multi-Format → 5.2 Mandanten-Self-Service → 5.
 **5.1 Multi-Format — FERTIG (v1.0.30, am Emulator verifiziert).**
 - Neues Feld `devices.display_format` (`portrait|phone|landscape|tablet`, Whitelist serverseitig, Migration `migrate_device_format.php`), im Dashboard pro Gerät wählbar, via `playlist.php` → 60-s-Sync in die App.
 - App setzt `requestedOrientation` zur Laufzeit; `layout-land/`, `values-land/`, `values-sw600dp/`, `dimens.xml`. Formatwechsel greift innerhalb eines Sync-Intervalls (Activity wird neu erstellt — bewusst akzeptiert).
-- **Nicht verifiziert:** das Tablet-Format (`values-sw600dp`) — es existiert kein Tablet-AVD.
+- **Tablet-Format verifiziert (2026-07-15, AVD `TeamworkShow_Tablet`, Pixel Tablet 2560×1600, android-36).** Auf sw800dp sind `xlrg`/`values-sw600dp` nachweislich aktiv (überprüft via `dumpsys` overrideConfig `sw800dp … xlrg`). App bootet, Splash + Bühne rendern sauber.
+- **Plattform-Befund (kein App-Bug):** Auf Displays ≥600dp gilt die Android-16-Large-Screen-Policy `ignoreOrientationRequest=true` — das OS **überstimmt die feste `requestedOrientation`** und zeigt die App im physischen Panel-Format (Letterboxing für nicht passende Slide-Seitenverhältnisse). Nachgewiesen: Tablet ignoriert die `portrait`-Sperre (bleibt Landscape), Phone (`ignoreOrientationRequest=false`, sw411dp) hält `portrait` korrekt. **Konsequenz:** Für echte Tablets ist das **`tablet`-Format** (→ `SCREEN_ORIENTATION_UNSPECIFIED`, folgt dem Panel) die richtige Wahl; `portrait`/`landscape` erzwingen auf großen Tablets keine Drehung mehr, greifen aber weiter auf Phones/Signage-Sticks (<600dp, `ignoreOrientationRequest=false`).
 
 **5.2 Mandanten-Self-Service — FERTIG (v1.0.32).**
 - `users.tenant_id` (NULL = interner Staff/global) + Rolle **`kunde`** (Migration `migrate_user_tenant.php`).

@@ -463,6 +463,28 @@ function pvPlayZone(zoneEl, slides, wx){
   step();
 }
 // cfg: { format, zones:{axis,split,company,customer}|null, items, wx:{loc,asset}, ticker:{on,text,color,bg} }
+// Recursively render a resolved custom zone tree (Vollausbau): a split lays its
+// weighted children along the axis with a magenta separator between them; a leaf is
+// one .pv-zone playing its own slides. Mirrors the app's recursive Stage tree.
+function pvRenderNode(parent, node, wx){
+  if (node && node.children){
+    const cols = node.axis==='cols';
+    parent.style.display='flex';
+    parent.style.flexDirection = cols?'row':'column';
+    node.children.forEach((ch,i)=>{
+      if (i>0){ const sep=document.createElement('div'); sep.className='pv-zsep';
+                sep.style.cssText = cols?'width:2px':'height:2px'; parent.appendChild(sep); }
+      const w=document.createElement('div');
+      w.style.cssText='position:relative;min-width:0;min-height:0;display:flex;flex:'+(ch.size||1);
+      parent.appendChild(w);
+      pvRenderNode(w, ch.node, wx);
+    });
+  } else {
+    const z=document.createElement('div'); z.className='pv-zone'; z.style.flex='1';
+    parent.appendChild(z);
+    pvPlayZone(z, (node&&node.slides)||[], wx);
+  }
+}
 function pvOpen(cfg, caption){
   pvStop();
   const wrap=$('#pvFrameWrap'); wrap.innerHTML='';
@@ -473,7 +495,9 @@ function pvOpen(cfg, caption){
   frame.appendChild(stage);
   const zone=()=>{ const z=document.createElement('div'); z.className='pv-zone'; return z; };
 
-  if (cfg.zones){
+  if (cfg.tree){                              // custom: free-form zone tree (Vollausbau)
+    pvRenderNode(stage, cfg.tree, cfg.wx);
+  } else if (cfg.zones){
     const z=cfg.zones, cols=z.axis==='cols';
     stage.style.flexDirection = cols?'row':'column';
     const comp=zone(), cust=zone();          // company first = oben/links, wie im Gerät
@@ -505,15 +529,17 @@ function pvOpen(cfg, caption){
 async function pvDevice(code, label){
   try{
     const pl=await (await fetch('playlist.php?device='+encodeURIComponent(code),{cache:'no-store'})).json();
-    const zn = pl.zones ? {axis:pl.zones.axis, split:pl.zones.split,
+    const custom = pl.zones && pl.zones.mode==='custom';
+    const tree = custom ? pl.zones.tree : null;
+    const zn = (pl.zones && !custom) ? {axis:pl.zones.axis, split:pl.zones.split,
                            company:pl.zones.company||[], customer:pl.zones.customer||[]} : null;
     const fmt = (pl.device&&pl.device.display_format)||'portrait';
     pvOpen({
-      format: fmt, zones: zn, items: pl.items||[],
+      format: fmt, tree, zones: zn, items: pl.items||[],
       wx: { loc:(pl.widgets&&pl.widgets.weather_location)||'', asset:(pl.weather_asset&&pl.weather_asset.name)||'' },
       ticker: pl.widgets ? { on:!!pl.widgets.notices_enabled, text:pl.widgets.notices_text||'',
                              color:pl.widgets.notices_color, bg:pl.widgets.notices_bg } : {on:false}
-    }, (label||'Gerät')+' · '+(pl.zones?('Split '+pl.zones.axis+' '+pl.zones.split+'/'+(100-pl.zones.split)):'Einzelfläche')+' · '+fmt);
+    }, (label||'Gerät')+' · '+(custom?'Freie Zonen':(pl.zones?('Split '+pl.zones.axis+' '+pl.zones.split+'/'+(100-pl.zones.split)):'Einzelfläche'))+' · '+fmt);
   }catch(e){ toast('Vorschau fehlgeschlagen'); }
 }
 // Präsentations-Vorschau: das gespeicherte Board als Vollbild-Einzelshow.

@@ -62,6 +62,7 @@ function tw_load_env(string $path): array
         ],
         'openweather_api_key' => $env['OPENWEATHER_API_KEY'] ?? '',
         'admin_password'      => $env['ADMIN_PASSWORD'] ?? '',
+        'cron_key'            => $env['CRON_KEY'] ?? '',
     ];
 }
 

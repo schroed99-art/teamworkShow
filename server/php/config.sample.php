@@ -15,4 +15,6 @@ return [
     'openweather_api_key' => '',
     // Simple dashboard-admin login (step 6).
     'admin_password' => 'CHANGE_ME',
+    // Secret for the URL-triggered device monitor (KAS cron). Empty => web call denied.
+    'cron_key' => '',
 ];

@@ -9,15 +9,25 @@
  * appends a line to logs/device_status.log. When a device stays offline past the
  * alarm window it logs an ALARM once and (later) notifies the admin by e-mail.
  *
- * CLI only.
+ * Triggered either from a real CLI cron (SSH) or — on shared hosting whose cron
+ * only calls URLs (All-Inkl KAS) — via HTTPS with a secret token:
+ *   https://…/device_monitor.php?key=<cron_key>
+ * The CLI path always runs; the web path requires ?key to match cron_key.
  */
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit("CLI only\n");
-}
-
 require __DIR__ . '/db.php';
 require __DIR__ . '/status_util.php';
+
+if (PHP_SAPI !== 'cli') {
+    $want = (string) (tw_config()['cron_key'] ?? '');
+    $got  = (string) ($_GET['key'] ?? '');
+    if ($want === '' || !hash_equals($want, $got)) {
+        http_response_code(403);
+        exit("forbidden\n");
+    }
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+}
+
 $pdo = tw_db();
 
 // --- log file (kept out of the web via logs/.htaccess) ----------------------

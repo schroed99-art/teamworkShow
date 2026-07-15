@@ -118,6 +118,36 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .lb-close { position:absolute; top:18px; right:18px; z-index:1; width:38px; height:38px; border-radius:50%;
               background:var(--magenta); color:#fff; font-size:18px; line-height:38px; text-align:center; cursor:pointer; border:0; }
   .lb-close:hover { filter:brightness(1.1); }
+  /* --- Vorschau: schematischer Screen-Player (Inhalt/Format/Ablauf, nicht Auflösung) --- */
+  .pv-bg { position:fixed; inset:0; background:rgba(0,0,0,.92); display:none; flex-direction:column;
+           align-items:center; justify-content:center; gap:14px; z-index:60; }
+  .pv-bg.show { display:flex; }
+  .pv-close { position:absolute; top:18px; right:18px; z-index:2; width:38px; height:38px; border-radius:50%;
+              border:1px solid var(--line); background:var(--panel); color:var(--text); cursor:pointer; font-size:16px; }
+  .pv-close:hover { filter:brightness(1.1); }
+  .pv-frame { position:relative; background:#000; border:2px solid var(--line); border-radius:14px; overflow:hidden;
+              box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  .pv-frame.portrait  { height:min(74vh,860px); aspect-ratio:9/16; }
+  .pv-frame.landscape { width:min(92vw,1200px); aspect-ratio:16/9; max-height:78vh; }
+  .pv-stage { position:absolute; inset:0; display:flex; }
+  .pv-zone { position:relative; overflow:hidden; background:#000; min-width:0; min-height:0; container-type:size; }
+  .pv-zsep { background:var(--magenta); flex:0 0 auto; }
+  .pv-media { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; display:block; }
+  .pv-news { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; gap:.4em;
+             padding:7%; text-align:center; background:#0b1220; color:#f1f5f9; }
+  .pv-news .t { font-weight:800; color:#fda4b8; line-height:1.15; font-size:clamp(13px,7cqw,52px); }
+  .pv-news .b { line-height:1.35; white-space:pre-line; opacity:.95; font-size:clamp(10px,4.4cqw,34px); }
+  .pv-wx { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+           gap:.35em; color:#fff; background:#0d2233; }
+  .pv-wx .bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.45; }
+  .pv-wx .ic { font-size:clamp(30px,16cqw,110px); position:relative; }
+  .pv-wx .loc { font-weight:700; font-size:clamp(12px,5cqw,34px); position:relative; }
+  .pv-wx .hint { opacity:.8; font-size:clamp(9px,3.4cqw,22px); position:relative; }
+  .pv-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:13px; }
+  .pv-ticker { position:absolute; left:0; right:0; bottom:0; overflow:hidden; white-space:nowrap; padding:5px 0; z-index:3; }
+  .pv-ticker span { display:inline-block; padding-left:100%; animation:pv-marq linear infinite; }
+  @keyframes pv-marq { from{transform:translateX(0)} to{transform:translateX(-100%)} }
+  .pv-cap { color:var(--dim); font-size:12px; text-align:center; max-width:90vw; }
   .tag { font-size:11px; color:var(--dim); }
   .pair { font-family:ui-monospace,monospace; color:var(--magenta); }
   /* branded confirm modal */
@@ -248,6 +278,12 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   </div>
 </div>
 
+<div class="pv-bg" id="pvBg">
+  <button class="pv-close" id="pvClose" title="Schließen">✕</button>
+  <div id="pvFrameWrap"></div>
+  <div class="pv-cap" id="pvCap"></div>
+</div>
+
 <script>
 const API = {
   async call(url, method='GET', body=null) {
@@ -359,6 +395,120 @@ function closeLightbox(){
 $('#lbClose').onclick = closeLightbox;
 $('#lbBg').onclick = e => { if (e.target === $('#lbBg')) closeLightbox(); };
 document.addEventListener('keydown', e => { if (e.key==='Escape') closeLightbox(); });
+
+// --- Vorschau: schematischer Screen-Player -------------------------------------
+// Rendert denselben Ablauf, den das Gerät spielt: Format (hoch/quer), Zonen-Split,
+// je Zone eine eigene Timer-Schleife über die Slides. Es geht bewusst um den
+// optischen Inhalt (Bilder/Videos/Nachrichten/Wetter) und die Aufteilung, nicht um
+// die echte Auflösung des Zielgeräts. Teilt sich mediaUrl/esc/isVideo mit der Lightbox.
+let pvTimers = [];
+function pvStop(){ pvTimers.forEach(clearTimeout); pvTimers=[]; }
+function pvClose(){ pvStop(); $('#pvBg').classList.remove('show'); $('#pvFrameWrap').innerHTML=''; }
+// Android speichert Farben als #AARRGGBB (Alpha zuerst); CSS erwartet rgba().
+function pvColor(h, fb){
+  if(typeof h!=='string') return fb;
+  const m=h.replace('#','');
+  if(m.length===8){ const a=(parseInt(m.slice(0,2),16)/255).toFixed(2);
+    return `rgba(${parseInt(m.slice(2,4),16)},${parseInt(m.slice(4,6),16)},${parseInt(m.slice(6,8),16)},${a})`; }
+  if(m.length===6) return '#'+m;
+  return fb;
+}
+function pvSlideHtml(s, wx){
+  const kind = s.kind||'media';
+  if (kind==='news')
+    return `<div class="pv-news"><div class="t">${esc(s.title||s.text_title||'')}</div>`+
+           `<div class="b">${esc(s.body||s.text_body||'')}</div></div>`;
+  if (kind==='weather'){
+    const bg = wx && wx.asset ? `<img class="bg" src="${mediaUrl(wx.asset)}" alt="">` : '';
+    return `<div class="pv-wx">${bg}<div class="ic">🌤</div>`+
+           `<div class="loc">${esc((wx&&wx.loc)||'Wetter')}</div>`+
+           `<div class="hint">Vorhersage erscheint am Gerät</div></div>`;
+  }
+  const name = s.name||s.media_name||'';
+  if (!name) return `<div class="pv-empty">—</div>`;
+  return isVideo(name)
+    ? `<video class="pv-media" src="${mediaUrl(name)}" autoplay muted loop playsinline></video>`
+    : `<img class="pv-media" src="${mediaUrl(name)}" alt="">`;
+}
+// Läuft die Slides einer Zone durch; nächster Wechsel nach duration_ms.
+function pvPlayZone(zoneEl, slides, wx){
+  if (!slides || !slides.length){ zoneEl.innerHTML='<div class="pv-empty">Keine Slides</div>'; return; }
+  let i=0;
+  const step=()=>{
+    const s=slides[i%slides.length];
+    zoneEl.innerHTML=pvSlideHtml(s, wx);
+    i++;
+    pvTimers.push(setTimeout(step, Math.max(1000, (+s.duration_ms)||8000)));
+  };
+  step();
+}
+// cfg: { format, zones:{axis,split,company,customer}|null, items, wx:{loc,asset}, ticker:{on,text,color,bg} }
+function pvOpen(cfg, caption){
+  pvStop();
+  const wrap=$('#pvFrameWrap'); wrap.innerHTML='';
+  const landscape = cfg.format==='landscape' || cfg.format==='tablet';
+  const frame=document.createElement('div');
+  frame.className='pv-frame '+(landscape?'landscape':'portrait');
+  const stage=document.createElement('div'); stage.className='pv-stage';
+  frame.appendChild(stage);
+  const zone=()=>{ const z=document.createElement('div'); z.className='pv-zone'; return z; };
+
+  if (cfg.zones){
+    const z=cfg.zones, cols=z.axis==='cols';
+    stage.style.flexDirection = cols?'row':'column';
+    const comp=zone(), cust=zone();          // company first = oben/links, wie im Gerät
+    comp.style.flex=z.split; cust.style.flex=(100-z.split);
+    const sep=document.createElement('div'); sep.className='pv-zsep';
+    sep.style.cssText = cols?'width:2px':'height:2px';
+    stage.append(comp, sep, cust);
+    pvPlayZone(comp, z.company, cfg.wx);
+    pvPlayZone(cust, z.customer, cfg.wx);
+  } else {
+    const one=zone(); one.style.flex='1'; stage.appendChild(one);
+    pvPlayZone(one, cfg.items, cfg.wx);
+  }
+
+  if (cfg.ticker && cfg.ticker.on && (cfg.ticker.text||'').trim()){
+    const tk=document.createElement('div'); tk.className='pv-ticker';
+    tk.style.background = pvColor(cfg.ticker.bg, 'rgba(0,0,0,.55)');
+    const sp=document.createElement('span'); sp.textContent=cfg.ticker.text;
+    sp.style.color = pvColor(cfg.ticker.color, '#fff');
+    sp.style.animationDuration = Math.max(6, Math.round((cfg.ticker.text.length+20)*0.28))+'s';
+    tk.appendChild(sp); frame.appendChild(tk);
+  }
+
+  wrap.appendChild(frame);
+  $('#pvCap').textContent = caption||'';
+  $('#pvBg').classList.add('show');
+}
+// Geräte-Vorschau: exakt die Playlist, die dieser Bildschirm spielt (öffentlicher Endpoint).
+async function pvDevice(code, label){
+  try{
+    const pl=await (await fetch('playlist.php?device='+encodeURIComponent(code),{cache:'no-store'})).json();
+    const zn = pl.zones ? {axis:pl.zones.axis, split:pl.zones.split,
+                           company:pl.zones.company||[], customer:pl.zones.customer||[]} : null;
+    const fmt = (pl.device&&pl.device.display_format)||'portrait';
+    pvOpen({
+      format: fmt, zones: zn, items: pl.items||[],
+      wx: { loc:(pl.widgets&&pl.widgets.weather_location)||'', asset:(pl.weather_asset&&pl.weather_asset.name)||'' },
+      ticker: pl.widgets ? { on:!!pl.widgets.notices_enabled, text:pl.widgets.notices_text||'',
+                             color:pl.widgets.notices_color, bg:pl.widgets.notices_bg } : {on:false}
+    }, (label||'Gerät')+' · '+(pl.zones?('Split '+pl.zones.axis+' '+pl.zones.split+'/'+(100-pl.zones.split)):'Einzelfläche')+' · '+fmt);
+  }catch(e){ toast('Vorschau fehlgeschlagen'); }
+}
+// Präsentations-Vorschau: das gespeicherte Board als Vollbild-Einzelshow.
+async function pvPresentation(id, name){
+  try{
+    const full=(await API.call('presentations.php?id='+id)).presentation;
+    const items=(full.slides||[]).map(s=>({name:s.media_name, kind:s.kind||'media',
+      title:s.text_title, body:s.text_body, duration_ms:s.duration_ms}));
+    pvOpen({ format:'portrait', zones:null, items, wx:{loc:'',asset:''}, ticker:{on:false} },
+           'Präsentation: '+(name||'')+' · Einzelfläche (gespeicherter Stand)');
+  }catch(e){ toast('Vorschau fehlgeschlagen'); }
+}
+$('#pvClose').onclick = pvClose;
+$('#pvBg').onclick = e => { if (e.target === $('#pvBg')) pvClose(); };
+document.addEventListener('keydown', e => { if (e.key==='Escape' && $('#pvBg').classList.contains('show')) pvClose(); });
 
 async function loadTenants(){
   tenants = (await API.call('tenants.php')).tenants || [];
@@ -557,6 +707,7 @@ function renderDetail(t, devices, presentations){
         ${statusPill(d)}
         <span class="tag">${d.last_seen?('zuletzt: '+esc(d.last_seen)):'nie gesehen'}</span>
         <span class="spacer" style="flex:1"></span>
+        <button class="ghost sm" data-preview title="Vorschau: wie dieser Bildschirm abspielt">🔍 Vorschau</button>
         ${IS_KUNDE?'':'<button class="ghost sm" data-deldev>Löschen</button>'}
       </div>
       ${fields}
@@ -594,6 +745,7 @@ function renderDetail(t, devices, presentations){
         </div>
       </div>
       <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Änderungen speichern</button></div>`;
+    c.querySelector('[data-preview]').onclick=()=>pvDevice(d.pairing_code, d.name||'Gerät');
     c.querySelector('[data-savedev]').onclick=async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
       const devBody = IS_KUNDE
@@ -752,6 +904,7 @@ async function editPresentation(p){
       ${IS_KUNDE?'':'<button class="sm ghost" id="editWxLayout" title="Wetter-Layout gestalten">🌤 Layout…</button>'}
     </div>
     <div class="row" style="margin-top:12px"><button id="saveSlides">Speichern</button>
+      <button class="ghost" id="pvPres" title="Vorschau des gespeicherten Stands">🔍 Vorschau</button>
       <button class="ghost" id="closeSlides">Schließen</button></div>`;
   // Master-detail: hide the presentation list and show only this editor below the
   // tab bar (which stays pinned). Back/Schließen restores the list.
@@ -833,6 +986,7 @@ async function editPresentation(p){
   // is staff-only), so the customer never gets this entry point.
   card.querySelector('#editWxLayout')?.addEventListener('click', openWeatherLayout);
   card.querySelector('#saveSlides').onclick=async()=>{ await API.call('presentations.php','PUT',{id:p.id,slides}); toast('Slides gespeichert'); };
+  card.querySelector('#pvPres').onclick=()=>pvPresentation(p.id, p.name);
   const closeEditor=()=>{ card.remove(); const pp=document.getElementById('panelPres'); if(pp) pp.style.display=''; };
   card.querySelector('#closeSlides').onclick=closeEditor;
   card.querySelector('#backPres').onclick=(e)=>{ e.preventDefault(); closeEditor(); };

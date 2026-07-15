@@ -1,4 +1,4 @@
-# TeamworkShow — Session-Handoff (Stand 2026-07-14, v1.0.40)
+# TeamworkShow — Session-Handoff (Stand 2026-07-15, v1.0.41)
 
 Kurzeinstieg für eine neue Session. Ziel des Projekts: **Android-Kiosk-/Digital-Signage-App** (Kotlin) + **PHP-Medienserver**. Die App spielt eine Endlos-Slideshow aus einem gerätespezifischen Medienordner, der alle 60 s per Hash vom Server synchronisiert wird.
 
@@ -57,6 +57,13 @@ Geplant in 4 Schritten: **5.1 Multi-Format → 5.2 Mandanten-Self-Service → 5.
 
 **Phase 5 ist damit abgeschlossen.**
 
+## Vorschau im Dashboard — FERTIG (v1.0.41, per Harness-Screenshot verifiziert)
+- **Zweck:** beim Anlegen sehen, wie der Bildschirm später abspielt — Inhalt (Bilder/Videos/Nachrichten/Wetter), Hoch-/Quer-Aufteilung, Zonen-Split und Ablauf. Bewusst **auflösungs-agnostisch** (schematischer Rahmen 9:16 bzw. 16:9), es geht um Optik und Reihenfolge, nicht um Zielauflösung.
+- **Kein neues Backend:** Geräte-Vorschau zieht `playlist.php?device=<code>` (öffentlich, mit Zonen/Wetter/Ticker), Präsentations-Vorschau `presentations.php?id=<id>` (gespeicherter Stand, tenant-gescoped). Reine Client-Logik in `admin.php` (`pv*`-Funktionen, Overlay `#pvBg`, CSS `.pv-*`).
+- **Zwei Buttons:** „🔍 Vorschau" an jeder Geräte-Karte und im Slide-Editor. Auch für Kunden sichtbar (read-only, keine neue Datenexposition — zeigt nur, was der eigene Schirm/das eigene Board ohnehin spielt).
+- **Renderer:** je Zone eine eigene Timer-Schleife (`pvPlayZone`) über die Slides mit echtem `duration_ms`; Zonen als Flexbox (company first = oben/links, wie `stageContainer` in der App), `axis=rows` vertikal / `cols` horizontal, `split` = Firmen-Anteil. Nachrichten selbstskalierend via `container-type:size` + `cqw` (spiegelt `autoSizeTextType`). Ticker-Farben aus Android-`#AARRGGBB` nach `rgba()` konvertiert (`pvColor`). Wetter nur inhaltlich angenähert (Hintergrund-Asset + Ort), da die Live-Vorhersage erst am Gerät entsteht.
+- **Verifiziert:** Wegwerf-Harness (`scratchpad/pv_harness.html`, Renderer-Kopie + echte Pooldateien) im Browser — single (Bild/News/Wetter/Ticker), Split rows 60/40 (Firma oben, Kunde unten), Split cols 50/50 im Querformat. `php -l admin.php` auf der VM grün.
+
 ## Zuletzt ausgeliefert (2026-07-13/14, diese Session)
 Großer UI-/Feature-Block — Details je Punkt in Memory `teamworkshow-status` (neueste oben):
 - **Web-Dashboard + Login restyled** auf Lead-Manager-CI (slate/rose `#0F172A/#1E293B/#334155`, Akzent **`#D21A55`**, Text `#F1F5F9/#94A3B8`) + Logo-Wasserzeichen; Favicon/Tab-Icon (`assets/favicon.png` etc.). Android-App bewusst ausgenommen.
@@ -73,7 +80,7 @@ Großer UI-/Feature-Block — Details je Punkt in Memory `teamworkshow-status` (
 ## Umgebung (alles per CLI, keine Studio-Dialoge)
 - `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`
 - SDK: `~/Library/Android/sdk` · `adb` unter `$SDK/platform-tools/adb`
-- Emulator-AVD: **`TeamworkShow_Pixel`** (Serial `emulator-5554`, Pairing `550-3B4`) → `$SDK/emulator/emulator -avd TeamworkShow_Pixel &`. Physisches Handy: Serial `TK02260501832`, Pairing `136-A54`.
+- Emulator-AVD: **`TeamworkShow_Pixel`** (Serial `emulator-5554`, Pairing **`CD9-2BA`** = Gerät 14 in der DB) → `$SDK/emulator/emulator -avd TeamworkShow_Pixel &`. Physisches Handy: Serial `TK02260501832`, Pairing `136-A54`.
 - Bauen: `./gradlew :app:compileDebugKotlin` / `:app:assembleRelease` · Installieren: `./gradlew installDebug` · Start s.o.
 - Wartungsmenü: 5× oben rechts tippen (2 s) → PIN **`0000`**. (adb-Tap-Automatik muss on-device als Shell-Loop laufen, um das 2-s-Fenster zu treffen.)
 - Server-URL der App (SharedPreferences `teamworkshow_settings`): `http://192.168.178.207/teamworkshow` (die VM)

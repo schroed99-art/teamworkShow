@@ -16,3 +16,6 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
+
+# Local secrets for the backend integration gate — never commit real credentials.
+/config/*.env

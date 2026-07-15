@@ -40,7 +40,7 @@ android {
         // Baked-in backend base URL so paired devices need no manual URL entry.
         // Override per build: ./gradlew ... -Pteamwork.serverUrl=https://…
         val serverUrl = (project.findProperty("teamwork.serverUrl") as String?)
-            ?: "http://192.168.178.207/teamworkshow"
+            ?: "https://teamworkshow.itandmedia-solution.de"
         buildConfigField("String", "SERVER_URL", "\"$serverUrl\"")
     }
 

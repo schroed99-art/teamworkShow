@@ -19,3 +19,5 @@ keystore.properties
 
 # Local secrets for the backend integration gate — never commit real credentials.
 /config/*.env
+# Deploy target overrides (host/user/paths) — may name internal hosts.
+/scripts/deploy.env

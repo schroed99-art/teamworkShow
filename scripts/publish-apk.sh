@@ -11,11 +11,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."   # repo root
 
-# ---- config (matches scripts/deploy.sh) ----
-VM_IP="192.168.178.207"
-VM_USER="root"
-VM_PATH="/var/www/html/teamworkshow"
-KEY="$HOME/.ssh/teamworkshow_deploy"
+# ---- config (matches scripts/deploy.sh; override via scripts/deploy.env) ----
+DEPLOY_HOST="192.168.178.207"
+DEPLOY_USER="root"
+DEPLOY_PATH="/var/www/html/teamworkshow"
+DEPLOY_KEY="$HOME/.ssh/teamworkshow_deploy"
+DEPLOY_PORT="22"
+DEPLOY_PRIVATE_DIR="/var/www/teamworkshow-apk"   # APK dir, outside the web root
+DEPLOY_CHOWN="www-data:www-data"                 # empty on hosts without root
+if [ -f scripts/deploy.env ]; then
+  # shellcheck disable=SC1091
+  . scripts/deploy.env
+fi
 JAVA_HOME_DEFAULT="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 if [ ! -f keystore.properties ]; then
@@ -48,15 +55,18 @@ JSON
 # The APK goes to a PRIVATE dir outside the web root; it is served only through
 # apk.php (dashboard session or valid device pairing code). Only the metadata
 # (app_update.json) stays public so the app can check for updates.
-PRIVATE_DIR="/var/www/teamworkshow-apk"
-echo ">> Uploading APK ($SIZE bytes) to $VM_USER@$VM_IP:$PRIVATE_DIR + metadata to web root…"
-ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" "mkdir -p $PRIVATE_DIR"
-scp -i "$KEY" -o BatchMode=yes "$APK" "$VM_USER@$VM_IP:$PRIVATE_DIR/app-release.apk"
-scp -i "$KEY" -o BatchMode=yes "$META" "$VM_USER@$VM_IP:$VM_PATH/app_update.json"
-ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" \
-  "rm -f $VM_PATH/app-release.apk; \
-   chown www-data:www-data $PRIVATE_DIR/app-release.apk $VM_PATH/app_update.json; \
-   chmod 640 $PRIVATE_DIR/app-release.apk"
+PRIVATE_DIR="$DEPLOY_PRIVATE_DIR"
+SSH="ssh -i $DEPLOY_KEY -p $DEPLOY_PORT -o BatchMode=yes"
+SCP="scp -i $DEPLOY_KEY -P $DEPLOY_PORT -o BatchMode=yes"
+echo ">> Uploading APK ($SIZE bytes) to $DEPLOY_USER@$DEPLOY_HOST:$PRIVATE_DIR + metadata to web root…"
+$SSH "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p $PRIVATE_DIR"
+$SCP "$APK" "$DEPLOY_USER@$DEPLOY_HOST:$PRIVATE_DIR/app-release.apk"
+$SCP "$META" "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/app_update.json"
+# chown only where we have root (DEPLOY_CHOWN empty on shared hosting).
+CHOWN_CMD=true
+[ -n "${DEPLOY_CHOWN:-}" ] && CHOWN_CMD="chown $DEPLOY_CHOWN $PRIVATE_DIR/app-release.apk $DEPLOY_PATH/app_update.json"
+$SSH "$DEPLOY_USER@$DEPLOY_HOST" \
+  "rm -f $DEPLOY_PATH/app-release.apk; $CHOWN_CMD; chmod 640 $PRIVATE_DIR/app-release.apk"
 rm -f "$META"
 
 echo ""

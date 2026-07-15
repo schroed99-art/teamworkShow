@@ -12,10 +12,18 @@ set -euo pipefail
 cd "$(dirname "$0")/.."   # repo root
 
 # ---- config ----
-VM_IP="192.168.178.207"
-VM_USER="root"
-VM_PATH="/var/www/html/teamworkshow"
-KEY="$HOME/.ssh/teamworkshow_deploy"
+# Deploy target defaults to the legacy VM; override via gitignored scripts/deploy.env
+# (see scripts/deploy.env.sample) to push to All-Inkl instead.
+DEPLOY_HOST="192.168.178.207"
+DEPLOY_USER="root"
+DEPLOY_PATH="/var/www/html/teamworkshow"
+DEPLOY_KEY="$HOME/.ssh/teamworkshow_deploy"
+DEPLOY_PORT="22"
+DEPLOY_CHOWN="www-data:www-data"   # empty on hosts without root
+if [ -f scripts/deploy.env ]; then
+  # shellcheck disable=SC1091
+  . scripts/deploy.env
+fi
 JAVA_HOME_DEFAULT="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 # ---- bump version ----
@@ -46,22 +54,23 @@ echo ">> Building app…"
 # ---- deploy server to VM ----
 # Push every PHP endpoint (public + admin/CRUD). config.php is VM-only and not in
 # the repo, so this never clobbers the live secrets; media/ uploads are untouched.
-echo ">> Deploying server to $VM_USER@$VM_IP…"
-scp -i "$KEY" -o BatchMode=yes \
-  server/php/*.php \
-  "$VM_USER@$VM_IP:$VM_PATH/"
+echo ">> Deploying server to $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH…"
+SSH="ssh -i $DEPLOY_KEY -p $DEPLOY_PORT -o BatchMode=yes"
+SCP="scp -i $DEPLOY_KEY -P $DEPLOY_PORT -o BatchMode=yes"
+# .user.ini is a dotfile (not matched by *.php) so it is listed explicitly.
+$SCP server/php/*.php server/php/.user.ini "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 # Static assets (dashboard logo watermark, etc.)
-ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" "mkdir -p $VM_PATH/assets"
-scp -i "$KEY" -o BatchMode=yes \
-  server/php/assets/* \
-  "$VM_USER@$VM_IP:$VM_PATH/assets/"
-# Retire the old public folder-scan page so index.php becomes the directory index.
-ssh -i "$KEY" -o BatchMode=yes "$VM_USER@$VM_IP" \
-  "rm -f $VM_PATH/index.html; chown -R www-data:www-data $VM_PATH"
+$SSH "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p $DEPLOY_PATH/assets"
+$SCP server/php/assets/* "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/assets/"
+# Retire the old public folder-scan page so index.php becomes the directory index;
+# chown only where we have root (DEPLOY_CHOWN is empty on shared hosting).
+CHOWN_CMD=true
+[ -n "${DEPLOY_CHOWN:-}" ] && CHOWN_CMD="chown -R $DEPLOY_CHOWN $DEPLOY_PATH"
+$SSH "$DEPLOY_USER@$DEPLOY_HOST" "rm -f $DEPLOY_PATH/index.html; $CHOWN_CMD"
 
 echo ""
 echo "==================================================="
 echo "  Deployed Teamwork Show  v$VERSION  ($DATE)"
 echo "  App     -> installed on the connected device"
-echo "  Server  -> http://$VM_IP/teamworkshow/"
+echo "  Server  -> $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH"
 echo "==================================================="

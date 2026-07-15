@@ -26,9 +26,18 @@ if [ -f scripts/deploy.env ]; then
 fi
 JAVA_HOME_DEFAULT="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
+# ---- flags: --no-bump (deploy current VERSION) / --server-only (skip app build) ----
+BUMP=1; SERVER_ONLY=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-bump)     BUMP=0 ;;
+    --server-only) BUMP=0; SERVER_ONLY=1 ;;
+  esac
+done
+
 # ---- bump version ----
 VERSION="$(tr -d '[:space:]' < VERSION)"
-if [ "${1:-}" != "--no-bump" ]; then
+if [ "$BUMP" = "1" ]; then
   IFS='.' read -r MA MI PA <<< "$VERSION"
   PA=$(( ${PA:-0} + 1 ))
   VERSION="${MA:-1}.${MI:-0}.${PA}"
@@ -46,10 +55,14 @@ header('Cache-Control: no-store');
 echo json_encode(['version' => '$VERSION', 'date' => '$DATE']);
 PHP
 
-# ---- build + install app (reads VERSION for versionName) ----
-export JAVA_HOME="${JAVA_HOME:-$JAVA_HOME_DEFAULT}"
-echo ">> Building app…"
-./gradlew installDebug --console=plain -q
+# ---- build + install app (reads VERSION for versionName); skipped for --server-only ----
+if [ "$SERVER_ONLY" = "0" ]; then
+  export JAVA_HOME="${JAVA_HOME:-$JAVA_HOME_DEFAULT}"
+  echo ">> Building app…"
+  ./gradlew installDebug --console=plain -q
+else
+  echo ">> --server-only: skipping app build/install"
+fi
 
 # ---- deploy server to VM ----
 # Push every PHP endpoint (public + admin/CRUD). config.php is VM-only and not in

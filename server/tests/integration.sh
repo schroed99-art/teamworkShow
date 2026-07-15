@@ -132,6 +132,23 @@ if [ -n "${TW_ADMIN_TOKEN:-}" ]; then
   areq PUT "$BASE/devices.php" "{\"id\":$did,\"display_format\":\"bogus_xyz\"}" >/dev/null
   check_get "invalid display_format falls back to portrait" "$BASE/playlist.php?device=$PAIR" 200 '"display_format":"portrait"'
 
+  # --- Phase 5.3 Vollausbau: free-form custom zone tree round-trips ---
+  # The device is 'portrait' now. Store a two-zone rows split (customer + our own
+  # presentation) exactly as the dashboard editor emits it, then prove devices.php
+  # accepts it and playlist.php resolves it for this format. A leaf bound to the
+  # gate presentation must carry that presentation's slides.
+  ZL="{\"v\":1,\"layouts\":{\"portrait\":{\"axis\":\"rows\",\"children\":[{\"size\":50,\"node\":{\"zone\":{\"source\":\"customer\"}}},{\"size\":50,\"node\":{\"zone\":{\"source\":$pid}}}]}}}"
+  areq PUT "$BASE/devices.php" "{\"id\":$did,\"zone_mode\":\"custom\",\"zone_layout\":$ZL}" >/dev/null
+  cout="$(curl -s -m 15 "$BASE/playlist.php?device=$PAIR")"
+  printf '%s' "$cout" | grep -q '"mode":"custom"' && pass "custom zone_mode resolves in playlist" || fail "custom zone_mode resolves"
+  printf '%s' "$cout" | grep -q '"tree"'          && pass "custom playlist carries resolved tree" || fail "custom playlist tree"
+  printf '%s' "$cout" | grep -q 'poster_2.png'    && pass "custom leaf resolves presentation slides" || fail "custom leaf slides"
+  # An invalid tree (leaf pointing at a non-existent presentation) must be rejected 422.
+  bad_status="$(areq PUT "$BASE/devices.php" "{\"id\":$did,\"zone_mode\":\"custom\",\"zone_layout\":{\"v\":1,\"layouts\":{\"portrait\":{\"zone\":{\"source\":999999}}}}}")"
+  printf '%s' "${bad_status##*$'\n'}" | grep -q '422' && pass "custom layout with unknown presentation is 422" || fail "custom layout bad-source rejected"
+  # Restore single so the later notice/cleanup checks run against a clean contract.
+  areq PUT "$BASE/devices.php" "{\"id\":$did,\"zone_mode\":\"single\"}" >/dev/null
+
   # --- Step 4: weather (stub without API key) ---
   check_get "weather?device=$PAIR responds (stub/live)" "$BASE/weather.php?device=$PAIR" 200 '"stub"'
 

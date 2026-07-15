@@ -209,6 +209,26 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .wx-prev .clock { border-radius:50%; background:rgba(232,232,232,.92); display:flex; align-items:center; justify-content:center; text-shadow:none; }
   .wx-txtrow { display:flex; gap:6px; align-items:center; margin-top:6px; flex-wrap:wrap; }
   @media (max-width:760px) { .wx-panel { grid-template-columns:1fr; } }
+  /* Free-form zone editor (staff only) */
+  .ze-wrap { margin-top:12px; border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .ze-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .ze-tabs button { font-size:12px; padding:5px 10px; }
+  .ze-canvas-wrap { display:flex; justify-content:center; }
+  .ze-canvas { background:#000; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .ze-canvas.portrait { width:210px; aspect-ratio:9/16; }
+  .ze-canvas.landscape { width:100%; max-width:430px; aspect-ratio:16/9; }
+  .ze-split { display:flex; width:100%; height:100%; position:relative; }
+  .ze-child { position:relative; min-width:0; min-height:0; display:flex; }
+  .ze-leaf { position:relative; flex:1; margin:3px; border:1px solid var(--magenta); border-radius:8px;
+             background:rgba(210,26,85,.08); display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+  .ze-leaf .ze-src { font-size:11px; margin:4px 4px 2px; padding:3px 5px; }
+  .ze-leaf .ze-btns { display:flex; gap:3px; margin:0 4px 4px; }
+  .ze-leaf .ze-btns button { font-size:11px; padding:2px 6px; line-height:1.15; }
+  .ze-splitctl { position:absolute; left:50%; bottom:4px; transform:translateX(-50%); z-index:2;
+                 display:flex; gap:4px; align-items:center; background:rgba(15,23,42,.9);
+                 border:1px solid var(--line); border-radius:7px; padding:2px 5px; }
+  .ze-splitctl button { font-size:11px; padding:1px 6px; }
+  .ze-splitctl input[type=range] { width:74px; }
 </style>
 </head>
 <body>
@@ -578,46 +598,170 @@ async function selectTenant(t){
 
 <?php if (!$isKunde): ?>
 /**
- * Zone controls for a device (staff only). 'Geteilt' puts our company slideshow
- * next to the customer's — the customer keeps their own zone (the Präsentation
- * field above) and never sees or changes any of this. PHP-gated rather than
- * hidden at runtime, so a customer's browser is never even sent this markup.
+ * Source <option>s shared by the legacy company-zone select and every leaf of the
+ * free-form editor: the customer's own presentation plus every presentation in the
+ * system, grouped by tenant (a zone may carry our advertising from another tenant).
  */
-function zoneFields(d){
-  const mode = d.zone_mode||'single', axis = d.zone_axis||'rows', split = d.zone_split??70;
-  const cid = d.company_presentation_id;
-  const byTenant = {};
+function zoneSourceGroups(sel, includeCustomer){
+  const byTenant={};
   allPres.forEach(p=>{ (byTenant[p.tenant_id]=byTenant[p.tenant_id]||[]).push(p); });
-  const groups = Object.keys(byTenant).map(tid=>{
-    const tn = (tenants.find(x=>String(x.id)===String(tid))||{}).name || ('Mandant '+tid);
+  const groups=Object.keys(byTenant).map(tid=>{
+    const tn=(tenants.find(x=>String(x.id)===String(tid))||{}).name||('Mandant '+tid);
     return `<optgroup label="${esc(tn)}">`
-      + byTenant[tid].map(p=>`<option value="${p.id}"${String(p.id)===String(cid)?' selected':''}>${esc(p.name)}</option>`).join('')
+      + byTenant[tid].map(p=>`<option value="${p.id}"${String(p.id)===String(sel)?' selected':''}>${esc(p.name)}</option>`).join('')
       + `</optgroup>`;
   }).join('');
+  const cust=includeCustomer
+    ? `<option value="customer"${sel==='customer'?' selected':''}>Kunde (eigene Präsentation)</option>` : '';
+  return cust+groups;
+}
+
+/**
+ * Zone controls for a device (staff only). Three modes:
+ *   single  – only the customer's presentation, full screen.
+ *   split   – our company slideshow next to the customer's (the fixed v1.0.37 layout).
+ *   custom  – the free-form per-format zone tree (Vollausbau), authored on the canvas.
+ * The customer keeps their own zone (the Präsentation field above) and never sees or
+ * changes any of this: PHP-gated, so their browser is never even sent this markup.
+ * zoneFields() draws only the shell; initZoneEditor() wires it after insertion and
+ * hangs _getZoneBody() on the card for the save handler.
+ */
+function zoneFields(d){
+  const mode=d.zone_mode||'single', axis=d.zone_axis||'rows', split=d.zone_split??70;
+  const cid=d.company_presentation_id;
+  const fmtTabs=[['portrait','Hochkant'],['landscape','Quer'],['phone','Telefon'],['tablet','Tablet']]
+    .map(([f,l])=>`<button type="button" class="ghost" data-zfmt="${f}">${l}</button>`).join('');
   return `
-    <div style="margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:14px">
+    <div class="ze-wrap" data-zone-root>
       <div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
         <b>🗂 Bildschirm-Zonen</b>
-        <span class="muted">Firmen-Bereich neben dem Kunden-Bereich</span>
+        <span class="muted">Eine Fläche · fester Firma/Kunde-Split · oder frei aufgeteilt</span>
       </div>
-      <div class="grid2">
-        <div><label class="f">Aufteilung</label>
-          <select data-f="zone_mode" style="width:100%">
-            <option value="single"${mode==='single'?' selected':''}>Eine Fläche (Kunde)</option>
-            <option value="split"${mode==='split'?' selected':''}>Geteilt: Firma + Kunde</option>
-          </select></div>
-        <div><label class="f">Teilung</label>
-          <select data-f="zone_axis" style="width:100%">
-            <option value="rows"${axis==='rows'?' selected':''}>Übereinander</option>
-            <option value="cols"${axis==='cols'?' selected':''}>Nebeneinander</option>
-          </select></div>
-        <div><label class="f">Anteil Firmen-Zone (%)</label>
-          <input type="number" min="10" max="90" step="5" data-f="zone_split" value="${split}" style="width:100%"></div>
-        <div><label class="f">Firmen-Präsentation</label>
-          <select data-f="company_presentation_id" style="width:100%"><option value="">—</option>${groups}</select></div>
+      <div><label class="f">Aufteilung</label>
+        <select data-f="zone_mode" data-zone-mode style="width:100%;max-width:340px">
+          <option value="single"${mode==='single'?' selected':''}>Eine Fläche (Kunde)</option>
+          <option value="split"${mode==='split'?' selected':''}>Geteilt: Firma + Kunde</option>
+          <option value="custom"${mode==='custom'?' selected':''}>Frei aufgeteilt (Zonen-Editor)</option>
+        </select></div>
+
+      <div data-zone-legacy style="display:none;margin-top:10px">
+        <div class="grid2">
+          <div><label class="f">Teilung</label>
+            <select data-f="zone_axis" style="width:100%">
+              <option value="rows"${axis==='rows'?' selected':''}>Übereinander</option>
+              <option value="cols"${axis==='cols'?' selected':''}>Nebeneinander</option>
+            </select></div>
+          <div><label class="f">Anteil Firmen-Zone (%)</label>
+            <input type="number" min="10" max="90" step="5" data-f="zone_split" value="${split}" style="width:100%"></div>
+          <div style="grid-column:1/-1"><label class="f">Firmen-Präsentation</label>
+            <select data-f="company_presentation_id" style="width:100%"><option value="">—</option>${zoneSourceGroups(cid,false)}</select></div>
+        </div>
+        <p class="muted" style="margin:8px 0 0">Firmen-Zone zuerst (oben/links), Kunden-Zone füllt den Rest.</p>
       </div>
-      <p class="muted" style="margin:8px 0 0">Bei „Eine Fläche“ läuft nur die Präsentation des Kunden — die übrigen Felder greifen dann nicht.</p>
+
+      <div data-zone-custom style="display:none;margin-top:10px">
+        <div class="ze-tabs" data-zfmt-tabs>${fmtTabs}</div>
+        <p class="muted" style="margin:0 0 8px">Jede Zone hat eine Quelle. „▤/▥“ teilt sie, „✕“ entfernt sie. Layout je Format getrennt; fehlende Formate laufen als Einzelfläche.</p>
+        <div class="ze-canvas-wrap" data-ze-canvas></div>
+      </div>
     </div>`;
+}
+
+/**
+ * Wire the zone controls after the card HTML is inserted (staff only). Builds the
+ * per-format zone trees, renders the recursive canvas, and exposes card._getZoneBody()
+ * — the single source the save handler reads to send the right PUT for the mode.
+ */
+function initZoneEditor(card, d){
+  const root=card.querySelector('[data-zone-root]'); if(!root) return;
+  const modeSel=root.querySelector('[data-zone-mode]');
+  const legacy=root.querySelector('[data-zone-legacy]');
+  const custom=root.querySelector('[data-zone-custom]');
+  const tabsEl=root.querySelector('[data-zfmt-tabs]');
+  const canvas=root.querySelector('[data-ze-canvas]');
+
+  // Per-format trees. A missing format defaults to a single customer zone, which
+  // resolves identically to the 'single' fallback, so storing it is harmless.
+  const FMTS=['portrait','landscape','phone','tablet'];
+  let state={};
+  try{ const lay=d.zone_layout?(typeof d.zone_layout==='string'?JSON.parse(d.zone_layout):d.zone_layout):null;
+       if(lay&&lay.layouts) state=lay.layouts; }catch(e){ state={}; }
+  FMTS.forEach(f=>{ if(!state[f]) state[f]={zone:{source:'customer'}}; });
+  let fmt=(d.display_format&&FMTS.includes(d.display_format))?d.display_format:'portrait';
+
+  // The tree is a binary structure: splitting a leaf makes two children, deleting
+  // one child collapses the split back into its sibling.
+  const getNode=path=>{ let n=state[fmt]; for(const i of path) n=n.children[i].node; return n; };
+  const setNode=(path,nw)=>{ if(!path.length){ state[fmt]=nw; return; }
+    let n=state[fmt]; for(let k=0;k<path.length-1;k++) n=n.children[path[k]].node;
+    n.children[path[path.length-1]].node=nw; };
+  const splitAt=(path,axis)=>{ const old=getNode(path);
+    setNode(path,{axis,children:[{size:50,node:old},{size:50,node:{zone:{source:'customer'}}}]}); draw(); };
+  const delAt=path=>{ if(!path.length){ setNode([],{zone:{source:'customer'}}); draw(); return; }
+    const pp=path.slice(0,-1), idx=path[path.length-1], parent=getNode(pp);
+    parent.children.splice(idx,1);
+    if(parent.children.length===1) setNode(pp, parent.children[0].node);
+    draw(); };
+
+  const mkBtn=(txt,title,fn)=>{ const b=document.createElement('button'); b.type='button';
+    b.className='ghost'; b.textContent=txt; b.title=title; b.onclick=fn; return b; };
+
+  function elFor(path){
+    const node=getNode(path);
+    if(node&&node.children){
+      const box=document.createElement('div'); box.className='ze-split';
+      box.style.flexDirection = node.axis==='cols'?'row':'column';
+      node.children.forEach((ch,i)=>{
+        const w=document.createElement('div'); w.className='ze-child'; w.style.flex=String(ch.size||1);
+        w.appendChild(elFor(path.concat(i))); box.appendChild(w);
+      });
+      const ctl=document.createElement('div'); ctl.className='ze-splitctl';
+      ctl.appendChild(mkBtn(node.axis==='cols'?'▥':'▤','Achse wechseln',
+        ()=>{ node.axis=node.axis==='cols'?'rows':'cols'; draw(); }));
+      if(node.children.length===2){
+        const rg=document.createElement('input'); rg.type='range'; rg.min='10'; rg.max='90'; rg.step='5';
+        rg.value=String(Math.round(node.children[0].size)); rg.title='Größenverhältnis';
+        rg.oninput=()=>{ const p=+rg.value; node.children[0].size=p; node.children[1].size=100-p;
+          box.children[0].style.flex=String(p); box.children[1].style.flex=String(100-p); };
+        ctl.appendChild(rg);
+      }
+      box.appendChild(ctl);
+      return box;
+    }
+    const leaf=document.createElement('div'); leaf.className='ze-leaf';
+    const sel=document.createElement('select'); sel.className='ze-src';
+    sel.innerHTML=zoneSourceGroups(node.zone.source,true);
+    sel.onchange=()=>{ const v=sel.value; node.zone.source = v==='customer'?'customer':(+v); };
+    const btns=document.createElement('div'); btns.className='ze-btns';
+    btns.appendChild(mkBtn('▤','In Zeilen teilen',()=>splitAt(path,'rows')));
+    btns.appendChild(mkBtn('▥','In Spalten teilen',()=>splitAt(path,'cols')));
+    const x=mkBtn('✕','Zone entfernen',()=>delAt(path)); if(!path.length) x.title='Alles zurücksetzen';
+    btns.appendChild(x);
+    leaf.append(sel,btns);
+    return leaf;
+  }
+
+  function draw(){
+    canvas.innerHTML='';
+    const land=(fmt==='landscape'||fmt==='tablet');
+    const c=document.createElement('div'); c.className='ze-canvas '+(land?'landscape':'portrait');
+    c.appendChild(elFor([])); canvas.appendChild(c);
+    tabsEl.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.zfmt===fmt)?'sm':'ghost'; });
+  }
+
+  tabsEl.querySelectorAll('[data-zfmt]').forEach(b=>{ b.onclick=()=>{ fmt=b.dataset.zfmt; draw(); }; });
+
+  function updateVis(){ const m=modeSel.value;
+    legacy.style.display = m==='split'?'':'none';
+    custom.style.display = m==='custom'?'':'none';
+    if(m==='custom') draw(); }
+  modeSel.onchange=updateVis; updateVis();
+
+  card._getZoneBody=()=>{ const m=modeSel.value;
+    if(m==='custom') return { zone_mode:'custom', zone_layout:{v:1,layouts:state} };
+    const g=f=>root.querySelector(`[data-f="${f}"]`);
+    return { zone_mode:m, zone_axis:g('zone_axis').value, zone_split:+g('zone_split').value||70,
+             company_presentation_id:g('company_presentation_id').value||null }; };
 }
 <?php endif; ?>
 
@@ -746,13 +890,13 @@ function renderDetail(t, devices, presentations){
       </div>
       <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Änderungen speichern</button></div>`;
     c.querySelector('[data-preview]').onclick=()=>pvDevice(d.pairing_code, d.name||'Gerät');
+    if(!IS_KUNDE) initZoneEditor(c, d);
     c.querySelector('[data-savedev]').onclick=async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
       const devBody = IS_KUNDE
         ? {id:d.id, presentation_id:g('presentation_id')||null}
         : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format'),
-           zone_mode:g('zone_mode'), zone_axis:g('zone_axis'), zone_split:+g('zone_split')||70,
-           company_presentation_id:g('company_presentation_id')||null};
+           ...(c._getZoneBody?c._getZoneBody():{})};
       await API.call('devices.php','PUT',devBody);
       const w=f=>c.querySelector(`[data-w="${f}"]`);
       const nc=k=>c.querySelector(`[data-nc="${k}"]`);

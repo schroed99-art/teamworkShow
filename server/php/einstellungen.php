@@ -59,15 +59,18 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
            border:1px solid var(--magenta); color:var(--text); padding:10px 16px; border-radius:10px; display:none; z-index:60; }
   .toast.show { display:block; }
 </style>
+<?php require_once __DIR__ . '/brand_partials.php'; echo tw_brand_css(); ?>
 </head>
 <body>
 <header>
   <h1>Teamwork<span>Show</span></h1>
   <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?> · Einstellungen</span>
+  <?= tw_area_badge(false) ?>
   <span class="spacer"></span>
   <a class="nav" href="overview.php">← Übersicht</a>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
+<?= tw_brandby() ?>
 
 <div class="wrap">
   <div class="card">

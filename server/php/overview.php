@@ -174,11 +174,13 @@ function tw_weather_pictogram(): string
   .modal button { border:0; border-radius:9px; padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer; background:var(--magenta); color:#fff; }
   .modal button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
 </style>
+<?php require_once __DIR__ . '/brand_partials.php'; echo tw_brand_css(); ?>
 </head>
 <body>
 <header>
   <h1>Teamwork<span>Show</span></h1>
   <?php if ($version !== ''): ?><span class="ver">v<?= h($version) ?></span><?php endif; ?>
+  <?= tw_area_badge($isKunde) ?>
   <span class="stat"><?= $isKunde
       ? $totalMedia . ' Medien'
       : count($tenants) . ' Mandanten · ' . $totalMedia . ' Medien' ?></span>
@@ -190,6 +192,8 @@ function tw_weather_pictogram(): string
   <?php endif; ?>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
+
+<?= tw_brandby() ?>
 
 <div class="h2"><?= $isKunde ? 'Mein Bereich' : 'Mandanten' ?></div>
 <?php if (!$tenants): ?>

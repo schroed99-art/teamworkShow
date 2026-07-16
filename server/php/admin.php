@@ -230,16 +230,19 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .ze-splitctl button { font-size:11px; padding:1px 6px; }
   .ze-splitctl input[type=range] { width:74px; }
 </style>
+<?php require_once __DIR__ . '/brand_partials.php'; echo tw_brand_css(); ?>
 </head>
 <body>
 <header>
   <h1>Teamwork<span>Show</span></h1>
-  <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?> · <?= $isKunde ? 'Mein Bereich' : 'Admin' ?></span>
+  <span class="ver"><?= $version !== '' ? 'v' . htmlspecialchars($version) : '' ?></span>
+  <?= tw_area_badge($isKunde) ?>
   <span class="spacer"></span>
   <a class="logout" href="overview.php">← Übersicht</a>
   <?php if (!$isKunde): ?><a class="logout" href="einstellungen.php">Einstellungen</a><?php endif; ?>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
+<?= tw_brandby() ?>
 
 <div class="wrap">
   <div class="panel">

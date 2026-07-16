@@ -677,6 +677,27 @@ function zoneSourceGroups(sel, includeCustomer){
  * zoneFields() draws only the shell; initZoneEditor() wires it after insertion and
  * hangs _getZoneBody() on the card for the save handler.
  */
+/** "Anzeigeart" eines Geräts für die Präsentationsliste: Format · Aufteilung,
+ *  z. B. "Hochkant · zweigeteilt". Bei frei aufgeteilten Layouts zählt die
+ *  Blattzahl des Layouts für das Geräteformat (fehlt es, läuft eine Fläche). */
+function anzeigeArt(d){
+  const fmt={portrait:'Hochkant',phone:'Telefon',landscape:'Quer',tablet:'Tablet'}[d.display_format||'portrait']||'Hochkant';
+  const mode=d.zone_mode||'single';
+  let teilung='eine Fläche';
+  if(mode==='split') teilung='zweigeteilt (Firma/Kunde)';
+  else if(mode==='custom'){
+    let n=1;
+    try{
+      const lay=d.zone_layout?(typeof d.zone_layout==='string'?JSON.parse(d.zone_layout):d.zone_layout):null;
+      const node=lay&&lay.layouts?lay.layouts[d.display_format||'portrait']:null;
+      const count=x=>!x?1:(x.children?x.children.reduce((s,c)=>s+count(c.node),0):1);
+      n=node?count(node):1;
+    }catch(e){}
+    teilung=n<=1?'eine Fläche':n===2?'zweigeteilt':n+' Zonen';
+  }
+  return fmt+' · '+teilung;
+}
+
 function zoneFields(d){
   const mode=d.zone_mode||'single', axis=d.zone_axis||'rows', split=d.zone_split??70;
   const cid=d.company_presentation_id;
@@ -854,11 +875,14 @@ function renderDetail(t, devices, presentations){
     const thumb=fm
       ?`<span class="pthumb" data-lb title="${esc(fm)} – Vorschau">${isVideo(fm)?`<video src="${mediaUrl(fm)}" muted preload="metadata"></video>`:`<img src="${mediaUrl(fm)}" alt="">`}</span>`
       :`<span class="pthumb empty" title="Noch kein Bild in dieser Präsentation">🖼</span>`;
+    // Anzeigeart: Format · Aufteilung der Geräte, auf denen diese Präsentation läuft.
+    const artChips=devices.filter(d=>String(d.presentation_id)===String(p.id))
+      .map(d=>` <span class="tag" title="Läuft auf „${esc(d.name||d.pairing_code||'Gerät')}“">${esc(anzeigeArt(d))}</span>`).join('');
     row.innerHTML=`
       <div class="row wrap2" style="align-items:center">
         ${thumb}
         <div class="grow" style="min-width:0">
-          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on">aktiv</span>':''}</div>
+          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on">aktiv</span>':''}${artChips}</div>
           <div class="muted" data-desc style="font-size:12px;margin-top:3px;cursor:pointer" title="Beschreibung bearbeiten">${p.description?esc(p.description):'<i>Keine Beschreibung — hier klicken zum Ergänzen.</i>'}</div>
         </div>
         <button class="eye${active?' on':''}" data-eye title="${eyeTitle}"${hasDevices?'':' disabled'}>${eyeSvg(active)}</button>

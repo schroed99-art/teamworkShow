@@ -105,6 +105,12 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   /* Einheitlicher Innenkasten (alle Reiter): transparenter Hintergrund wie der
      Hauptkasten, nur ein feiner Rahmen trennt optisch — wie bei Bildschirm-Zonen. */
   .ibox { border:1px solid var(--line); border-radius:12px; padding:14px; margin-top:12px; background:transparent; }
+  /* Präsentations-Piktogramm: erstes Bild der Präsentation als kleine Vorschau. */
+  .pthumb { flex:none; width:88px; height:54px; border-radius:8px; overflow:hidden; border:1px solid var(--line);
+    background:#0b1120; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .pthumb img, .pthumb video { width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+  .pthumb:hover { border-color:var(--magenta); }
+  .pthumb.empty { color:var(--dim); font-size:20px; cursor:default; }
   /* App-Installation + Koppeln nebeneinander; auf schmalen Screens untereinander. */
   .top-tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start; }
   @media (max-width:900px){ .top-tiles { grid-template-columns:1fr; } }
@@ -835,20 +841,38 @@ function renderDetail(t, devices, presentations){
   const pWrap=document.createElement('div'); pWrap.className='card'; pWrap.id='panelPres';
   pWrap.innerHTML=`<h3>Präsentationen</h3>
     <p class="muted" style="margin:-4px 0 6px">Inhalts-Präsentationen dieses Mandanten — jede kann einem oder mehreren Bildschirmen zugewiesen werden (Reiter „Geräte").</p>`;
-  const pBox=document.createElement('div'); pBox.className='ibox';
   const activePresIds=new Set(devices.map(d=>String(d.presentation_id)).filter(v=>v&&v!=='null'));
   const hasDevices=devices.length>0;
   presentations.forEach(p=>{
     const active=activePresIds.has(String(p.id));
-    const row=document.createElement('div'); row.className='row wrap2'; row.style.marginBottom='8px';
+    const row=document.createElement('div'); row.className='ibox';
     const eyeTitle=!hasDevices?'Kein Gerät verknüpft'
       :active?'Läuft auf dem Gerät – klicken zum Ausblenden'
       :'Auf dem Gerät anzeigen';
-    row.innerHTML=`<span class="grow">${esc(p.name)}${active?' <span class="badge-on">aktiv</span>':''}</span>
-      <button class="eye${active?' on':''}" data-eye title="${eyeTitle}"${hasDevices?'':' disabled'}>${eyeSvg(active)}</button>
-      <button class="ghost sm" data-ren title="Umbenennen">✎</button>
-      <button class="ghost sm" data-edit>Slides</button>
-      <button class="ghost sm" data-del>Löschen</button>`;
+    // Piktogramm: erstes Bild (Position 1) der Präsentation; Klick öffnet die Lightbox.
+    const fm=p.first_media||'';
+    const thumb=fm
+      ?`<span class="pthumb" data-lb title="${esc(fm)} – Vorschau">${isVideo(fm)?`<video src="${mediaUrl(fm)}" muted preload="metadata"></video>`:`<img src="${mediaUrl(fm)}" alt="">`}</span>`
+      :`<span class="pthumb empty" title="Noch kein Bild in dieser Präsentation">🖼</span>`;
+    row.innerHTML=`
+      <div class="row wrap2" style="align-items:center">
+        ${thumb}
+        <div class="grow" style="min-width:0">
+          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on">aktiv</span>':''}</div>
+          <div class="muted" data-desc style="font-size:12px;margin-top:3px;cursor:pointer" title="Beschreibung bearbeiten">${p.description?esc(p.description):'<i>Keine Beschreibung — hier klicken zum Ergänzen.</i>'}</div>
+        </div>
+        <button class="eye${active?' on':''}" data-eye title="${eyeTitle}"${hasDevices?'':' disabled'}>${eyeSvg(active)}</button>
+        <button class="ghost sm" data-ren title="Umbenennen">✎</button>
+        <button class="ghost sm" data-edit>Slides</button>
+        <button class="ghost sm" data-del>Löschen</button>
+      </div>`;
+    if(fm) row.querySelector('[data-lb]').onclick=()=>openLightbox(fm);
+    row.querySelector('[data-desc]').onclick=async()=>{
+      const desc=await promptInline('Beschreibung — worum geht es in dieser Präsentation?', p.description||'');
+      if(desc===null||desc===(p.description||'')) return;
+      await API.call('presentations.php','PUT',{id:p.id,description:desc});
+      toast('Beschreibung gespeichert'); selectTenant(t);
+    };
     row.querySelector('[data-eye]').onclick=async()=>{
       await API.call('presentations.php','PUT',{id:p.id,active:!active});
       toast(!active?'Auf dem Gerät aktiviert':'Ausgeblendet'); selectTenant(t); };
@@ -859,14 +883,13 @@ function renderDetail(t, devices, presentations){
     row.querySelector('[data-edit]').onclick=()=>editPresentation(p);
     row.querySelector('[data-del]').onclick=async()=>{ if(await confirmDialog('Präsentation löschen?', p.name)){
       await API.call('presentations.php?id='+p.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } };
-    pBox.appendChild(row);
+    pWrap.appendChild(row);
   });
-  const pAdd=document.createElement('div'); pAdd.className='row'; pAdd.style.marginTop='10px';
+  const pAdd=document.createElement('div'); pAdd.className='ibox row';
   pAdd.innerHTML=`<input class="grow" id="newPres" placeholder="Neue Präsentation…"><button class="sm">+</button>`;
   pAdd.querySelector('button').onclick=async()=>{ const name=$('#newPres').value.trim(); if(!name)return;
     await API.call('presentations.php','POST',{tenant_id:t.id,name}); toast('Erstellt'); selectTenant(t); };
-  pBox.appendChild(pAdd);
-  pWrap.appendChild(pBox);
+  pWrap.appendChild(pAdd);
   panels.pres=pWrap;
   body.appendChild(pWrap);
 

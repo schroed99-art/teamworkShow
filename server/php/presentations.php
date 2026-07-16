@@ -47,15 +47,20 @@ if ($method === 'GET') {
         $p['slides'] = $ss->fetchAll();
         tw_json(['presentation' => $p]);
     }
+    // first_media: the first media slide (lowest position) — the dashboard shows
+    // it as a per-presentation thumbnail in the list.
+    $firstMedia = "(SELECT s.media_name FROM slides s
+                     WHERE s.presentation_id = p.id AND s.kind = 'media' AND s.media_name <> ''
+                     ORDER BY s.position, s.id LIMIT 1) AS first_media";
     $tenantId = (int) ($_GET['tenant_id'] ?? 0);
     if ($tenantId > 0) {
         tw_require_tenant($tenantId);
-        $s = $pdo->prepare('SELECT * FROM presentations WHERE tenant_id = ? ORDER BY id');
+        $s = $pdo->prepare("SELECT p.*, $firstMedia FROM presentations p WHERE p.tenant_id = ? ORDER BY p.id");
         $s->execute([$tenantId]);
         $rows = $s->fetchAll();
     } else {
-        [$scope, $args] = tw_tenant_filter('tenant_id');
-        $s = $pdo->prepare("SELECT * FROM presentations WHERE 1=1 $scope ORDER BY id");
+        [$scope, $args] = tw_tenant_filter('p.tenant_id');
+        $s = $pdo->prepare("SELECT p.*, $firstMedia FROM presentations p WHERE 1=1 $scope ORDER BY p.id");
         $s->execute($args);
         $rows = $s->fetchAll();
     }
@@ -91,6 +96,11 @@ if ($method === 'PUT') {
             tw_json(['error' => 'name_required'], 422);
         }
         $pdo->prepare('UPDATE presentations SET name = ? WHERE id = ?')->execute([$newName, $id]);
+    }
+    // Short list description (empty allowed = remove). Column via migrate_pres_description.php.
+    if (array_key_exists('description', $b)) {
+        $desc = tw_cut(trim((string) $b['description']), 300);
+        $pdo->prepare('UPDATE presentations SET description = ? WHERE id = ?')->execute([$desc, $id]);
     }
     // Toggle which presentation the tenant's device(s) show. active=true routes all
     // of the tenant's devices to this presentation; active=false switches off only

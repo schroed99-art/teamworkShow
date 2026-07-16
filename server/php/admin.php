@@ -77,10 +77,11 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   button.eye { background:transparent; border:1px solid var(--line); color:var(--dim);
     padding:4px 8px; border-radius:8px; display:inline-flex; align-items:center; cursor:pointer; }
   button.eye:hover:not(:disabled) { border-color:var(--magenta); color:var(--text); }
-  button.eye.on { color:var(--magenta); border-color:var(--magenta); }
+  button.eye.on { color:#39d353; border-color:#1c5c2e; }
   button.eye:disabled { opacity:.4; cursor:not-allowed; }
+  /* "aktiv" ist ein positiver Zustand -> grün (nicht magenta). */
   .badge-on { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
-    color:var(--magenta); border:1px solid var(--magenta); border-radius:6px; padding:1px 6px; margin-left:6px; }
+    color:#39d353; border:1px solid #1c5c2e; background:#0e1f13; border-radius:6px; padding:1px 6px; margin-left:6px; }
   .statuspill { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600;
     padding:2px 9px; border-radius:999px; border:1px solid var(--line); }
   .statuspill .dot { width:8px; height:8px; border-radius:50%; background:currentColor; flex:none; }
@@ -1033,9 +1034,15 @@ function renderDetail(t, devices, presentations){
       </div>`;
     panels.usr=uWrap;
     body.appendChild(uWrap);
-    uWrap.querySelector('#uPw').value=genPw();
+    // Temp-Passwort NICHT vorbefüllen — Feld bleibt beim Betreten der Seite leer und
+    // wird erst auf Klick "Generieren" sichtbar. Anlegen erst, wenn eins erzeugt wurde
+    // (bewusst, damit es notiert werden kann — später nur noch zurücksetzbar).
+    uWrap.querySelector('#uPw').placeholder='Auf „Generieren“ klicken';
     uWrap.querySelector('#uGen').onclick=()=>{ uWrap.querySelector('#uPw').value=genPw(); };
-    uWrap.querySelector('#uAdd').onclick=()=>createTenantUser(t, uWrap);
+    uWrap.querySelector('#uAdd').onclick=()=>{
+      if(!uWrap.querySelector('#uPw').value){ toast('Bitte zuerst ein Temp-Passwort generieren'); return; }
+      createTenantUser(t, uWrap);
+    };
     loadTenantUsers(t);
   }
 
@@ -1344,7 +1351,7 @@ async function loadTenantUsers(t){
         <b>${esc(name)}</b>${self?' <span class="tag">(angemeldet)</span>':''}
         <div class="muted">${esc(u.email)}</div>
       </div>
-      <span class="badge-on" style="${u.active?'':'color:var(--dim);border-color:var(--line)'}">${u.active?'aktiv':'inaktiv'}</span>
+      <span class="badge-on" style="${u.active?'':'color:var(--dim);border-color:var(--line);background:transparent'}">${u.active?'aktiv':'inaktiv'}</span>
       <button class="ghost sm" data-reset title="Neues Temp-Passwort vergeben">⟳ Passwort</button>
       <button class="ghost sm" data-act ${self?'disabled':''}>${u.active?'Deaktivieren':'Aktivieren'}</button>
       <button class="ghost sm" data-del ${self?'disabled':''} style="border-color:#5a2230;color:#ff6b8a">Löschen</button>`;

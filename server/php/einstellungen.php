@@ -58,6 +58,11 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel2);
            border:1px solid var(--magenta); color:var(--text); padding:10px 16px; border-radius:10px; display:none; z-index:60; }
   .toast.show { display:block; }
+  .tabs { display:flex; gap:6px; border-bottom:1px solid var(--line); margin-bottom:16px; flex-wrap:wrap; }
+  .tab { padding:9px 16px; font-size:13px; color:var(--dim); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.active { color:var(--text); border-bottom-color:var(--magenta); }
+  .panel { display:none; }
+  .panel.active { display:block; }
 </style>
 <?php require_once __DIR__ . '/brand_partials.php'; echo tw_brand_css(); ?>
 </head>
@@ -73,32 +78,45 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 <?= tw_brandby() ?>
 
 <div class="wrap">
-  <div class="card">
-    <h3>Hilfe &amp; Kontakt</h3>
-    <p class="muted" style="margin:0 0 8px">Gilt <b>global für alle Geräte</b>. Wird im Wartungsmenü der App unter „Hilfe &amp; Kontakt" angezeigt und beim nächsten Sync übernommen.</p>
-    <div class="grid2">
-      <div><label class="f">Firmenname</label><input data-h="help_company"></div>
-      <div><label class="f">Application</label><input data-h="help_app" placeholder="z.B. Teamwork Show"></div>
-      <div><label class="f">Version</label><input data-h="help_version" placeholder="leer = App zeigt eigene Version"></div>
-      <div><label class="f">Telefon</label><input data-h="help_phone"></div>
-      <div><label class="f">Ansprechpartner</label><input data-h="help_contact"></div>
-      <div><label class="f">Internetseite</label><input data-h="help_website" placeholder="https://…"></div>
-      <div><label class="f">Support · E-Mail</label><input data-h="help_support_mail" type="email"></div>
-      <div><label class="f">Support · Telefon</label><input data-h="help_support_phone"></div>
-    </div>
-    <div class="row" style="margin-top:14px"><span class="spacer"></span><button id="save">Speichern</button></div>
+  <div class="tabs">
+    <div class="tab active" data-p="users">Benutzerverwaltung</div>
+    <div class="tab" data-p="help">Hilfe &amp; Kontakt</div>
   </div>
 
-  <div class="card">
-    <h3>Benutzerverwaltung</h3>
-    <p class="muted" style="margin:0 0 12px">Konten anlegen, Rollen vergeben, Passwörter zurücksetzen oder Nutzer deaktivieren.</p>
-    <a href="benutzer.php" style="display:inline-flex;align-items:center;gap:8px;background:var(--magenta);color:#fff;padding:10px 16px;border-radius:9px;text-decoration:none;font-weight:600;font-size:13px">👥 Benutzer verwalten</a>
+  <div class="panel active" id="panel-users">
+    <div class="card">
+      <h3>Benutzerverwaltung</h3>
+      <p class="muted" style="margin:0 0 12px">Konten anlegen, Rollen vergeben, Passwörter zurücksetzen oder Nutzer deaktivieren.</p>
+      <a href="benutzer.php" style="display:inline-flex;align-items:center;gap:8px;background:var(--magenta);color:#fff;padding:10px 16px;border-radius:9px;text-decoration:none;font-weight:600;font-size:13px">👥 Benutzer verwalten</a>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-help">
+    <div class="card">
+      <h3>Hilfe &amp; Kontakt</h3>
+      <p class="muted" style="margin:0 0 8px">Gilt <b>global für alle Geräte</b>. Wird im Wartungsmenü der App unter „Hilfe &amp; Kontakt" angezeigt und beim nächsten Sync übernommen.</p>
+      <div class="grid2">
+        <div><label class="f">Firmenname</label><input data-h="help_company"></div>
+        <div><label class="f">Application</label><input data-h="help_app" placeholder="z.B. Teamwork Show"></div>
+        <div><label class="f">Version</label><input data-h="help_version" placeholder="leer = App zeigt eigene Version"></div>
+        <div><label class="f">Telefon</label><input data-h="help_phone"></div>
+        <div><label class="f">Ansprechpartner</label><input data-h="help_contact"></div>
+        <div><label class="f">Internetseite</label><input data-h="help_website" placeholder="https://…"></div>
+        <div><label class="f">Support · E-Mail</label><input data-h="help_support_mail" type="email"></div>
+        <div><label class="f">Support · Telefon</label><input data-h="help_support_phone"></div>
+      </div>
+      <div class="row" style="margin-top:14px"><span class="spacer"></span><button id="save">Speichern</button></div>
+    </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 <script>
   const $ = s => document.querySelector(s);
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+t.dataset.p));
+  });
   const inputs = () => document.querySelectorAll('[data-h]');
   function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
 

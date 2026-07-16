@@ -1129,6 +1129,17 @@ function renderDetail(t, devices, presentations){
     c.querySelector('[data-preview]').onclick=()=>pvDevice(d.pairing_code, d.name||'Gerät');
     c.querySelector('[data-savedev]').onclick=async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
+      // Anzeigeformat ist eine bewusste Entscheidung: Ausrichtung + Zonen-Layout
+      // der Anzeige hängen daran -> Änderung nur nach Bestätigung.
+      if(!IS_KUNDE){
+        const oldFmt=d.display_format||'portrait', newFmt=g('display_format');
+        if(newFmt!==oldFmt){
+          const L={portrait:'Hochkant-Signage',phone:'Telefon',landscape:'Querformat / TV',tablet:'Tablet'};
+          const ok=await confirmDialog('Anzeigeformat ändern?',
+            `„${d.name||d.pairing_code}“ wechselt von ${L[oldFmt]||oldFmt} zu ${L[newFmt]||newFmt} — Ausrichtung und Zonen-Layout der Anzeige ändern sich beim nächsten Sync.`);
+          if(!ok) return;
+        }
+      }
       const devBody = IS_KUNDE
         ? {id:d.id, presentation_id:g('presentation_id')||null}
         : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format')};
@@ -1258,10 +1269,17 @@ function renderDetail(t, devices, presentations){
     pairWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06);margin-bottom:14px';
     const dAddPres=presentations.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
     pairWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">➕ Neues Gerät koppeln</h3>
-      <p class="muted" style="margin:0 0 12px">Code aus dem „Gerät koppeln"-Screen des Geräts eingeben — oder leer lassen, dann wird ein neuer Code erzeugt. Name und Präsentation sind optional.</p>
+      <p class="muted" style="margin:0 0 12px">Code aus dem „Gerät koppeln"-Screen des Geräts eingeben — oder leer lassen, dann wird ein neuer Code erzeugt. <b>Anzeigeformat ist Pflicht</b>; Name und Präsentation sind optional.</p>
       <div class="row wrap2">
         <input id="newDevCode" placeholder="Code vom Gerät (optional)…" style="width:210px;text-transform:uppercase">
         <input class="grow" id="newDev" placeholder="Gerätename…">
+        <select id="newDevFmt" style="width:190px" title="Anzeigeformat (Pflichtfeld)">
+          <option value="">Anzeigeformat… *</option>
+          <option value="portrait">Hochkant-Signage</option>
+          <option value="phone">Telefon</option>
+          <option value="landscape">Querformat / TV</option>
+          <option value="tablet">Tablet</option>
+        </select>
         <select id="newDevPres" style="width:180px"><option value="">Präsentation…</option>${dAddPres}</select>
         <button class="sm">+ Gerät</button>
       </div>`;
@@ -1269,7 +1287,9 @@ function renderDetail(t, devices, presentations){
       const name=$('#newDev').value.trim();
       const code=$('#newDevCode').value.trim().toUpperCase();
       const pid=$('#newDevPres').value;
-      const body={tenant_id:t.id,name}; if(code) body.pairing_code=code; if(pid) body.presentation_id=pid;
+      const fmt=$('#newDevFmt').value;
+      if(!fmt){ toast('Bitte Anzeigeformat wählen (Pflichtfeld)'); return; }
+      const body={tenant_id:t.id,name,display_format:fmt}; if(code) body.pairing_code=code; if(pid) body.presentation_id=pid;
       try{
         const r=await API.call('devices.php','POST',body);
         toast(code?('Gekoppelt · '+r.pairing_code):('Gerät angelegt · Code '+r.pairing_code)); selectTenant(t);

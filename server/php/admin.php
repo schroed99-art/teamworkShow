@@ -826,10 +826,7 @@ function editScreen(d, focusPres){
   wrap.innerHTML=`
     <a href="#" id="backScreen" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
     <h3 style="margin-top:0">Bildschirm — ${esc(d.name||d.pairing_code||'Gerät')}</h3>
-    <div class="row wrap2" style="margin:-4px 0 10px;align-items:center">
-      ${miniScreenHtml(d, focusPres?focusPres.id:null)} <span class="tag">${esc(anzeigeArt(d))}</span>
-      <span class="muted">Je Zone die Slides ihrer Quell-Präsentation — „Bearbeiten" öffnet den Editor in der Zone.</span>
-    </div>
+    <p class="muted" style="margin:-4px 0 10px">Je Zone die Slides ihrer Quell-Präsentation — „Bearbeiten" öffnet den Editor in der Zone.</p>
     <div data-zones style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;flex-direction:${dirRow?'row':'column'}"></div>`;
   if (body.firstElementChild) body.insertBefore(wrap, body.firstElementChild.nextSibling);
   else body.appendChild(wrap);

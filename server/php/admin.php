@@ -58,6 +58,9 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
           position:relative; z-index:1; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
   .panel h2 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+  /* Rechte Mandanten-Detailspalte flach (kein umschließender Kasten): Titel + Reiter
+     sitzen auf dem Hintergrund, nur der Inhalt steht in Karten — wie einstellungen.php. */
+  #detail { background:transparent; border:0; border-radius:0; padding:0; }
   ul.list { list-style:none; margin:0; padding:0; }
   ul.list li { display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:9px; cursor:pointer; }
   ul.list li:hover { background:var(--panel2); }

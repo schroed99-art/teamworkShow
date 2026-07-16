@@ -964,11 +964,11 @@ function renderDetail(t, devices, presentations){
         <div class="row" style="align-items:center;gap:10px;margin-bottom:4px">
           <b>🌤 Wetter</b>
           <span class="muted">Wetterdaten &amp; Vorhersage-Zwischenbild für diesen Bildschirm</span>
+          <span class="spacer" style="flex:1"></span>
+          <label class="f" style="margin:0"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> aktiv</label>
         </div>
-        <div class="grid2">
-          <div><label class="f">Wetter-Ort</label><input value="${esc(d._w_loc||'')}" data-w="weather_location" style="width:100%" placeholder="z.B. Berlin,DE"></div>
-          <div style="display:flex;align-items:flex-end;padding-bottom:8px"><label class="f" style="margin:0"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> Wetter aktiv</label></div>
-        </div>
+        <label class="f">Wetter-Ort</label>
+        <input value="${esc(d._w_loc||'')}" data-w="weather_location" style="width:100%" placeholder="z.B. Berlin,DE">
       </div>
       <div class="ibox">
         <div class="row" style="align-items:center;gap:10px;margin-bottom:8px">

@@ -707,6 +707,7 @@ function anzeigeArt(d){
 
 let currentDevices=[]; // Geräte des gewählten Mandanten (für den Slides-Editor-Kopf)
 let currentPresentations=[]; // Präsentationen des gewählten Mandanten (für den Bildschirm-Editor)
+let lastTab='pres'; // aktiver Reiter überlebt ein Re-Render (Auto-Refresh nach Speichern)
 
 /** Geräte, auf denen Präsentation p irgendwo erscheint: als Kunden-Präsentation,
  *  als Firmen-Präsentation (fester Split) oder direkt als Zonen-Quelle. */
@@ -833,8 +834,9 @@ function editScreen(d, focusPres){
   if (body.firstElementChild) body.insertBefore(wrap, body.firstElementChild.nextSibling);
   else body.appendChild(wrap);
   wrap.scrollIntoView({behavior:'smooth',block:'nearest'});
-  wrap.querySelector('#backScreen').onclick=e=>{ e.preventDefault(); wrap.remove();
-    const pp=document.getElementById('panelPres'); if(pp) pp.style.display=''; };
+  wrap.querySelector('#backScreen').onclick=e=>{ e.preventDefault();
+    if(activeTenant){ selectTenant(activeTenant); return; } // frisch laden (Piktogramm/Chips)
+    wrap.remove(); const pp=document.getElementById('panelPres'); if(pp) pp.style.display=''; };
   const zonesBox=wrap.querySelector('[data-zones]');
   const seen={}; let autoMounted=false;
   leaves.forEach((lf,i)=>{
@@ -1021,6 +1023,7 @@ function renderDetail(t, devices, presentations){
   const tabs=document.createElement('div'); tabs.className='tabs';
   const panels={};
   const showTab=name=>{
+    lastTab=name; // merken, damit ein Auto-Refresh nach dem Speichern hier bleibt
     document.getElementById('slidesEditor')?.remove(); // leave the slides editor when switching tabs
     document.getElementById('screenEditor')?.remove(); // dito Bildschirm-Editor
     Object.keys(panels).forEach(k=>{ panels[k].style.display=(k===name)?'':'none'; });
@@ -1138,6 +1141,7 @@ function renderDetail(t, devices, presentations){
         : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format')};
       await API.call('devices.php','PUT',devBody);
       toast('Gerät gespeichert');
+      selectTenant(t); // Ansicht sofort aktualisieren (Name/Format wirken überall)
     };
     c.querySelector('[data-deldev]')?.addEventListener('click', async()=>{ if(await confirmDialog('Gerät löschen?', d.name||d.pairing_code)){
       await API.call('devices.php?id='+d.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } });
@@ -1219,6 +1223,9 @@ function renderDetail(t, devices, presentations){
         notices_font:w('notices_font').value, notices_speed:+w('notices_speed').value||90,
         notices_color:(nc('fg').value||'#FFFFFF')});
       toast('Anzeige gespeichert');
+      // Ansicht sofort aktualisieren: Mini-Bildschirme, Anzeigeart-Chips und der
+      // Bildschirm-Editor lesen die Zonen-Daten aus dem Mandanten-Datensatz.
+      selectTenant(t);
     };
     anzWrap.appendChild(c);
     // fetch widget values lazily
@@ -1359,7 +1366,7 @@ function renderDetail(t, devices, presentations){
     body.appendChild(sWrap);
   }
 
-  showTab('pres');
+  showTab(panels[lastTab]?lastTab:'pres');
 }
 
 // Presentation slide editor (drag order + duration)
@@ -1479,7 +1486,8 @@ async function editPresentation(p, mount){
   card.querySelector('#editWxLayout')?.addEventListener('click', openWeatherLayout);
   card.querySelector('#saveSlides').onclick=async()=>{ await API.call('presentations.php','PUT',{id:p.id,slides}); toast('Slides gespeichert'); };
   card.querySelector('#pvPres').onclick=()=>pvPresentation(p.id, p.name);
-  const closeEditor=()=>{ card.remove(); const pp=document.getElementById('panelPres'); if(pp) pp.style.display=''; };
+  const closeEditor=()=>{ if(activeTenant){ selectTenant(activeTenant); return; } // frisch laden (Piktogramm/Chips)
+    card.remove(); const pp=document.getElementById('panelPres'); if(pp) pp.style.display=''; };
   card.querySelector('#closeSlides').onclick=closeEditor;
   card.querySelector('#backPres').onclick=(e)=>{ e.preventDefault(); closeEditor(); };
 }

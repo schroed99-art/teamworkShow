@@ -864,6 +864,7 @@ function renderDetail(t, devices, presentations){
   // Devices
   const dWrap=document.createElement('div'); dWrap.className='card';
   dWrap.innerHTML=`<h3>Geräte</h3>`;
+  let pairWrap=null; // eigener Koppel-Kasten, wird oberhalb der Liste platziert (s. u.)
   devices.forEach(d=>{
     const c=document.createElement('div'); c.style.cssText='border-top:1px solid var(--line);padding-top:10px;margin-top:10px';
     const presOpts = presentations.map(p=>`<option value="${p.id}" ${String(p.id)===String(d.presentation_id)?'selected':''}>${esc(p.name)}</option>`).join('');
@@ -982,13 +983,20 @@ function renderDetail(t, devices, presentations){
       dWrap.appendChild(hint);
     }
   } else {
-    const dAdd=document.createElement('div'); dAdd.className='row wrap2'; dAdd.style.marginTop='12px';
+    // Eigener Kasten zum Koppeln — optisch analog zur "App-Installation"-Kachel,
+    // wird oberhalb der Geräteliste platziert (nicht mehr gedrängt darunter).
+    pairWrap=document.createElement('div'); pairWrap.className='card';
+    pairWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06);margin-bottom:14px';
     const dAddPres=presentations.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-    dAdd.innerHTML=`<input id="newDevCode" placeholder="Code vom Gerät (optional)…" style="width:190px;text-transform:uppercase">`+
-      `<input class="grow" id="newDev" placeholder="Gerätename…">`+
-      `<select id="newDevPres" style="width:170px"><option value="">Präsentation…</option>${dAddPres}</select>`+
-      `<button class="sm">+ Gerät</button>`;
-    dAdd.querySelector('button').onclick=async()=>{
+    pairWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">➕ Neues Gerät koppeln</h3>
+      <p class="muted" style="margin:0 0 12px">Code aus dem „Gerät koppeln"-Screen des Geräts eingeben — oder leer lassen, dann wird ein neuer Code erzeugt. Name und Präsentation sind optional.</p>
+      <div class="row wrap2">
+        <input id="newDevCode" placeholder="Code vom Gerät (optional)…" style="width:210px;text-transform:uppercase">
+        <input class="grow" id="newDev" placeholder="Gerätename…">
+        <select id="newDevPres" style="width:180px"><option value="">Präsentation…</option>${dAddPres}</select>
+        <button class="sm">+ Gerät</button>
+      </div>`;
+    pairWrap.querySelector('button').onclick=async()=>{
       const name=$('#newDev').value.trim();
       const code=$('#newDevCode').value.trim().toUpperCase();
       const pid=$('#newDevPres').value;
@@ -998,7 +1006,6 @@ function renderDetail(t, devices, presentations){
         toast(code?('Gekoppelt · '+r.pairing_code):('Gerät angelegt · Code '+r.pairing_code)); selectTenant(t);
       }catch(e){ toast('Fehler – Code evtl. schon vergeben'); }
     };
-    dWrap.appendChild(dAdd);
   }
 
   const devPanel=document.createElement('div');
@@ -1015,6 +1022,7 @@ function renderDetail(t, devices, presentations){
          ⬇ Download-Seite öffnen</a>`;
     devPanel.appendChild(aWrap);
   }
+  if (pairWrap) devPanel.appendChild(pairWrap);
   devPanel.appendChild(dWrap);
   panels.dev=devPanel;
   body.appendChild(devPanel);

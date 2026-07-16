@@ -874,8 +874,9 @@ function editScreen(d, focusPres){
 function zoneFields(d){
   const mode=d.zone_mode||'single', axis=d.zone_axis||'rows', split=d.zone_split??70;
   const cid=d.company_presentation_id;
-  const fmtTabs=[['portrait','Hochkant'],['landscape','Quer'],['phone','Telefon'],['tablet','Tablet']]
-    .map(([f,l])=>`<button type="button" class="ghost" data-zfmt="${f}">${l}</button>`).join('');
+  // Der Editor ist fest an das Anzeigeformat des Geräts gebunden (hoch/quer ist
+  // pro Gerät fix; eingestellt wird es im Reiter "Geräte"). Keine Format-Tabs mehr.
+  const fmtLabel={portrait:'Hochkant',landscape:'Quer',phone:'Telefon',tablet:'Tablet'}[d.display_format||'portrait']||'Hochkant';
   return `
     <div class="ze-wrap" data-zone-root>
       <div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
@@ -905,8 +906,7 @@ function zoneFields(d){
       </div>
 
       <div data-zone-custom style="display:none;margin-top:10px">
-        <div class="ze-tabs" data-zfmt-tabs>${fmtTabs}</div>
-        <p class="muted" style="margin:0 0 8px">Jede Zone hat eine Quelle. „▤/▥“ teilt sie, „✕“ entfernt sie. Layout je Format getrennt; fehlende Formate laufen als Einzelfläche.</p>
+        <p class="muted" style="margin:0 0 8px">Layout für <b>${fmtLabel}</b> — das Anzeigeformat dieses Geräts (änderbar im Reiter „Geräte"). Jede Zone hat eine Quelle. „▤/▥“ teilt sie, „✕“ entfernt sie.</p>
         <div class="ze-canvas-wrap" data-ze-canvas></div>
       </div>
     </div>`;
@@ -922,7 +922,6 @@ function initZoneEditor(card, d){
   const modeSel=root.querySelector('[data-zone-mode]');
   const legacy=root.querySelector('[data-zone-legacy]');
   const custom=root.querySelector('[data-zone-custom]');
-  const tabsEl=root.querySelector('[data-zfmt-tabs]');
   const canvas=root.querySelector('[data-ze-canvas]');
 
   // Per-format trees. A missing format defaults to a single customer zone, which
@@ -991,10 +990,7 @@ function initZoneEditor(card, d){
     const land=(fmt==='landscape'||fmt==='tablet');
     const c=document.createElement('div'); c.className='ze-canvas '+(land?'landscape':'portrait');
     c.appendChild(elFor([])); canvas.appendChild(c);
-    tabsEl.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.zfmt===fmt)?'sm':'ghost'; });
   }
-
-  tabsEl.querySelectorAll('[data-zfmt]').forEach(b=>{ b.onclick=()=>{ fmt=b.dataset.zfmt; draw(); }; });
 
   function updateVis(){ const m=modeSel.value;
     legacy.style.display = m==='split'?'':'none';

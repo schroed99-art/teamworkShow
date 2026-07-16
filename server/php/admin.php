@@ -74,6 +74,12 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
   button.ghost:hover { border-color:var(--magenta); }
   button.sm { padding:5px 9px; font-size:12px; }
+  /* Reiter-Optik (wie einstellungen.php): Unterstrich statt Pille. */
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:14px; flex-wrap:wrap; }
+  button.tab { background:transparent; border:0; border-bottom:2px solid transparent; border-radius:0;
+    color:var(--dim); font-size:13px; font-weight:600; padding:9px 16px; cursor:pointer; }
+  button.tab:hover { color:var(--text); filter:none; }
+  button.tab.active { color:var(--text); border-bottom-color:var(--magenta); }
   button.eye { background:transparent; border:1px solid var(--line); color:var(--dim);
     padding:4px 8px; border-radius:8px; display:inline-flex; align-items:center; cursor:pointer; }
   button.eye:hover:not(:disabled) { border-color:var(--magenta); color:var(--text); }
@@ -800,18 +806,18 @@ function renderDetail(t, devices, presentations){
   body.innerHTML='';
 
   // Tabs: Präsentationen / Geräte / Einstellungen — only one panel visible at a time.
-  const tabs=document.createElement('div'); tabs.className='row'; tabs.style.cssText='gap:6px;margin-bottom:12px';
+  const tabs=document.createElement('div'); tabs.className='tabs';
   const panels={};
   const showTab=name=>{
     document.getElementById('slidesEditor')?.remove(); // leave the slides editor when switching tabs
     Object.keys(panels).forEach(k=>{ panels[k].style.display=(k===name)?'':'none'; });
-    tabs.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.tab===name)?'sm':'ghost sm'; });
+    tabs.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.tab===name)?'tab active':'tab'; });
   };
   const tabDefs = IS_KUNDE
     ? [['pres','Präsentationen'],['dev','Geräte'],['usr','Zugänge']]   // no tenant-level settings for a customer
     : [['pres','Präsentationen'],['dev','Geräte'],['usr','Zugänge'],['set','Einstellungen']];
   tabDefs.forEach(([k,label])=>{
-    const b=document.createElement('button'); b.dataset.tab=k; b.textContent=label; b.onclick=()=>showTab(k);
+    const b=document.createElement('button'); b.className='tab'; b.dataset.tab=k; b.textContent=label; b.onclick=()=>showTab(k);
     tabs.appendChild(b);
   });
   body.appendChild(tabs);

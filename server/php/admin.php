@@ -706,6 +706,7 @@ function anzeigeArt(d){
 }
 
 let currentDevices=[]; // Geräte des gewählten Mandanten (für den Slides-Editor-Kopf)
+let currentPresentations=[]; // Präsentationen des gewählten Mandanten (für den Bildschirm-Editor)
 
 /** Geräte, auf denen Präsentation p irgendwo erscheint: als Kunden-Präsentation,
  *  als Firmen-Präsentation (fester Split) oder direkt als Zonen-Quelle. */
@@ -763,6 +764,100 @@ function miniScreenHtml(d, presId){
     inner=`<div class="mz-leaf${hl('customer')?' on':''}"></div>`;
   }
   return `<span class="mzscreen${isLand?' land':''}" title="${esc(d.name||d.pairing_code||'Gerät')} — ${esc(anzeigeArt(d))}">${inner}</span>`;
+}
+
+// ---- Bildschirm-Editor: Zonen wie am Gerät angeordnet, je Zone die Slides ihrer Quelle ----
+
+/** Blätter (Zonen) eines Geräts in Vorlese-Reihenfolge mit ihrer Quelle
+ *  ('customer' | 'company' | Präsentations-ID). */
+function screenLeaves(d){
+  const mode=d.zone_mode||'single';
+  if(mode==='split') return [{source:'company'},{source:'customer'}];
+  if(mode==='custom'){
+    try{
+      const lay=d.zone_layout?(typeof d.zone_layout==='string'?JSON.parse(d.zone_layout):d.zone_layout):null;
+      const node=lay&&lay.layouts?lay.layouts[d.display_format||'portrait']:null;
+      if(node){
+        const out=[]; const walk=x=>{ if(!x) return;
+          if(x.children) x.children.forEach(c=>walk(c.node));
+          else out.push({source:(x.zone&&x.zone.source)??'customer'}); };
+        walk(node); if(out.length) return out;
+      }
+    }catch(e){}
+  }
+  return [{source:'customer'}];
+}
+
+/** "Slides"-Einstieg: Geräte mit mehreren Zonen öffnen den Bildschirm-Editor,
+ *  Einzelflächen wie bisher den Präsentations-Editor. */
+function openSlides(p){
+  const dev=presDevices(p, currentDevices)[0];
+  if(dev && screenLeaves(dev).length>1) editScreen(dev, p);
+  else editPresentation(p);
+}
+
+/** Bildschirm-Editor: die Zonen des Geräts als Bereiche — platzsparend gedreht
+ *  (Hochkant-Gerät -> Spalten nebeneinander, Quer -> untereinander). Je Zone die
+ *  Quell-Präsentation; "Bearbeiten" öffnet den Slide-Editor direkt in der Zone. */
+function editScreen(d, focusPres){
+  const leaves=screenLeaves(d);
+  const resolve=src=> src==='customer'?d.presentation_id : src==='company'?d.company_presentation_id : src;
+  const presOf=id=>currentPresentations.find(x=>String(x.id)===String(id))||null;
+  const body=$('#detailBody');
+  document.getElementById('slidesEditor')?.remove();
+  document.getElementById('screenEditor')?.remove();
+  const presPanel=document.getElementById('panelPres');
+  if (presPanel) presPanel.style.display='none';
+  const dirRow=d.display_format!=='landscape';
+  const wrap=document.createElement('div'); wrap.className='card'; wrap.id='screenEditor';
+  wrap.innerHTML=`
+    <a href="#" id="backScreen" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
+    <h3 style="margin-top:0">Bildschirm — ${esc(d.name||d.pairing_code||'Gerät')}</h3>
+    <div class="row wrap2" style="margin:-4px 0 10px;align-items:center">
+      ${miniScreenHtml(d, focusPres?focusPres.id:null)} <span class="tag">${esc(anzeigeArt(d))}</span>
+      <span class="muted">Je Zone die Slides ihrer Quell-Präsentation — „Bearbeiten" öffnet den Editor in der Zone.</span>
+    </div>
+    <div data-zones style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;flex-direction:${dirRow?'row':'column'}"></div>`;
+  if (body.firstElementChild) body.insertBefore(wrap, body.firstElementChild.nextSibling);
+  else body.appendChild(wrap);
+  wrap.scrollIntoView({behavior:'smooth',block:'nearest'});
+  wrap.querySelector('#backScreen').onclick=e=>{ e.preventDefault(); wrap.remove();
+    const pp=document.getElementById('panelPres'); if(pp) pp.style.display=''; };
+  const zonesBox=wrap.querySelector('[data-zones]');
+  const seen={}; let autoMounted=false;
+  leaves.forEach((lf,i)=>{
+    const pid=resolve(lf.source);
+    const pres=pid?presOf(pid):null;
+    const dup=pid&&seen[pid]!==undefined;
+    const box=document.createElement('div'); box.className='ibox';
+    box.style.cssText=`flex:1 1 ${dirRow?'340px':'auto'};margin-top:0;min-width:0`;
+    const roleTag=lf.source==='company'?' <span class="tag">Firma</span>'
+      :lf.source==='customer'?' <span class="tag">Kunde</span>':'';
+    box.innerHTML=`
+      <div class="row" style="align-items:center;gap:8px;margin-bottom:6px">
+        <b>Zone ${i+1}</b>${roleTag}
+        <span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pres?esc(pres.name):'— keine Präsentation zugewiesen —'}</span>
+        <span class="spacer" style="flex:1"></span>
+        ${pres&&!dup?'<button class="ghost sm" data-zedit>Bearbeiten</button>':''}
+      </div>
+      <div data-zbody>${dup?`<p class="muted" style="margin:4px 0 0">Zeigt dieselbe Präsentation wie Zone ${seen[pid]+1}.</p>`
+        :pres?'<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>'
+        :'<p class="muted" style="margin:4px 0 0">Quelle im Reiter „Anzeige" (Zonen) bzw. „Geräte" (Präsentation) zuweisen.</p>'}</div>`;
+    if(pid&&!dup) seen[pid]=i;
+    if(pres&&!dup){
+      const zbody=box.querySelector('[data-zbody]');
+      const mountHere=()=>{
+        // Nur ein aktiver Editor: die Zone, die ihn bisher hatte, bekommt den Hinweis zurück.
+        zonesBox.querySelectorAll('[data-zbody]').forEach(z=>{
+          if(z!==zbody && z.querySelector('#slidesEditor')) z.innerHTML='<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>';
+        });
+        editPresentation(pres, zbody);
+      };
+      box.querySelector('[data-zedit]').onclick=mountHere;
+      if(focusPres && String(pid)===String(focusPres.id) && !autoMounted){ autoMounted=true; setTimeout(mountHere,0); }
+    }
+    zonesBox.appendChild(box);
+  });
 }
 
 function zoneFields(d){
@@ -908,12 +1003,14 @@ function renderDetail(t, devices, presentations){
   const body=$('#detailBody');
   body.innerHTML='';
   currentDevices=devices; // für den Slides-Editor-Kopf ("Läuft auf")
+  currentPresentations=presentations; // für den Bildschirm-Editor (Zonen-Quellen)
 
   // Tabs: Präsentationen / Geräte / Einstellungen — only one panel visible at a time.
   const tabs=document.createElement('div'); tabs.className='tabs';
   const panels={};
   const showTab=name=>{
     document.getElementById('slidesEditor')?.remove(); // leave the slides editor when switching tabs
+    document.getElementById('screenEditor')?.remove(); // dito Bildschirm-Editor
     Object.keys(panels).forEach(k=>{ panels[k].style.display=(k===name)?'':'none'; });
     tabs.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.tab===name)?'tab active':'tab'; });
   };
@@ -973,7 +1070,7 @@ function renderDetail(t, devices, presentations){
       const name=await promptInline('Präsentation umbenennen', p.name);
       if(name===null||name===''||name===p.name) return;
       await API.call('presentations.php','PUT',{id:p.id,name}); toast('Umbenannt'); selectTenant(t); };
-    row.querySelector('[data-edit]').onclick=()=>editPresentation(p);
+    row.querySelector('[data-edit]').onclick=()=>openSlides(p);
     row.querySelector('[data-del]').onclick=async()=>{ if(await confirmDialog('Präsentation löschen?', p.name)){
       await API.call('presentations.php?id='+p.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } };
     pWrap.appendChild(row);
@@ -1254,7 +1351,7 @@ function renderDetail(t, devices, presentations){
 }
 
 // Presentation slide editor (drag order + duration)
-async function editPresentation(p){
+async function editPresentation(p, mount){
   const full=(await API.call('presentations.php?id='+p.id)).presentation;
   let slides=(full.slides||[]).map(s=>({media_name:s.media_name,duration_ms:s.duration_ms,kind:s.kind||'media',
     text_title:s.text_title||'', text_body:s.text_body||''}));
@@ -1283,11 +1380,20 @@ async function editPresentation(p){
   // Master-detail: hide the presentation list and show only this editor below the
   // tab bar (which stays pinned). Back/Schließen restores the list.
   document.getElementById('slidesEditor')?.remove();
-  const presPanel=document.getElementById('panelPres');
-  if (presPanel) presPanel.style.display='none';
-  if (body.firstElementChild) body.insertBefore(card, body.firstElementChild.nextSibling);
-  else body.appendChild(card);
-  card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  if (mount) {
+    // Eingebettet im Bildschirm-Editor: der Editor füllt die Zone; Zurück/Schließen
+    // übernimmt der Bildschirm-Editor selbst, daher hier ausgeblendet.
+    card.className=''; card.style.marginTop='4px';
+    card.querySelector('#backPres').style.display='none';
+    card.querySelector('#closeSlides').style.display='none';
+    mount.innerHTML=''; mount.appendChild(card);
+  } else {
+    const presPanel=document.getElementById('panelPres');
+    if (presPanel) presPanel.style.display='none';
+    if (body.firstElementChild) body.insertBefore(card, body.firstElementChild.nextSibling);
+    else body.appendChild(card);
+    card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
   const mp=card.querySelector('#mediaPick'); mp.innerHTML=media.map(m=>`<option>${esc(m)}</option>`).join('');
 
   // Upload images/videos straight from the slide editor (same media/ folder as the

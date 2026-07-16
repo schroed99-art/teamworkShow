@@ -93,23 +93,29 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
            color:var(--text); padding:10px 16px; border-radius:10px; display:none; z-index:60; }
   .toast.show { display:block; }
   .empty { color:var(--dim); padding:30px 0; }
+  .b-kunde { background:#2a1e0f; color:#f0c274; border:1px solid #5e4316; }
+  a.btn { text-decoration:none; display:inline-flex; align-items:center; }
+  .btn.sm { padding:6px 10px; font-size:12px; }
 </style>
+<?php require_once __DIR__ . '/brand_partials.php'; echo tw_brand_css(); ?>
 </head>
 <body>
 <header>
   <h1>Teamwork<span>Show</span></h1>
   <?php if ($version !== ''): ?><span class="ver">v<?= htmlspecialchars($version) ?></span><?php endif; ?>
+  <?= tw_area_badge(false) ?>
   <span class="spacer"></span>
   <a class="nav" href="overview.php">← Übersicht</a>
   <a class="nav" href="einstellungen.php">Einstellungen</a>
   <?php include __DIR__ . '/nav_user.php'; ?>
 </header>
+<?= tw_brandby() ?>
 
 <div class="wrap">
   <div class="head">
     <div class="title">
       <h2>Benutzerverwaltung</h2>
-      <p>Interne Benutzer anlegen, bearbeiten und Rollen verwalten. Kundenzugänge werden beim jeweiligen Mandanten verwaltet (Übersicht → Konfigurieren → Zugänge).</p>
+      <p>Interne Benutzer anlegen, bearbeiten und Rollen verwalten. Kundenzugänge werden beim jeweiligen Mandanten verwaltet (Übersicht → Konfigurieren → Zugänge) und sind hier nur zur Ansicht gelistet.</p>
     </div>
     <span class="spacer"></span>
     <button id="btnNew">+ Benutzer anlegen</button>
@@ -134,7 +140,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 const ACTOR_ROLE = <?= json_encode($role) ?>;
 const $ = s => document.querySelector(s);
 const esc = s => (s??'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const ROLE_LABEL = { admin:'Administrator', koordinator:'Koordinator', betrachter:'Betrachter' };
+const ROLE_LABEL = { admin:'Administrator', koordinator:'Koordinator', betrachter:'Betrachter', kunde:'Kunde' };
 const ROLE_ORDER = ['admin','koordinator','betrachter'];
 let users = [], tab = 'alle';
 
@@ -160,18 +166,18 @@ function salutationOptions(sel){ return ['','Herr','Frau','Divers']
   .map(s=>`<option value="${esc(s)}" ${s===(sel||'')?'selected':''}>${s===''?'Bitte wählen':s}</option>`).join(''); }
 
 // Customer logins ('kunde') belong to a tenant and are managed there (admin.php
-// → Mandant → Zugänge). Listing them here would also offer a role picker that
-// has no 'kunde' entry, which would silently demote them and drop their tenant.
+// → Mandant → Zugänge). They are listed here READ-ONLY (own "Kunden" tab, no edit/
+// role picker) so staff can see them without risking a silent demote / tenant drop.
 async function load(){
-  users=((await API.call('users.php')).users||[]).filter(u=>u.role!=='kunde');
+  users=(await API.call('users.php')).users||[];
   render();
 }
 
 function render(){
-  const counts={ alle:users.length, admin:0, koordinator:0, betrachter:0 };
+  const counts={ alle:users.length, admin:0, koordinator:0, betrachter:0, kunde:0 };
   users.forEach(u=>counts[u.role]!==undefined && counts[u.role]++);
-  const tabDefs=[['alle','Alle'],['admin','Administratoren'],['koordinator','Koordinatoren'],['betrachter','Betrachter']];
-  $('#tabs').innerHTML=tabDefs.map(([k,l])=>`<div class="tab ${k===tab?'active':''}" data-t="${k}">${l}</div>`).join('');
+  const tabDefs=[['alle','Alle'],['admin','Administratoren'],['koordinator','Koordinatoren'],['betrachter','Betrachter'],['kunde','Kunden']];
+  $('#tabs').innerHTML=tabDefs.map(([k,l])=>`<div class="tab ${k===tab?'active':''}" data-t="${k}">${l}<span style="opacity:.6"> ${counts[k]??0}</span></div>`).join('');
   $('#tabs').querySelectorAll('.tab').forEach(el=>el.onclick=()=>{ tab=el.dataset.t; render(); });
   const shown=users.filter(u=>tab==='alle'||u.role===tab);
   $('#count').textContent=`${shown.length} Benutzer`;
@@ -180,8 +186,28 @@ function render(){
   list.innerHTML='';
   shown.forEach(u=>{
     const name=[u.first_name,u.last_name].filter(Boolean).join(' ')||u.email;
-    const manage=canManage(u);
     const card=document.createElement('div'); card.className='ucard';
+    // Customer logins are read-only here: shown with their tenant + a deep link into
+    // the Mandant's "Zugänge", where they are actually managed. No edit/reset/delete
+    // (the role picker has no 'kunde' entry — editing would demote + drop the tenant).
+    if(u.role==='kunde'){
+      card.innerHTML=`
+        <div class="main">
+          <div class="name">${esc(name)}</div>
+          <div class="email">${esc(u.email)}</div>
+          <div class="meta">
+            <span class="badge b-kunde">Kunde</span>
+            ${u.tenant_name?`<span class="kuerzel">Mandant: ${esc(u.tenant_name)}</span>`:''}
+            <span class="badge ${u.active?'b-aktiv':'b-inaktiv'}">${u.active?'Aktiv':'Inaktiv'}</span>
+          </div>
+        </div>
+        <div class="acts">
+          ${u.tenant_id?`<a class="btn ghost sm" href="admin.php?tenant=${u.tenant_id}" title="Beim Mandanten verwalten">Beim Mandanten verwalten →</a>`:''}
+        </div>`;
+      list.appendChild(card);
+      return;
+    }
+    const manage=canManage(u);
     card.innerHTML=`
       <div class="main">
         <div class="name">${esc(name)}</div>

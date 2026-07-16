@@ -796,9 +796,9 @@ function openSlides(p){
   else editPresentation(p);
 }
 
-/** Bildschirm-Editor: die Zonen des Geräts als Bereiche — platzsparend gedreht
- *  (Hochkant-Gerät -> Spalten nebeneinander, Quer -> untereinander). Je Zone die
- *  Quell-Präsentation; "Bearbeiten" öffnet den Slide-Editor direkt in der Zone. */
+/** Bildschirm-Editor: die Zonen des Geräts als Bereiche, 1:1 wie am Gerät —
+ *  Zonen übereinander (rows) erscheinen untereinander, nebeneinander (cols) als
+ *  Spalten. "Bearbeiten" öffnet den Slide-Editor direkt in der Zone. */
 function editScreen(d, focusPres){
   const leaves=screenLeaves(d);
   const resolve=src=> src==='customer'?d.presentation_id : src==='company'?d.company_presentation_id : src;
@@ -808,7 +808,19 @@ function editScreen(d, focusPres){
   document.getElementById('screenEditor')?.remove();
   const presPanel=document.getElementById('panelPres');
   if (presPanel) presPanel.style.display='none';
-  const dirRow=d.display_format!=='landscape';
+  // Teilungsachse des Geräts bestimmen: rows = Zonen übereinander -> Bereiche
+  // untereinander; cols = nebeneinander -> Spalten. (Spiegelt die Anzeige 1:1.)
+  let rootAxis='rows';
+  const zmode=d.zone_mode||'single';
+  if(zmode==='split') rootAxis=d.zone_axis||'rows';
+  else if(zmode==='custom'){
+    try{
+      const lay=d.zone_layout?(typeof d.zone_layout==='string'?JSON.parse(d.zone_layout):d.zone_layout):null;
+      const node=lay&&lay.layouts?lay.layouts[d.display_format||'portrait']:null;
+      if(node&&node.axis) rootAxis=node.axis;
+    }catch(e){}
+  }
+  const dirRow=rootAxis==='cols';
   const wrap=document.createElement('div'); wrap.className='card'; wrap.id='screenEditor';
   wrap.innerHTML=`
     <a href="#" id="backScreen" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>

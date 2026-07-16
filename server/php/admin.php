@@ -820,8 +820,8 @@ function renderDetail(t, devices, presentations){
     tabs.querySelectorAll('button').forEach(b=>{ b.className=(b.dataset.tab===name)?'tab active':'tab'; });
   };
   const tabDefs = IS_KUNDE
-    ? [['pres','Präsentationen'],['dev','Geräte'],['usr','Zugänge']]   // no tenant-level settings for a customer
-    : [['pres','Präsentationen'],['dev','Geräte'],['usr','Zugänge'],['set','Einstellungen']];
+    ? [['pres','Präsentationen'],['anz','Anzeige'],['dev','Geräte'],['usr','Zugänge']]   // no tenant-level settings for a customer
+    : [['pres','Präsentationen'],['anz','Anzeige'],['dev','Geräte'],['usr','Zugänge'],['set','Einstellungen']];
   tabDefs.forEach(([k,label])=>{
     const b=document.createElement('button'); b.className='tab'; b.dataset.tab=k; b.textContent=label; b.onclick=()=>showTab(k);
     tabs.appendChild(b);
@@ -885,8 +885,7 @@ function renderDetail(t, devices, presentations){
         <div><label class="f">Anzeige-Info</label><input value="${esc(d.anzeige_info)}" data-f="anzeige_info" style="width:100%"></div>
         <div><label class="f">Präsentation</label><select data-f="presentation_id" style="width:100%"><option value="">—</option>${presOpts}</select></div>
         <div><label class="f">Anzeigeformat</label><select data-f="display_format" style="width:100%">${[['portrait','Hochkant-Signage'],['phone','Telefon'],['landscape','Querformat / TV'],['tablet','Tablet']].map(([v,l])=>`<option value="${v}"${(d.display_format||'portrait')===v?' selected':''}>${l}</option>`).join('')}</select></div>
-      </div>
-      ${zoneFields(d)}`;
+      </div>`;
     c.innerHTML=`
       <div class="row wrap2">
         <b>${esc(d.name||'(ohne Name)')}</b>
@@ -898,6 +897,39 @@ function renderDetail(t, devices, presentations){
         ${IS_KUNDE?'':'<button class="ghost sm" data-deldev>Löschen</button>'}
       </div>
       ${fields}
+      <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Gerät speichern</button></div>`;
+    c.querySelector('[data-preview]').onclick=()=>pvDevice(d.pairing_code, d.name||'Gerät');
+    c.querySelector('[data-savedev]').onclick=async()=>{
+      const g=f=>c.querySelector(`[data-f="${f}"]`).value;
+      const devBody = IS_KUNDE
+        ? {id:d.id, presentation_id:g('presentation_id')||null}
+        : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format')};
+      await API.call('devices.php','PUT',devBody);
+      toast('Gerät gespeichert');
+    };
+    c.querySelector('[data-deldev]')?.addEventListener('click', async()=>{ if(await confirmDialog('Gerät löschen?', d.name||d.pairing_code)){
+      await API.call('devices.php?id='+d.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } });
+    dWrap.appendChild(c);
+  });
+
+  // ---- Anzeige-Reiter: Bildschirm-Zonen, Wetter, Laufschrift — je Gerät ----
+  // Inhaltlich (was der Bildschirm zeigt), daher eigener Reiter mit EIGENEM
+  // Speichern-Button, getrennt vom Gerät (Hardware/Identität im Geräte-Reiter).
+  const anzWrap=document.createElement('div'); anzWrap.className='card';
+  anzWrap.innerHTML=`<h3>Anzeige</h3><p class="muted" style="margin:-4px 0 6px">Bildschirm-Zonen, Wetter und Laufschrift — je Bildschirm. Bestimmt, was auf dem Gerät dargestellt wird.</p>`;
+  if(!devices.length){
+    const hint=document.createElement('p'); hint.className='muted'; hint.style.marginTop='10px';
+    hint.textContent=IS_KUNDE?'Für Sie ist noch kein Bildschirm eingerichtet.':'Noch kein Gerät gekoppelt — lege zuerst im Reiter „Geräte" eines an.';
+    anzWrap.appendChild(hint);
+  }
+  devices.forEach(d=>{
+    const c=document.createElement('div'); c.style.cssText='border-top:1px solid var(--line);padding-top:12px;margin-top:12px';
+    c.innerHTML=`
+      <div class="row wrap2" style="margin-bottom:2px">
+        <b>${esc(d.name||'(ohne Name)')}</b>
+        ${IS_KUNDE?'':`<span class="pair">${esc(d.pairing_code)}</span>`}
+      </div>
+      ${IS_KUNDE?'':zoneFields(d)}
       <div class="grid2" style="margin-top:8px">
         <div><label class="f">Wetter-Ort</label><input value="${esc(d._w_loc||'')}" data-w="weather_location" style="width:100%" placeholder="z.B. Berlin,DE"></div>
         <div style="display:flex;align-items:flex-end;padding-bottom:8px"><label class="f" style="margin:0"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> Wetter aktiv</label></div>
@@ -931,16 +963,12 @@ function renderDetail(t, devices, presentations){
           <div><label class="f">Rahmen-Deckkraft (%)</label><input type="number" min="0" max="100" data-nc="op" style="width:90px" value="40"></div>
         </div>
       </div>
-      <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Änderungen speichern</button></div>`;
-    c.querySelector('[data-preview]').onclick=()=>pvDevice(d.pairing_code, d.name||'Gerät');
+      <div class="row" style="margin-top:10px"><span class="spacer" style="flex:1"></span><button class="sm" data-saveanz>Anzeige speichern</button></div>`;
     if(!IS_KUNDE) initZoneEditor(c, d);
-    c.querySelector('[data-savedev]').onclick=async()=>{
-      const g=f=>c.querySelector(`[data-f="${f}"]`).value;
-      const devBody = IS_KUNDE
-        ? {id:d.id, presentation_id:g('presentation_id')||null}
-        : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format'),
-           ...(c._getZoneBody?c._getZoneBody():{})};
-      await API.call('devices.php','PUT',devBody);
+    c.querySelector('[data-saveanz]').onclick=async()=>{
+      // Zonen hängen am Gerät (devices.zone_layout) -> eigener partieller PUT;
+      // Wetter/Laufschrift -> widgets.php. Beides über DIESEN Button.
+      if(!IS_KUNDE && c._getZoneBody){ await API.call('devices.php','PUT',{id:d.id, ...c._getZoneBody()}); }
       const w=f=>c.querySelector(`[data-w="${f}"]`);
       const nc=k=>c.querySelector(`[data-nc="${k}"]`);
       const op=Math.max(0,Math.min(100,parseInt(nc('op').value||'0',10)||0));
@@ -952,11 +980,9 @@ function renderDetail(t, devices, presentations){
         notices_size:+w('notices_size').value||15, notices_height:+w('notices_height').value||0, notices_bg:nbg,
         notices_font:w('notices_font').value, notices_speed:+w('notices_speed').value||90,
         notices_color:(nc('fg').value||'#FFFFFF')});
-      toast('Gerät gespeichert');
+      toast('Anzeige gespeichert');
     };
-    c.querySelector('[data-deldev]')?.addEventListener('click', async()=>{ if(await confirmDialog('Gerät löschen?', d.name||d.pairing_code)){
-      await API.call('devices.php?id='+d.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } });
-    dWrap.appendChild(c);
+    anzWrap.appendChild(c);
     // fetch widget values lazily
     API.call('widgets.php?device_id='+d.id).then(r=>{ const w=r.widget||{};
       const set=(f,v)=>{ const el=c.querySelector(`[data-w="${f}"]`); if(!el)return; if(el.type==='checkbox') el.checked=!!(+v); else el.value=v??''; };
@@ -977,6 +1003,8 @@ function renderDetail(t, devices, presentations){
       if(nc('op')) nc('op').value=Math.round(a/255*100);
     }).catch(()=>{});
   });
+  panels.anz=anzWrap;
+  body.appendChild(anzWrap);
   // Devices are provisioned by us (devices.php POST is staff-only), so a customer
   // gets no create row — and a hint when we haven't paired a screen for them yet.
   if (IS_KUNDE) {

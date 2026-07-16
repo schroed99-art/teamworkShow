@@ -102,6 +102,9 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   @keyframes tw-pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
   button:hover { filter:brightness(1.08); }
   .card { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+  /* App-Installation + Koppeln nebeneinander; auf schmalen Screens untereinander. */
+  .top-tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start; }
+  @media (max-width:900px){ .top-tiles { grid-template-columns:1fr; } }
   .card h3 { margin:0 0 10px; font-size:14px; }
   .muted { color:var(--dim); font-size:12px; }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -1013,16 +1016,20 @@ function renderDetail(t, devices, presentations){
     // "App-Installation" tile: link to the login-gated download page. Installing
     // and pairing a screen is our job, so a customer never needs the APK.
     const aWrap=document.createElement('div'); aWrap.className='card';
-    aWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06);margin-bottom:14px';
+    aWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06)';
     aWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">📲 App-Installation</h3>
       <p class="muted" style="margin:0 0 12px">Neues Gerät einrichten oder die App manuell aktualisieren – öffnet die Download-Seite (nur für angemeldete Nutzer erreichbar).</p>
       <a href="download.php" target="_blank" rel="noopener"
          style="display:inline-flex;align-items:center;gap:8px;background:var(--magenta);color:#fff;
                 padding:11px 18px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">
          ⬇ Download-Seite öffnen</a>`;
-    devPanel.appendChild(aWrap);
+    const topTiles=document.createElement('div'); topTiles.className='top-tiles';
+    topTiles.appendChild(aWrap);
+    if (pairWrap){ pairWrap.style.marginBottom='0'; topTiles.appendChild(pairWrap); }
+    devPanel.appendChild(topTiles);
+  } else if (pairWrap) {
+    devPanel.appendChild(pairWrap);
   }
-  if (pairWrap) devPanel.appendChild(pairWrap);
   devPanel.appendChild(dWrap);
   panels.dev=devPanel;
   body.appendChild(devPanel);

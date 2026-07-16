@@ -102,6 +102,9 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   @keyframes tw-pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
   button:hover { filter:brightness(1.08); }
   .card { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+  /* Einheitlicher Innenkasten (alle Reiter): transparenter Hintergrund wie der
+     Hauptkasten, nur ein feiner Rahmen trennt optisch — wie bei Bildschirm-Zonen. */
+  .ibox { border:1px solid var(--line); border-radius:12px; padding:14px; margin-top:12px; background:transparent; }
   /* App-Installation + Koppeln nebeneinander; auf schmalen Screens untereinander. */
   .top-tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start; }
   @media (max-width:900px){ .top-tiles { grid-template-columns:1fr; } }
@@ -830,7 +833,9 @@ function renderDetail(t, devices, presentations){
 
   // Presentations
   const pWrap=document.createElement('div'); pWrap.className='card'; pWrap.id='panelPres';
-  pWrap.innerHTML=`<h3>Präsentationen</h3>`;
+  pWrap.innerHTML=`<h3>Präsentationen</h3>
+    <p class="muted" style="margin:-4px 0 6px">Inhalts-Präsentationen dieses Mandanten — jede kann einem oder mehreren Bildschirmen zugewiesen werden (Reiter „Geräte").</p>`;
+  const pBox=document.createElement('div'); pBox.className='ibox';
   const activePresIds=new Set(devices.map(d=>String(d.presentation_id)).filter(v=>v&&v!=='null'));
   const hasDevices=devices.length>0;
   presentations.forEach(p=>{
@@ -854,22 +859,24 @@ function renderDetail(t, devices, presentations){
     row.querySelector('[data-edit]').onclick=()=>editPresentation(p);
     row.querySelector('[data-del]').onclick=async()=>{ if(await confirmDialog('Präsentation löschen?', p.name)){
       await API.call('presentations.php?id='+p.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } };
-    pWrap.appendChild(row);
+    pBox.appendChild(row);
   });
   const pAdd=document.createElement('div'); pAdd.className='row'; pAdd.style.marginTop='10px';
   pAdd.innerHTML=`<input class="grow" id="newPres" placeholder="Neue Präsentation…"><button class="sm">+</button>`;
   pAdd.querySelector('button').onclick=async()=>{ const name=$('#newPres').value.trim(); if(!name)return;
     await API.call('presentations.php','POST',{tenant_id:t.id,name}); toast('Erstellt'); selectTenant(t); };
-  pWrap.appendChild(pAdd);
+  pBox.appendChild(pAdd);
+  pWrap.appendChild(pBox);
   panels.pres=pWrap;
   body.appendChild(pWrap);
 
   // Devices
   const dWrap=document.createElement('div'); dWrap.className='card';
-  dWrap.innerHTML=`<h3>Geräte</h3>`;
+  dWrap.innerHTML=`<h3>Geräte</h3>
+    <p class="muted" style="margin:-4px 0 6px">Hardware &amp; Identität der gekoppelten Bildschirme — Name, Standort, zugewiesene Präsentation und Anzeigeformat. Die Darstellung (Zonen, Wetter, Laufschrift) findest du im Reiter „Anzeige".</p>`;
   let pairWrap=null; // eigener Koppel-Kasten, wird oberhalb der Liste platziert (s. u.)
   devices.forEach(d=>{
-    const c=document.createElement('div'); c.style.cssText='border-top:1px solid var(--line);padding-top:10px;margin-top:10px';
+    const c=document.createElement('div'); c.className='ibox';
     const presOpts = presentations.map(p=>`<option value="${p.id}" ${String(p.id)===String(d.presentation_id)?'selected':''}>${esc(p.name)}</option>`).join('');
     // Customers pick what runs on their screen; the screen itself (name, place,
     // format, pairing) is ours to configure, so they get a read-only summary.
@@ -923,18 +930,24 @@ function renderDetail(t, devices, presentations){
     anzWrap.appendChild(hint);
   }
   devices.forEach(d=>{
-    const c=document.createElement('div'); c.style.cssText='border-top:1px solid var(--line);padding-top:12px;margin-top:12px';
+    const c=document.createElement('div'); c.className='ibox';
     c.innerHTML=`
       <div class="row wrap2" style="margin-bottom:2px">
         <b>${esc(d.name||'(ohne Name)')}</b>
         ${IS_KUNDE?'':`<span class="pair">${esc(d.pairing_code)}</span>`}
       </div>
       ${IS_KUNDE?'':zoneFields(d)}
-      <div class="grid2" style="margin-top:8px">
-        <div><label class="f">Wetter-Ort</label><input value="${esc(d._w_loc||'')}" data-w="weather_location" style="width:100%" placeholder="z.B. Berlin,DE"></div>
-        <div style="display:flex;align-items:flex-end;padding-bottom:8px"><label class="f" style="margin:0"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> Wetter aktiv</label></div>
+      <div class="ibox">
+        <div class="row" style="align-items:center;gap:10px;margin-bottom:4px">
+          <b>🌤 Wetter</b>
+          <span class="muted">Wetterdaten &amp; Vorhersage-Zwischenbild für diesen Bildschirm</span>
+        </div>
+        <div class="grid2">
+          <div><label class="f">Wetter-Ort</label><input value="${esc(d._w_loc||'')}" data-w="weather_location" style="width:100%" placeholder="z.B. Berlin,DE"></div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:8px"><label class="f" style="margin:0"><input type="checkbox" data-w="weather_enabled" ${d._w_en?'checked':''}> Wetter aktiv</label></div>
+        </div>
       </div>
-      <div style="margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:14px;background:rgba(210,26,85,.04)">
+      <div class="ibox">
         <div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
           <b>🔤 Laufschrift</b>
           <span class="muted">Kasten unten, läuft rechts → links</span>
@@ -1073,7 +1086,11 @@ function renderDetail(t, devices, presentations){
         : `Kundenlogins für „${esc(t.name)}“. Ein Kunde sieht ausschließlich diesen Mandanten und darf dort Präsentationen, Medien und Laufschrift pflegen — aber keine Geräte, Mandanten oder Benutzer anlegen.`}</p>
       <div id="usrNotice" style="display:none"></div>
       <div id="usrList" class="muted">Wird geladen…</div>
-      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+      <div class="ibox">
+        <div class="row" style="align-items:center;gap:10px;margin-bottom:4px">
+          <b>👤 Nutzerdaten</b>
+          <span class="muted">Neuen Zugang anlegen</span>
+        </div>
         <div class="grid2">
           <div><label class="f">Vorname</label><input id="uFn" style="width:100%" placeholder="Max"></div>
           <div><label class="f">Nachname</label><input id="uLn" style="width:100%" placeholder="Mustermann"></div>
@@ -1102,10 +1119,14 @@ function renderDetail(t, devices, presentations){
   if (!IS_KUNDE) {
     const sWrap=document.createElement('div'); sWrap.className='card';
     sWrap.innerHTML='<h3>Einstellungen</h3>'
-      +'<p class="muted" style="margin:0 0 8px">Globale Hilfe- &amp; Kontaktdaten unter <a href="einstellungen.php" style="color:var(--magenta)">Einstellungen</a>.</p>';
+      +'<p class="muted" style="margin:-4px 0 6px">Mandanten-spezifische Einstellungen. Globale Hilfe- &amp; Kontaktdaten unter <a href="einstellungen.php" style="color:var(--magenta)">Einstellungen</a>.</p>';
 
-    const tDel=document.createElement('div'); tDel.className='row'; tDel.style.marginTop='6px';
-    tDel.innerHTML=`<button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;
+    const tDel=document.createElement('div'); tDel.className='ibox';
+    tDel.innerHTML=`<div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
+        <b>🗑 Mandant löschen</b>
+        <span class="muted">Entfernt den Mandanten samt Geräten &amp; Präsentationen — nicht umkehrbar.</span>
+      </div>
+      <button class="ghost sm" style="border-color:#5a2230;color:#ff6b8a">Mandant löschen</button>`;
     tDel.querySelector('button').onclick=async()=>{ if(await confirmDialog('Mandant löschen?', t.name+' — inkl. Geräte & Präsentationen')){
       await API.call('tenants.php?id='+t.id,'DELETE'); activeTenant=null; $('#detailTitle').textContent='Bitte einen Mandanten wählen'; $('#detailBody').innerHTML=''; toast('Gelöscht'); loadTenants(); } };
     sWrap.appendChild(tDel);

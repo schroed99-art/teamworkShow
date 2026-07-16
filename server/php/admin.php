@@ -111,6 +111,13 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .pthumb img, .pthumb video { width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
   .pthumb:hover { border-color:var(--magenta); }
   .pthumb.empty { color:var(--dim); font-size:20px; cursor:default; }
+  /* Mini-Bildschirm (Anzeigeart je Gerät): echte Ausrichtung + Zonen-Aufteilung,
+     die Zone(n) der jeweiligen Präsentation magenta hervorgehoben. */
+  .mzscreen { flex:none; width:32px; height:50px; border:1.5px solid var(--dim); border-radius:5px;
+    overflow:hidden; display:inline-flex; vertical-align:middle; background:#0b1120; }
+  .mzscreen.land { width:50px; height:32px; }
+  .mz-leaf { width:100%; height:100%; box-sizing:border-box; border:1px solid rgba(148,163,184,.35); background:rgba(148,163,184,.12); }
+  .mz-leaf.on { background:rgba(210,26,85,.6); border-color:var(--magenta); }
   /* App-Installation + Koppeln nebeneinander; auf schmalen Screens untereinander. */
   .top-tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start; }
   @media (max-width:900px){ .top-tiles { grid-template-columns:1fr; } }
@@ -698,6 +705,66 @@ function anzeigeArt(d){
   return fmt+' · '+teilung;
 }
 
+let currentDevices=[]; // Geräte des gewählten Mandanten (für den Slides-Editor-Kopf)
+
+/** Geräte, auf denen Präsentation p irgendwo erscheint: als Kunden-Präsentation,
+ *  als Firmen-Präsentation (fester Split) oder direkt als Zonen-Quelle. */
+function presDevices(p, devs){
+  return (devs||[]).filter(d=>{
+    if(String(d.presentation_id)===String(p.id)) return true;
+    const mode=d.zone_mode||'single';
+    if(mode==='split' && String(d.company_presentation_id)===String(p.id)) return true;
+    if(mode==='custom'){
+      try{
+        const lay=d.zone_layout?(typeof d.zone_layout==='string'?JSON.parse(d.zone_layout):d.zone_layout):null;
+        const node=lay&&lay.layouts?lay.layouts[d.display_format||'portrait']:null;
+        const any=x=>!x?false:(x.children?x.children.some(c=>any(c.node)):String(x.zone?x.zone.source:'')===String(p.id));
+        if(node&&any(node)) return true;
+      }catch(e){}
+    }
+    return false;
+  });
+}
+
+/** Rekursive Mini-Zonen-Box: Splits als Flex, Blätter als (ggf. hervorgehobene) Fläche. */
+function miniZoneBox(node, hl){
+  if(!node||!node.children){
+    const src=node&&node.zone?node.zone.source:'customer';
+    return `<div class="mz-leaf${hl(src)?' on':''}"></div>`;
+  }
+  const vertical=node.axis==='rows';
+  const kids=node.children.map(ch=>`<div style="flex:${+ch.size||1} 1 0;min-width:0;min-height:0">${miniZoneBox(ch.node,hl)}</div>`).join('');
+  return `<div style="display:flex;width:100%;height:100%;flex-direction:${vertical?'column':'row'}">${kids}</div>`;
+}
+
+/** Mini-Bildschirm eines Geräts: dessen Ausrichtung (hoch/quer) + Zonen-Aufteilung;
+ *  die Zone(n), in denen presId läuft, sind hervorgehoben. */
+function miniScreenHtml(d, presId){
+  const isLand=d.display_format==='landscape';
+  const hl=src=>(src==='customer'||src==null||src==='')
+    ? String(d.presentation_id)===String(presId)
+    : String(src)===String(presId);
+  const mode=d.zone_mode||'single';
+  let inner;
+  if(mode==='custom'){
+    let node=null;
+    try{
+      const lay=d.zone_layout?(typeof d.zone_layout==='string'?JSON.parse(d.zone_layout):d.zone_layout):null;
+      node=lay&&lay.layouts?lay.layouts[d.display_format||'portrait']:null;
+    }catch(e){}
+    inner=node?miniZoneBox(node,hl):`<div class="mz-leaf${hl('customer')?' on':''}"></div>`;
+  } else if(mode==='split'){
+    const vertical=(d.zone_axis||'rows')==='rows';
+    const sp=Math.max(10,Math.min(90,+d.zone_split||70));
+    inner=`<div style="display:flex;width:100%;height:100%;flex-direction:${vertical?'column':'row'}">`
+      +`<div style="flex:${sp} 1 0;min-width:0;min-height:0"><div class="mz-leaf${String(d.company_presentation_id)===String(presId)?' on':''}"></div></div>`
+      +`<div style="flex:${100-sp} 1 0;min-width:0;min-height:0"><div class="mz-leaf${hl('customer')?' on':''}"></div></div></div>`;
+  } else {
+    inner=`<div class="mz-leaf${hl('customer')?' on':''}"></div>`;
+  }
+  return `<span class="mzscreen${isLand?' land':''}" title="${esc(d.name||d.pairing_code||'Gerät')} — ${esc(anzeigeArt(d))}">${inner}</span>`;
+}
+
 function zoneFields(d){
   const mode=d.zone_mode||'single', axis=d.zone_axis||'rows', split=d.zone_split??70;
   const cid=d.company_presentation_id;
@@ -840,6 +907,7 @@ function initZoneEditor(card, d){
 function renderDetail(t, devices, presentations){
   const body=$('#detailBody');
   body.innerHTML='';
+  currentDevices=devices; // für den Slides-Editor-Kopf ("Läuft auf")
 
   // Tabs: Präsentationen / Geräte / Einstellungen — only one panel visible at a time.
   const tabs=document.createElement('div'); tabs.className='tabs';
@@ -875,9 +943,10 @@ function renderDetail(t, devices, presentations){
     const thumb=fm
       ?`<span class="pthumb" data-lb title="${esc(fm)} – Vorschau">${isVideo(fm)?`<video src="${mediaUrl(fm)}" muted preload="metadata"></video>`:`<img src="${mediaUrl(fm)}" alt="">`}</span>`
       :`<span class="pthumb empty" title="Noch kein Bild in dieser Präsentation">🖼</span>`;
-    // Anzeigeart: Format · Aufteilung der Geräte, auf denen diese Präsentation läuft.
-    const artChips=devices.filter(d=>String(d.presentation_id)===String(p.id))
-      .map(d=>` <span class="tag" title="Läuft auf „${esc(d.name||d.pairing_code||'Gerät')}“">${esc(anzeigeArt(d))}</span>`).join('');
+    // Anzeigeart: Mini-Bildschirm (Ausrichtung + Zonen, Präsentations-Zone magenta)
+    // + Text-Chip — je Gerät, auf dem die Präsentation läuft (auch als Zonen-Quelle).
+    const artChips=presDevices(p, devices)
+      .map(d=>` ${miniScreenHtml(d, p.id)} <span class="tag">${esc(anzeigeArt(d))}</span>`).join('');
     row.innerHTML=`
       <div class="row wrap2" style="align-items:center">
         ${thumb}
@@ -1191,9 +1260,14 @@ async function editPresentation(p){
     text_title:s.text_title||'', text_body:s.text_body||''}));
   const body=$('#detailBody');
   const card=document.createElement('div'); card.className='card'; card.id='slidesEditor';
+  // "Läuft auf": Mini-Bildschirm + Anzeigeart je Gerät — zeigt beim Bestücken der
+  // Slides das Zielformat (hoch/quer) und die Zonen-Aufteilung.
+  const runsOn=presDevices(p, currentDevices)
+    .map(d=>`${miniScreenHtml(d, p.id)} <span class="tag">${esc(anzeigeArt(d))}</span>`).join(' ');
   card.innerHTML=`
     <a href="#" id="backPres" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
     <h3 style="margin-top:0">Slides — ${esc(p.name)}</h3>
+    ${runsOn?`<div class="row wrap2" style="margin:-4px 0 10px;align-items:center"><span class="muted">Läuft auf:</span> ${runsOn}</div>`:''}
     <ul class="list slides" id="slideList"></ul>
     <div class="row wrap2" style="margin-top:8px;gap:8px">
       <select id="mediaPick" class="grow"></select><button class="sm" id="addSlide">+ Slide</button>

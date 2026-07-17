@@ -84,6 +84,14 @@ class Stage(
                 if (playbackState == Player.STATE_ENDED) controller.onVideoDone()
             }
         })
+        // Stamp the app version onto the branded empty screen (shown when no
+        // presentation is assigned yet).
+        root.findViewById<TextView>(R.id.emptyVersion)?.text = try {
+            "TeamworkShow · v" +
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        } catch (e: Exception) {
+            "TeamworkShow"
+        }
     }
 
     fun start() = controller.start()

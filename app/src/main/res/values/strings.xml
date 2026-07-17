@@ -3,6 +3,8 @@
     <string name="brand_title">Teamwork Show</string>
     <string name="splash_loading">Wird geladen…</string>
     <string name="empty_media">Keine Inhalte vorhanden</string>
+    <string name="empty_title">Keine Daten geladen</string>
+    <string name="empty_hint">Für diesen Bildschirm ist aktuell keine Präsentation hinterlegt.\nBitte im Dashboard unter „Anzeige" eine Präsentation zuweisen.</string>
     <string name="logo_desc">Teamwork Show Logo</string>
     <string name="maintenance_title">Wartungsbereich</string>
     <string name="maintenance_pin_hint">PIN eingeben</string>

@@ -1242,7 +1242,7 @@ function renderDetail(t, devices, presentations){
   // Presentations
   const pWrap=document.createElement('div'); pWrap.className='card'; pWrap.id='panelPres';
   pWrap.innerHTML=`<h3>Präsentationen</h3>
-    <p class="muted" style="margin:-4px 0 6px">Inhalts-Präsentationen dieses Mandanten — jede kann einem oder mehreren Bildschirmen zugewiesen werden (Reiter „Geräte").</p>`;
+    <p class="muted" style="margin:-4px 0 6px">Inhalts-Präsentationen dieses Mandanten — die Zuweisung an einen Bildschirm erfolgt im Reiter „Anzeige".</p>`;
   const activePresIds=new Set(devices.map(d=>String(d.presentation_id)).filter(v=>v&&v!=='null'));
   const hasDevices=devices.length>0;
   presentations.forEach(p=>{
@@ -1300,24 +1300,25 @@ function renderDetail(t, devices, presentations){
   // Devices
   const dWrap=document.createElement('div'); dWrap.className='card';
   dWrap.innerHTML=`<h3>Geräte</h3>
-    <p class="muted" style="margin:-4px 0 6px">Hardware &amp; Identität der gekoppelten Bildschirme — Name, Standort, zugewiesene Präsentation und Anzeigeformat. Die Darstellung (Zonen, Wetter, Laufschrift) findest du im Reiter „Anzeige".</p>`;
+    <p class="muted" style="margin:-4px 0 6px">Hardware &amp; Identität der gekoppelten Bildschirme — Name, Standort, Projektnummer und Anzeigeformat. Was der Bildschirm zeigt (Präsentation, Zonen, Wetter, Laufschrift) stellst du im Reiter „Anzeige" ein.</p>`;
   let pairWrap=null; // eigener Koppel-Kasten, wird oberhalb der Liste platziert (s. u.)
   devices.forEach(d=>{
     const c=document.createElement('div'); c.className='ibox';
-    const presOpts = presentations.map(p=>`<option value="${p.id}" ${String(p.id)===String(d.presentation_id)?'selected':''}>${esc(p.name)}</option>`).join('');
-    // Customers pick what runs on their screen; the screen itself (name, place,
-    // format, pairing) is ours to configure, so they get a read-only summary.
+    // Inhalt (welche Präsentation läuft) wird im Reiter "Anzeige" zugewiesen, nicht
+    // mehr hier. Der Geräte-Reiter ist reine Hardware/Identität. Der Kunde bekommt
+    // eine reine Übersicht (die Hardware richten wir ein).
+    const fmtLabelMap={portrait:'Hochkant-Signage',phone:'Telefon',landscape:'Querformat / TV',tablet:'Tablet'};
     const fields = IS_KUNDE ? `
       <div class="grid2" style="margin-top:8px">
-        <div><label class="f">Präsentation</label><select data-f="presentation_id" style="width:100%"><option value="">—</option>${presOpts}</select></div>
         <div><label class="f">Standort</label><div class="muted" style="padding:9px 0">${esc(d.standort)||'—'}</div></div>
-      </div>` : `
+        <div><label class="f">Anzeigeformat</label><div class="muted" style="padding:9px 0">${fmtLabelMap[d.display_format||'portrait']||'Hochkant-Signage'}</div></div>
+      </div>
+      <p class="muted" style="margin:8px 0 0">Was auf diesem Bildschirm läuft, stellen Sie im Reiter „Anzeige" ein.</p>` : `
       <div class="grid2" style="margin-top:8px">
         <div><label class="f">Name</label><input value="${esc(d.name)}" data-f="name" style="width:100%"></div>
         <div><label class="f">Standort</label><input value="${esc(d.standort)}" data-f="standort" style="width:100%"></div>
         <div><label class="f">Projektnummer</label><input value="${esc(d.projektnummer||'')}" data-f="projektnummer" style="width:100%" placeholder="z.B. 2723"></div>
         <div><label class="f">Anzeige-Info</label><input value="${esc(d.anzeige_info)}" data-f="anzeige_info" style="width:100%"></div>
-        <div><label class="f">Präsentation</label><select data-f="presentation_id" style="width:100%"><option value="">—</option>${presOpts}</select></div>
         <div><label class="f">Anzeigeformat</label><select data-f="display_format" style="width:100%">${[['portrait','Hochkant-Signage'],['phone','Telefon'],['landscape','Querformat / TV'],['tablet','Tablet']].map(([v,l])=>`<option value="${v}"${(d.display_format||'portrait')===v?' selected':''}>${l}</option>`).join('')}</select></div>
       </div>`;
     c.innerHTML=`
@@ -1331,28 +1332,24 @@ function renderDetail(t, devices, presentations){
         ${IS_KUNDE?'':'<button class="ghost sm" data-deldev>Löschen</button>'}
       </div>
       ${fields}
-      <div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Gerät speichern</button></div>`;
+      ${IS_KUNDE?'':'<div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Gerät speichern</button></div>'}`;
     c.querySelector('[data-preview]').onclick=()=>pvDevice(d.pairing_code, d.name||'Gerät');
-    c.querySelector('[data-savedev]').onclick=async()=>{
+    c.querySelector('[data-savedev]')?.addEventListener('click', async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
       // Anzeigeformat ist eine bewusste Entscheidung: Ausrichtung + Zonen-Layout
       // der Anzeige hängen daran -> Änderung nur nach Bestätigung.
-      if(!IS_KUNDE){
-        const oldFmt=d.display_format||'portrait', newFmt=g('display_format');
-        if(newFmt!==oldFmt){
-          const L={portrait:'Hochkant-Signage',phone:'Telefon',landscape:'Querformat / TV',tablet:'Tablet'};
-          const ok=await confirmDialog('Anzeigeformat ändern?',
-            `„${d.name||d.pairing_code}“ wechselt von ${L[oldFmt]||oldFmt} zu ${L[newFmt]||newFmt} — Ausrichtung und Zonen-Layout der Anzeige ändern sich beim nächsten Sync.`);
-          if(!ok) return;
-        }
+      const oldFmt=d.display_format||'portrait', newFmt=g('display_format');
+      if(newFmt!==oldFmt){
+        const L={portrait:'Hochkant-Signage',phone:'Telefon',landscape:'Querformat / TV',tablet:'Tablet'};
+        const ok=await confirmDialog('Anzeigeformat ändern?',
+          `„${d.name||d.pairing_code}“ wechselt von ${L[oldFmt]||oldFmt} zu ${L[newFmt]||newFmt} — Ausrichtung und Zonen-Layout der Anzeige ändern sich beim nächsten Sync.`);
+        if(!ok) return;
       }
-      const devBody = IS_KUNDE
-        ? {id:d.id, presentation_id:g('presentation_id')||null}
-        : {id:d.id,name:g('name'),standort:g('standort'),projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),presentation_id:g('presentation_id')||null,display_format:g('display_format')};
-      await API.call('devices.php','PUT',devBody);
+      await API.call('devices.php','PUT',{id:d.id,name:g('name'),standort:g('standort'),
+        projektnummer:g('projektnummer'),anzeige_info:g('anzeige_info'),display_format:g('display_format')});
       toast('Gerät gespeichert');
       selectTenant(t); // Ansicht sofort aktualisieren (Name/Format wirken überall)
-    };
+    });
     c.querySelector('[data-deldev]')?.addEventListener('click', async()=>{ if(await confirmDialog('Gerät löschen?', d.name||d.pairing_code)){
       await API.call('devices.php?id='+d.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } });
     dWrap.appendChild(c);
@@ -1370,10 +1367,18 @@ function renderDetail(t, devices, presentations){
   }
   devices.forEach(d=>{
     const c=document.createElement('div'); c.className='ibox';
+    const anzPresOpts=presentations.map(p=>`<option value="${p.id}" ${String(p.id)===String(d.presentation_id)?'selected':''}>${esc(p.name)}</option>`).join('');
     c.innerHTML=`
       <div class="row wrap2" style="margin-bottom:2px">
         <b>${esc(d.name||'(ohne Name)')}</b>
         ${IS_KUNDE?'':`<span class="pair">${esc(d.pairing_code)}</span>`}
+      </div>
+      <div class="ibox">
+        <label class="f">${IS_KUNDE?'Präsentation':'Präsentation (Kundenbereich)'}</label>
+        <select data-anzpres style="width:100%"><option value="">— keine (Standardanzeige) —</option>${anzPresOpts}</select>
+        <p class="muted" style="margin:6px 0 0">${IS_KUNDE
+          ? 'Diese Präsentation läuft auf Ihrem Bildschirm. Leer = die App zeigt die Standardanzeige.'
+          : 'Kundenbereich: bei „Eine Fläche (Kunde)" der ganze Schirm, im Split die Kunden-Zone, im freien Layout die Quelle „Kunde". Leer = Standardanzeige.'}</p>
       </div>
       ${IS_KUNDE?'':zoneFields(d)}
       <div class="ibox">
@@ -1418,9 +1423,15 @@ function renderDetail(t, devices, presentations){
       <div class="row" style="margin-top:10px"><span class="spacer" style="flex:1"></span><button class="sm" data-saveanz>Anzeige speichern</button></div>`;
     if(!IS_KUNDE) initZoneEditor(c, d);
     c.querySelector('[data-saveanz]').onclick=async()=>{
-      // Zonen hängen am Gerät (devices.zone_layout) -> eigener partieller PUT;
-      // Wetter/Laufschrift -> widgets.php. Beides über DIESEN Button.
-      if(!IS_KUNDE && c._getZoneBody){ await API.call('devices.php','PUT',{id:d.id, ...c._getZoneBody()}); }
+      // Kunden-/Haupt-Präsentation (presentation_id) + Zonen hängen am Gerät ->
+      // devices.php-PUT; Wetter/Laufschrift -> widgets.php. Alles über DIESEN Button.
+      const presSel=c.querySelector('[data-anzpres]');
+      const presPart=presSel?{presentation_id:presSel.value||null}:{};
+      if(!IS_KUNDE && c._getZoneBody){
+        await API.call('devices.php','PUT',{id:d.id, ...c._getZoneBody(), ...presPart});
+      } else if(presSel){
+        await API.call('devices.php','PUT',{id:d.id, ...presPart});
+      }
       const w=f=>c.querySelector(`[data-w="${f}"]`);
       const nc=k=>c.querySelector(`[data-nc="${k}"]`);
       const op=Math.max(0,Math.min(100,parseInt(nc('op').value||'0',10)||0));
@@ -1473,9 +1484,8 @@ function renderDetail(t, devices, presentations){
     // wird oberhalb der Geräteliste platziert (nicht mehr gedrängt darunter).
     pairWrap=document.createElement('div'); pairWrap.className='card';
     pairWrap.style.cssText='border:1px solid var(--magenta);background:rgba(255,0,110,.06);margin-bottom:14px';
-    const dAddPres=presentations.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
     pairWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">➕ Neues Gerät koppeln</h3>
-      <p class="muted" style="margin:0 0 12px">Code aus dem „Gerät koppeln"-Screen des Geräts eingeben — oder leer lassen, dann wird ein neuer Code erzeugt. <b>Anzeigeformat ist Pflicht</b>; Name und Präsentation sind optional.</p>
+      <p class="muted" style="margin:0 0 12px">Code aus dem „Gerät koppeln"-Screen des Geräts eingeben — oder leer lassen, dann wird ein neuer Code erzeugt. <b>Anzeigeformat ist Pflicht</b>; Name ist optional. Die Präsentation wählst du danach im Reiter „Anzeige".</p>
       <div class="row wrap2">
         <input id="newDevCode" placeholder="Code vom Gerät (optional)…" style="width:210px;text-transform:uppercase">
         <input class="grow" id="newDev" placeholder="Gerätename…">
@@ -1486,16 +1496,14 @@ function renderDetail(t, devices, presentations){
           <option value="landscape">Querformat / TV</option>
           <option value="tablet">Tablet</option>
         </select>
-        <select id="newDevPres" style="width:180px"><option value="">Präsentation…</option>${dAddPres}</select>
         <button class="sm">+ Gerät</button>
       </div>`;
     pairWrap.querySelector('button').onclick=async()=>{
       const name=$('#newDev').value.trim();
       const code=$('#newDevCode').value.trim().toUpperCase();
-      const pid=$('#newDevPres').value;
       const fmt=$('#newDevFmt').value;
       if(!fmt){ toast('Bitte Anzeigeformat wählen (Pflichtfeld)'); return; }
-      const body={tenant_id:t.id,name,display_format:fmt}; if(code) body.pairing_code=code; if(pid) body.presentation_id=pid;
+      const body={tenant_id:t.id,name,display_format:fmt}; if(code) body.pairing_code=code;
       try{
         const r=await API.call('devices.php','POST',body);
         toast(code?('Gekoppelt · '+r.pairing_code):('Gerät angelegt · Code '+r.pairing_code)); selectTenant(t);

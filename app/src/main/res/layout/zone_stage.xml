@@ -37,15 +37,68 @@
         app:resize_mode="fit"
         app:surface_type="texture_view" />
 
-    <!-- Empty state: full-bleed branded start image, shown when no media is present -->
-    <ImageView
+    <!-- Empty state: branded "no presentation yet" screen (logo + hint + version),
+         shown for a freshly paired device or an assigned-but-empty presentation. -->
+    <LinearLayout
         android:id="@+id/emptyView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:src="@drawable/startbild"
-        android:scaleType="centerCrop"
-        android:contentDescription="@string/logo_desc"
-        android:visibility="gone" />
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#0F172A"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="0"
+            android:minWidth="80dp"
+            android:minHeight="80dp"
+            android:maxWidth="140dp"
+            android:maxHeight="140dp"
+            android:adjustViewBounds="true"
+            android:src="@drawable/ic_teamwork_logo"
+            android:layout_marginBottom="22dp"
+            android:contentDescription="@string/logo_desc" />
+
+        <View
+            android:layout_width="48dp"
+            android:layout_height="3dp"
+            android:background="@color/brand_magenta"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/emptyTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/empty_title"
+            android:textColor="#F1F5F9"
+            android:textStyle="bold"
+            android:textSize="26sp"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/emptyHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/empty_hint"
+            android:textColor="#94A3B8"
+            android:textSize="15sp"
+            android:gravity="center"
+            android:lineSpacingMultiplier="1.3"
+            android:layout_marginTop="10dp"
+            android:paddingHorizontal="16dp" />
+
+        <TextView
+            android:id="@+id/emptyVersion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#64748B"
+            android:textSize="12sp"
+            android:layout_marginTop="26dp" />
+
+    </LinearLayout>
 
     <!-- Weather interstitial: configurable background + scrim + a container whose children
          (city / forecast / clock / free texts) are built at runtime from the layout config. -->

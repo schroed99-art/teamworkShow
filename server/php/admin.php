@@ -1334,8 +1334,41 @@ function renderDetail(t, devices, presentations){
         ${IS_KUNDE?'':'<button class="ghost sm" data-deldev>Löschen</button>'}
       </div>
       ${fields}
+      <div class="ibox" style="margin-top:8px">
+        <div class="row" style="align-items:center;gap:10px">
+          <b>📷 Anzeige-Foto</b>
+          <span class="muted">Wie der Bildschirm vor Ort aussieht</span>
+          <span class="spacer" style="flex:1"></span>
+          <input type="file" accept="image/*" capture="environment" data-photoinput hidden>
+          <button class="ghost sm" data-photoadd>${d.photo?'📷 Ersetzen':'📷 Foto aufnehmen / hochladen'}</button>
+          ${d.photo?'<button class="ghost sm" data-photodel>Entfernen</button>':''}
+        </div>
+        <div data-photoview style="margin-top:8px">${d.photo
+          ? `<img src="device_photo.php?id=${d.id}&v=${Date.now()}" alt="Anzeige-Foto" title="Zum Vergrößern klicken" data-photolb style="max-width:100%;max-height:280px;border-radius:8px;border:1px solid var(--line);cursor:pointer;display:block">`
+          : '<span class="muted" style="font-size:12px">Noch kein Foto hinterlegt.</span>'}</div>
+      </div>
       ${IS_KUNDE?'':'<div class="row" style="margin-top:8px"><span class="spacer" style="flex:1"></span><button class="sm" data-savedev>Gerät speichern</button></div>'}`;
     c.querySelector('[data-preview]').onclick=()=>pvDevice(d.pairing_code, d.name||'Gerät');
+    // Anzeige-Foto: einfacher Bild-Upload (Handy: capture öffnet die Kamera).
+    const pin=c.querySelector('[data-photoinput]');
+    c.querySelector('[data-photoadd]')?.addEventListener('click',()=>pin.click());
+    pin?.addEventListener('change',async()=>{
+      const f=pin.files&&pin.files[0]; if(!f){ return; }
+      const fd=new FormData(); fd.append('id',d.id); fd.append('file',f);
+      try{
+        const r=await fetch('device_photo.php',{method:'POST',body:fd});
+        const j=await r.json().catch(()=>({}));
+        if(r.ok&&j.ok){ toast('Foto gespeichert'); selectTenant(t); }
+        else toast(j.error==='not_an_image'?'Bitte ein Bild wählen':'Foto-Upload fehlgeschlagen');
+      }catch(e){ toast('Foto-Upload fehlgeschlagen'); }
+      pin.value='';
+    });
+    c.querySelector('[data-photodel]')?.addEventListener('click',async()=>{
+      if(!await confirmDialog('Foto entfernen?', d.name||d.pairing_code)) return;
+      try{ await fetch('device_photo.php?id='+d.id,{method:'DELETE'}); toast('Foto entfernt'); selectTenant(t); }
+      catch(e){ toast('Fehler beim Entfernen'); }
+    });
+    c.querySelector('[data-photolb]')?.addEventListener('click',()=>window.open('device_photo.php?id='+d.id,'_blank','noopener'));
     c.querySelector('[data-savedev]')?.addEventListener('click', async()=>{
       const g=f=>c.querySelector(`[data-f="${f}"]`).value;
       // Anzeigeformat ist eine bewusste Entscheidung: Ausrichtung + Zonen-Layout

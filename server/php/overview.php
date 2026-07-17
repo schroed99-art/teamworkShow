@@ -71,6 +71,28 @@ foreach ($tenants as &$t) {
 }
 unset($t);
 
+// Zentrale Liste ALLER gekoppelten Geräte (im Zugriffsbereich) — damit man über
+// mehrere Mandanten hinweg den Überblick behält. Pairing-Codes sind systemweit
+// eindeutig; ein physisches Gerät zeigt genau den Datensatz mit „seinem" Code.
+$devAll = [];
+$dq = $pdo->prepare(
+    "SELECT d.id, d.name, d.pairing_code, d.display_format,
+            TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) AS secs,
+            t.name AS tenant_name,
+            (SELECT p.name FROM presentations p WHERE p.id = d.presentation_id) AS pres_name
+       FROM devices d JOIN tenants t ON d.tenant_id = t.id
+      WHERE 1=1 $scope
+      ORDER BY t.name, d.name, d.id"
+);
+$dq->execute($args);
+foreach ($dq as $r) {
+    $secs = $r['secs'] === null ? null : (int) $r['secs'];
+    $r['status'] = tw_device_status($secs);
+    $r['ago'] = tw_ago_human($secs);
+    $devAll[] = $r;
+}
+$devOnline = count(array_filter($devAll, static fn($d) => $d['status'] === 'online'));
+
 function tw_is_video(string $name): bool
 {
     return in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), ['mp4', 'webm', 'mov', 'm4v'], true);
@@ -173,6 +195,21 @@ function tw_weather_pictogram(): string
   .modal .row { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
   .modal button { border:0; border-radius:9px; padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer; background:var(--magenta); color:#fff; }
   .modal button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+  /* Globale Geräte-Übersicht */
+  .devsec { padding:8px 24px 40px; }
+  .devsec h2 { font-size:16px; margin:18px 0 6px; display:flex; align-items:center; gap:10px; }
+  .devsec h2 .devcnt { font-size:12px; font-weight:600; color:var(--dim); border:1px solid var(--line); border-radius:999px; padding:3px 10px; }
+  .devhint { color:var(--dim); font-size:12.5px; margin:0 0 14px; max-width:900px; line-height:1.5; }
+  .devtable-scroll { overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+  .devtable { width:100%; border-collapse:collapse; font-size:13px; min-width:720px; }
+  .devtable th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); font-weight:600; padding:11px 14px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .devtable td { padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .devtable tr:last-child td { border-bottom:0; }
+  .devtable tbody tr:hover { background:rgba(255,255,255,.03); }
+  .devtable .dv-name { font-weight:600; color:var(--text); }
+  .devtable .dv-code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--magenta); letter-spacing:.03em; white-space:nowrap; }
+  .devtable .dv-muted { color:var(--dim); }
+  .devtable .stlabel { font-size:12px; }
 </style>
 <?php require_once __DIR__ . '/brand_partials.php'; echo tw_brand_css(); ?>
 </head>
@@ -250,6 +287,39 @@ function tw_weather_pictogram(): string
   </div>
   <?php endif; ?>
 </div>
+
+<?php if (!empty($devAll)): ?>
+<section class="devsec">
+  <h2>Alle gekoppelten Geräte
+    <span class="devcnt"><?= $devOnline ?>/<?= count($devAll) ?> online</span>
+  </h2>
+  <p class="devhint">Jedes physische Gerät identifiziert sich über seinen Pairing-Code (im Wartungsmenü unter „Gerät koppeln"). Es zeigt genau den Datensatz mit diesem Code — zwei Geräte mit demselben Code sehen dieselbe Anzeige.</p>
+  <div class="devtable-scroll">
+    <table class="devtable">
+      <thead><tr>
+        <th>Status</th><th>Gerät</th><th>Code</th><th>Mandant</th><th>Format</th><th>Präsentation</th><th>Zuletzt gesehen</th>
+      </tr></thead>
+      <tbody>
+        <?php
+        $fmtL = ['portrait' => 'Hochkant', 'phone' => 'Telefon', 'landscape' => 'Quer / TV', 'tablet' => 'Tablet'];
+        foreach ($devAll as $d):
+            $stLabel = ['online' => 'online', 'offline' => 'offline', 'alarm' => 'offline (Alarm)', 'never' => 'nie gesehen'][$d['status']] ?? $d['status'];
+        ?>
+        <tr>
+          <td><span class="statusdot <?= h($d['status']) ?>"></span><span class="stlabel"><?= h($stLabel) ?></span></td>
+          <td class="dv-name"><?= h($d['name'] ?: '(ohne Name)') ?></td>
+          <td class="dv-code"><?= h($d['pairing_code']) ?></td>
+          <td><?= h($d['tenant_name']) ?></td>
+          <td><?= h($fmtL[$d['display_format']] ?? $d['display_format']) ?></td>
+          <td><?= $d['pres_name'] ? h($d['pres_name']) : '<span class="dv-muted">—</span>' ?></td>
+          <td class="dv-muted"><?= h($d['ago']) ?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</section>
+<?php endif; ?>
 
 <?php if ($canManage): // the create-tenant dialog is never delivered to anyone who can't create one ?>
 <div class="modal-bg" id="modalBg">

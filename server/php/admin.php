@@ -118,6 +118,19 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .mzscreen.land { width:50px; height:32px; }
   .mz-leaf { width:100%; height:100%; box-sizing:border-box; border:1px solid rgba(148,163,184,.35); background:rgba(148,163,184,.12); }
   .mz-leaf.on { background:rgba(210,26,85,.6); border-color:var(--magenta); }
+  /* Kombiniertes Mini-Vorschaubild in der Präsentationsliste: Zonen wie am Gerät,
+     Inhalts-Zone zeigt das erste Bild (rot umrandet = Zone 1), andere = Kundenbereich. */
+  .mpv { flex:none; width:44px; height:66px; border:1.5px solid var(--dim); border-radius:7px;
+    overflow:hidden; display:inline-flex; vertical-align:middle; background:#0b1120; cursor:pointer; }
+  .mpv.land { width:104px; height:62px; }
+  .mpv:hover { border-color:var(--magenta); }
+  .mpv-leaf { flex:1 1 0; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center;
+    box-sizing:border-box; overflow:hidden; }
+  .mpv-leaf.content { outline:1.5px dashed var(--magenta); outline-offset:-2px; }
+  .mpv-leaf.content img, .mpv-leaf.content video { width:100%; height:100%; object-fit:cover; display:block; }
+  .mpv-leaf.content .mpv-noimg { color:var(--magenta); font-size:16px; }
+  .mpv-leaf.kunde { background:rgba(148,163,184,.10); border:1px solid rgba(148,163,184,.22);
+    color:var(--dim); font-size:7px; letter-spacing:.03em; }
   /* App-Installation + Koppeln nebeneinander; auf schmalen Screens untereinander. */
   .top-tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start; }
   @media (max-width:900px){ .top-tiles { grid-template-columns:1fr; } }
@@ -767,6 +780,53 @@ function miniScreenHtml(d, presId){
   return `<span class="mzscreen${isLand?' land':''}" title="${esc(d.name||d.pairing_code||'Gerät')} — ${esc(anzeigeArt(d))}">${inner}</span>`;
 }
 
+/** Normalisierter Zonen-Baum eines Geräts (single/split/custom -> einheitliche Node-Form). */
+function deviceZoneNode(dev){
+  const mode=dev.zone_mode||'single';
+  if(mode==='split'){
+    const vertical=(dev.zone_axis||'rows')==='rows';
+    const sp=Math.max(10,Math.min(90,+dev.zone_split||70));
+    return {axis:vertical?'rows':'cols',children:[
+      {size:sp,node:{zone:{source:'company'}}},
+      {size:100-sp,node:{zone:{source:'customer'}}}]};
+  }
+  if(mode==='custom'){
+    try{ const lay=dev.zone_layout?(typeof dev.zone_layout==='string'?JSON.parse(dev.zone_layout):dev.zone_layout):null;
+      const node=lay&&lay.layouts?lay.layouts[dev.display_format||'portrait']:null; if(node) return node; }catch(e){}
+  }
+  return {zone:{source:'customer'}};
+}
+
+/** Rekursives Rendern eines Zonen-Baums; leafFn(source) liefert das HTML je Blatt. */
+function zoneNodeRender(node, leafFn){
+  if(!node||!node.children) return leafFn(node&&node.zone?(node.zone.source??'customer'):'customer');
+  const vertical=node.axis==='rows';
+  const kids=node.children.map(ch=>`<div style="flex:${+ch.size||1} 1 0;min-width:0;min-height:0;display:flex">${zoneNodeRender(ch.node,leafFn)}</div>`).join('');
+  return `<div style="display:flex;width:100%;height:100%;flex-direction:${vertical?'column':'row'}">${kids}</div>`;
+}
+
+/** Kombiniertes Mini-Vorschaubild für eine Präsentation: Zonen wie am (ersten)
+ *  Gerät; die Zone(n) dieser Präsentation zeigen ihr erstes Bild (Zone 1 Inhalt),
+ *  die übrigen erscheinen als gedimmter "Kunde"-Bereich. Ohne Gerät: nur das Bild. */
+function presPreviewHtml(p, devs){
+  const fm=p.first_media||'';
+  const imgCell=fm
+    ? (isVideo(fm)?`<video src="${mediaUrl(fm)}" muted preload="metadata"></video>`:`<img src="${mediaUrl(fm)}" alt="">`)
+    : `<span class="mpv-noimg">🖼</span>`;
+  const dev=presDevices(p, devs)[0];
+  if(!dev) return `<span class="mpv" data-lb title="${esc(fm||'Noch keine Slides')}"><div class="mpv-leaf content">${imgCell}</div></span>`;
+  const isContent=src=>{
+    if(src==='company') return String(dev.company_presentation_id)===String(p.id);
+    if(src==='customer'||src==null||src==='') return String(dev.presentation_id)===String(p.id);
+    return String(src)===String(p.id);
+  };
+  const leafFn=src=> isContent(src)
+    ? `<div class="mpv-leaf content">${imgCell}</div>`
+    : `<div class="mpv-leaf kunde">Kunde</div>`;
+  const isLand=dev.display_format==='landscape';
+  return `<span class="mpv${isLand?' land':''}" data-lb title="${esc(p.name)} — ${esc(anzeigeArt(dev))}">${zoneNodeRender(deviceZoneNode(dev),leafFn)}</span>`;
+}
+
 // ---- Bildschirm-Editor: Zonen wie am Gerät angeordnet, je Zone die Slides ihrer Quelle ----
 
 /** Blätter (Zonen) eines Geräts in Vorlese-Reihenfolge mit ihrer Quelle
@@ -1043,15 +1103,13 @@ function renderDetail(t, devices, presentations){
     const eyeTitle=!hasDevices?'Kein Gerät verknüpft'
       :active?'Läuft auf dem Gerät – klicken zum Ausblenden'
       :'Auf dem Gerät anzeigen';
-    // Piktogramm: erstes Bild (Position 1) der Präsentation; Klick öffnet die Lightbox.
+    // Kombiniertes Vorschaubild: Zonen wie am Gerät, Inhalts-Zone = erstes Bild
+    // (rot umrandet = Zone 1), andere Zone(n) = gedimmter Kundenbereich.
     const fm=p.first_media||'';
-    const thumb=fm
-      ?`<span class="pthumb" data-lb title="${esc(fm)} – Vorschau">${isVideo(fm)?`<video src="${mediaUrl(fm)}" muted preload="metadata"></video>`:`<img src="${mediaUrl(fm)}" alt="">`}</span>`
-      :`<span class="pthumb empty" title="Noch kein Bild in dieser Präsentation">🖼</span>`;
-    // Anzeigeart: Mini-Bildschirm (Ausrichtung + Zonen, Präsentations-Zone magenta)
-    // + Text-Chip — je Gerät, auf dem die Präsentation läuft (auch als Zonen-Quelle).
+    const thumb=presPreviewHtml(p, devices);
+    // Text-Chip: Anzeigeart je Gerät (Format · Aufteilung).
     const artChips=presDevices(p, devices)
-      .map(d=>` ${miniScreenHtml(d, p.id)} <span class="tag">${esc(anzeigeArt(d))}</span>`).join('');
+      .map(d=>` <span class="tag">${esc(anzeigeArt(d))}</span>`).join('');
     row.innerHTML=`
       <div class="row wrap2" style="align-items:center">
         ${thumb}

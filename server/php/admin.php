@@ -656,9 +656,14 @@ async function pvDevice(code, label){
     }, (label||'Gerät')+' · '+(custom?'Freie Zonen':(pl.zones?('Split '+pl.zones.axis+' '+pl.zones.split+'/'+(100-pl.zones.split)):'Einzelfläche'))+' · '+fmt);
   }catch(e){ toast('Vorschau fehlgeschlagen'); }
 }
-// Präsentations-Vorschau: das gespeicherte Board als Vollbild-Einzelshow.
+// Präsentations-Vorschau: das gespeicherte Board. Läuft die Präsentation auf einem
+// geteilten/frei aufgeteilten Gerät, zeigt die Vorschau die echte Bildschirm-Aufteilung
+// dieses Geräts (beide Zonen) — die Zweiteilung lebt am Gerät, nicht an der Präsentation.
+// Ohne Zonen-Gerät fällt sie auf die Vollbild-Einzelshow zurück.
 async function pvPresentation(id, name){
   try{
+    const zdev=presDevices({id}, currentDevices).find(d=>(d.zone_mode||'single')!=='single');
+    if(zdev){ return pvDevice(zdev.pairing_code, (name||'Präsentation')+' · '+(zdev.name||'Gerät')); }
     const full=(await API.call('presentations.php?id='+id)).presentation;
     const items=(full.slides||[]).map(s=>({name:s.media_name, kind:s.kind||'media',
       title:s.text_title, body:s.text_body, duration_ms:s.duration_ms,

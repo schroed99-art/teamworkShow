@@ -624,6 +624,12 @@ function pvOpen(cfg, caption){
     tk.style.background = pvColor(cfg.ticker.bg, 'rgba(0,0,0,.55)');
     const sp=document.createElement('span'); sp.textContent=cfg.ticker.text;
     sp.style.color = pvColor(cfg.ticker.color, '#fff');
+    const tf={serif:'Georgia,serif',monospace:'monospace','sans-serif-condensed':"'Arial Narrow',sans-serif",
+      'sans-serif-light':'system-ui','sans-serif-medium':'system-ui'}[cfg.ticker.font||''];
+    if(tf) sp.style.fontFamily=tf;
+    if(cfg.ticker.font==='sans-serif-medium') sp.style.fontWeight='600';
+    if(cfg.ticker.font==='sans-serif-light') sp.style.fontWeight='300';
+    const tsz=+cfg.ticker.size||0; if(tsz>0) sp.style.fontSize=Math.max(9,Math.min(40,tsz))+'px';
     sp.style.animationDuration = Math.max(6, Math.round((cfg.ticker.text.length+20)*0.28))+'s';
     tk.appendChild(sp); frame.appendChild(tk);
   }
@@ -645,7 +651,8 @@ async function pvDevice(code, label){
       format: fmt, tree, zones: zn, items: pl.items||[],
       wx: { loc:(pl.widgets&&pl.widgets.weather_location)||'', asset:(pl.weather_asset&&pl.weather_asset.name)||'' },
       ticker: pl.widgets ? { on:!!pl.widgets.notices_enabled, text:pl.widgets.notices_text||'',
-                             color:pl.widgets.notices_color, bg:pl.widgets.notices_bg } : {on:false}
+                             color:pl.widgets.notices_color, bg:pl.widgets.notices_bg,
+                             font:pl.widgets.notices_font, size:+pl.widgets.notices_size } : {on:false}
     }, (label||'Gerät')+' · '+(custom?'Freie Zonen':(pl.zones?('Split '+pl.zones.axis+' '+pl.zones.split+'/'+(100-pl.zones.split)):'Einzelfläche'))+' · '+fmt);
   }catch(e){ toast('Vorschau fehlgeschlagen'); }
 }
@@ -656,7 +663,20 @@ async function pvPresentation(id, name){
     const items=(full.slides||[]).map(s=>({name:s.media_name, kind:s.kind||'media',
       title:s.text_title, body:s.text_body, duration_ms:s.duration_ms,
       font:s.text_font, color:s.text_color, size:s.text_size}));
-    pvOpen({ format:'portrait', zones:null, items, wx:{loc:'',asset:''}, ticker:{on:false} },
+    // Die Laufschrift hängt am Gerät (nicht an der Präsentation) und läuft als Balken
+    // unten über die volle Breite. Für die Vorschau die Laufschrift des Geräts nehmen,
+    // das diese Präsentation spielt (erstes Treffer-Gerät).
+    let ticker={on:false};
+    const dev=presDevices({id}, currentDevices)[0];
+    if(dev){
+      try{
+        const w=(await API.call('widgets.php?device_id='+dev.id)).widget||{};
+        ticker={ on:!!(+w.notices_enabled), text:w.notices_text||'',
+                 color:w.notices_color, bg:w.notices_bg,
+                 font:w.notices_font, size:+w.notices_size };
+      }catch(e){}
+    }
+    pvOpen({ format:'portrait', zones:null, items, wx:{loc:'',asset:''}, ticker },
            'Präsentation: '+(name||'')+' · Einzelfläche (gespeicherter Stand)');
   }catch(e){ toast('Vorschau fehlgeschlagen'); }
 }

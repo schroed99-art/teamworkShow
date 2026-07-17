@@ -237,20 +237,27 @@ try {
     // The customer zone is the device's own presentation — in single mode it simply
     // is the whole screen, which keeps the legacy contract intact. Custom draws its
     // customer slides through the tree instead, so it needs no top-level list.
-    $customer = $zoneMode === 'custom' ? [] : tw_slides_of($pdo, $dir, $customerPresId, $hasWeather);
+    $companyPresId = !empty($dev['company_presentation_id']) ? (int) $dev['company_presentation_id'] : null;
+
+    // 'company' = whole screen shows the Teamwork/company presentation, no customer.
+    // It behaves exactly like single (zones stay null), only the source differs.
+    $customer = ($zoneMode === 'custom' || $zoneMode === 'company')
+        ? [] : tw_slides_of($pdo, $dir, $customerPresId, $hasWeather);
     $company  = $zoneMode === 'split'
-        ? tw_slides_of($pdo, $dir, $dev['company_presentation_id'] ?? null, $hasWeather)
+        ? tw_slides_of($pdo, $dir, $companyPresId, $hasWeather)
         : [];
 
     // `items` is the app's download list.
-    //  - single: it is ALSO the whole playlist, so the file-less weather/news slides
-    //    stay in it — the app builds its slideshow from exactly this array.
+    //  - single/company: it is ALSO the whole playlist, so the file-less weather/news
+    //    slides stay in it — the app builds its slideshow from exactly this array.
     //  - split/custom: the playlist lives in `zones`, so `items` carries only real
     //    files, each exactly once, even when several zones use the same one.
     if ($zoneMode === 'split') {
         $items = tw_dedup_files(array_merge($customer, $company));
     } elseif ($zoneMode === 'custom') {
         $items = tw_dedup_files($flat);
+    } elseif ($zoneMode === 'company') {
+        $items = tw_slides_of($pdo, $dir, $companyPresId, $hasWeather);
     } else {
         $items = $customer;
     }

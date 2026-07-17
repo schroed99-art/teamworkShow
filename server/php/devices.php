@@ -27,7 +27,7 @@ function tw_display_format(mixed $v): string
  * Zone config (Phase 5.3). 'split' shows a company zone plus the customer zone;
  * 'custom' (Vollausbau) drives a free-form per-format zone tree in zone_layout.
  */
-const TW_ZONE_MODES = ['single', 'split', 'custom'];
+const TW_ZONE_MODES = ['single', 'company', 'split', 'custom'];
 const TW_ZONE_AXES  = ['rows', 'cols'];   // stacked vs. side by side
 
 // Guardrails for the custom zone tree, so a hand-crafted PUT can't blow up the

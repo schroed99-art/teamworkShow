@@ -809,7 +809,7 @@ function zoneSourceGroups(sel, includeCustomer){
 function anzeigeArt(d){
   const fmt={portrait:'Hochkant',phone:'Telefon',landscape:'Quer',tablet:'Tablet'}[d.display_format||'portrait']||'Hochkant';
   const mode=d.zone_mode||'single';
-  let teilung='eine Fläche';
+  let teilung=mode==='company'?'eine Fläche (Teamwork)':'eine Fläche (Kunde)';
   if(mode==='split'){
     const sp=Math.max(10,Math.min(90,+d.zone_split||70));
     const dir=(d.zone_axis||'rows')==='rows'?'übereinander':'nebeneinander';
@@ -836,9 +836,10 @@ let lastTab='pres'; // aktiver Reiter überlebt ein Re-Render (Auto-Refresh nach
  *  als Firmen-Präsentation (fester Split) oder direkt als Zonen-Quelle. */
 function presDevices(p, devs){
   return (devs||[]).filter(d=>{
-    if(String(d.presentation_id)===String(p.id)) return true;
     const mode=d.zone_mode||'single';
-    if(mode==='split' && String(d.company_presentation_id)===String(p.id)) return true;
+    // Kunden-/Haupt-Präsentation zählt in jedem Modus außer 'company' (dort ohne Kunde).
+    if(mode!=='company' && String(d.presentation_id)===String(p.id)) return true;
+    if((mode==='split'||mode==='company') && String(d.company_presentation_id)===String(p.id)) return true;
     if(mode==='custom'){
       try{
         const lay=d.zone_layout?(typeof d.zone_layout==='string'?JSON.parse(d.zone_layout):d.zone_layout):null;
@@ -1081,11 +1082,12 @@ function zoneFields(d){
       <div><label class="f">Aufteilung</label>
         <select data-f="zone_mode" data-zone-mode style="width:100%;max-width:340px">
           <option value="single"${mode==='single'?' selected':''}>Eine Fläche (Kunde)</option>
+          <option value="company"${mode==='company'?' selected':''}>Eine Fläche (Teamwork)</option>
           <option value="split"${mode==='split'?' selected':''}>Geteilt: Firma + Kunde</option>
           <option value="custom"${mode==='custom'?' selected':''}>Frei aufgeteilt (Zonen-Editor)</option>
         </select></div>
 
-      <div data-zone-legacy style="display:none;margin-top:10px">
+      <div data-zone-split style="display:none;margin-top:10px">
         <div class="grid2">
           <div><label class="f">Teilung</label>
             <select data-f="zone_axis" style="width:100%">
@@ -1094,10 +1096,14 @@ function zoneFields(d){
             </select></div>
           <div><label class="f">Anteil Firmen-Zone (%)</label>
             <input type="number" min="10" max="90" step="5" data-f="zone_split" value="${split}" style="width:100%"></div>
-          <div style="grid-column:1/-1"><label class="f">Firmen-Präsentation</label>
-            <select data-f="company_presentation_id" style="width:100%"><option value="">—</option>${zoneSourceGroups(cid,false)}</select></div>
         </div>
         <p class="muted" style="margin:8px 0 0">Firmen-Zone zuerst (oben/links), Kunden-Zone füllt den Rest.</p>
+      </div>
+
+      <div data-zone-firma style="display:none;margin-top:10px">
+        <label class="f">Firmen-/Teamwork-Präsentation</label>
+        <select data-f="company_presentation_id" style="width:100%"><option value="">—</option>${zoneSourceGroups(cid,false)}</select>
+        <p class="muted" data-firma-hint style="margin:6px 0 0"></p>
       </div>
 
       <div data-zone-custom style="display:none;margin-top:10px">
@@ -1115,7 +1121,9 @@ function zoneFields(d){
 function initZoneEditor(card, d){
   const root=card.querySelector('[data-zone-root]'); if(!root) return;
   const modeSel=root.querySelector('[data-zone-mode]');
-  const legacy=root.querySelector('[data-zone-legacy]');
+  const splitB=root.querySelector('[data-zone-split]');
+  const firmaB=root.querySelector('[data-zone-firma]');
+  const firmaHint=root.querySelector('[data-firma-hint]');
   const custom=root.querySelector('[data-zone-custom]');
   const canvas=root.querySelector('[data-ze-canvas]');
 
@@ -1188,14 +1196,19 @@ function initZoneEditor(card, d){
   }
 
   function updateVis(){ const m=modeSel.value;
-    legacy.style.display = m==='split'?'':'none';
+    splitB.style.display = m==='split'?'':'none';
+    firmaB.style.display = (m==='split'||m==='company')?'':'none';
     custom.style.display = m==='custom'?'':'none';
+    if(firmaHint) firmaHint.textContent = m==='company'
+      ? 'Der ganze Bildschirm zeigt diese Teamwork-Präsentation — kein Kundenbereich.'
+      : 'Firmen-Zone oben/links; Kunden-Zone füllt den Rest.';
     if(m==='custom') draw(); }
   modeSel.onchange=updateVis; updateVis();
 
   card._getZoneBody=()=>{ const m=modeSel.value;
     if(m==='custom') return { zone_mode:'custom', zone_layout:{v:1,layouts:state} };
     const g=f=>root.querySelector(`[data-f="${f}"]`);
+    if(m==='company') return { zone_mode:'company', company_presentation_id:g('company_presentation_id').value||null };
     return { zone_mode:m, zone_axis:g('zone_axis').value, zone_split:+g('zone_split').value||70,
              company_presentation_id:g('company_presentation_id').value||null }; };
 }

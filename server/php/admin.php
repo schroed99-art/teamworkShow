@@ -526,9 +526,25 @@ function pvColor(h, fb){
 }
 function pvSlideHtml(s, wx){
   const kind = s.kind||'media';
-  if (kind==='news')
-    return `<div class="pv-news"><div class="t">${esc(s.title||s.text_title||'')}</div>`+
-           `<div class="b">${esc(s.body||s.text_body||'')}</div></div>`;
+  if (kind==='news'){
+    const title=s.title||s.text_title||'', body=s.body||s.text_body||'';
+    const bgName=s.bg||s.name||s.media_name||'';
+    const font=s.font||s.text_font||'', color=s.color||s.text_color||'', size=+(s.size||s.text_size||0);
+    const hasBg=bgName && !isVideo(bgName);
+    const ff={serif:'Georgia,serif',monospace:'monospace','sans-serif-condensed':"'Arial Narrow',sans-serif",
+      'sans-serif-light':'system-ui','sans-serif-medium':'system-ui'}[font]||'';
+    const fw=(font==='sans-serif-medium')?'600':(font==='sans-serif-light')?'300':'';
+    const col=(color||'').match(/^#[0-9A-Fa-f]{6}/)?color.slice(0,7):'';
+    const bgStyle=hasBg?`background-image:url('${mediaUrl(bgName)}');background-size:cover;background-position:center;`:'';
+    const tStyle=(col?`color:${col};`:'')+(ff?`font-family:${ff};`:'')+(size>0?`font-size:${Math.round(size*1.5)}px;`:'');
+    const bStyle=(col?`color:${col};`:'')+(ff?`font-family:${ff};`:'')+(fw?`font-weight:${fw};`:'')+(size>0?`font-size:${size}px;`:'');
+    return `<div class="pv-news" style="${bgStyle}">`+
+      (hasBg?`<div style="position:absolute;inset:0;background:rgba(11,18,32,.6)"></div>`:'')+
+      `<div style="position:relative;display:flex;flex-direction:column;gap:.4em;min-width:0">`+
+      (title.trim()?`<div class="t" style="${tStyle}">${sanitizeNewsHtml(title)}</div>`:'')+
+      (body.trim()?`<div class="b" style="${bStyle}">${sanitizeNewsHtml(body)}</div>`:'')+
+      `</div></div>`;
+  }
   if (kind==='weather'){
     const bg = wx && wx.asset ? `<img class="bg" src="${mediaUrl(wx.asset)}" alt="">` : '';
     return `<div class="pv-wx">${bg}<div class="ic">🌤</div>`+
@@ -638,7 +654,8 @@ async function pvPresentation(id, name){
   try{
     const full=(await API.call('presentations.php?id='+id)).presentation;
     const items=(full.slides||[]).map(s=>({name:s.media_name, kind:s.kind||'media',
-      title:s.text_title, body:s.text_body, duration_ms:s.duration_ms}));
+      title:s.text_title, body:s.text_body, duration_ms:s.duration_ms,
+      font:s.text_font, color:s.text_color, size:s.text_size}));
     pvOpen({ format:'portrait', zones:null, items, wx:{loc:'',asset:''}, ticker:{on:false} },
            'Präsentation: '+(name||'')+' · Einzelfläche (gespeicherter Stand)');
   }catch(e){ toast('Vorschau fehlgeschlagen'); }

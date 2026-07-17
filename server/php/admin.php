@@ -91,6 +91,8 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   /* "aktiv" ist ein positiver Zustand -> grün (nicht magenta). */
   .badge-on { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
     color:#39d353; border:1px solid #1c5c2e; background:#0e1f13; border-radius:6px; padding:1px 6px; margin-left:6px; }
+  .badge-off { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:#9aa0aa; border:1px solid #3a3f47; background:#15171b; border-radius:6px; padding:1px 6px; margin-left:6px; }
   .statuspill { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600;
     padding:2px 9px; border-radius:999px; border:1px solid var(--line); }
   .statuspill .dot { width:8px; height:8px; border-radius:50%; background:currentColor; flex:none; }
@@ -1261,29 +1263,31 @@ function renderDetail(t, devices, presentations){
   const pWrap=document.createElement('div'); pWrap.className='card'; pWrap.id='panelPres';
   pWrap.innerHTML=`<h3>Präsentationen</h3>
     <p class="muted" style="margin:-4px 0 6px">Inhalts-Präsentationen dieses Mandanten — die Zuweisung an einen Bildschirm erfolgt im Reiter „Anzeige".</p>`;
-  const activePresIds=new Set(devices.map(d=>String(d.presentation_id)).filter(v=>v&&v!=='null'));
-  const hasDevices=devices.length>0;
   presentations.forEach(p=>{
-    const active=activePresIds.has(String(p.id));
+    // Eigener Pro-Präsentation-Schalter (presentations.active) — unabhängig davon,
+    // welchem Gerät sie zugewiesen ist. Default: aktiv.
+    const active = p.active===undefined ? true : !!(+p.active);
     const row=document.createElement('div'); row.className='ibox';
-    const eyeTitle=!hasDevices?'Kein Gerät verknüpft'
-      :active?'Läuft auf dem Gerät – klicken zum Ausblenden'
-      :'Auf dem Gerät anzeigen';
+    const eyeTitle=active?'Präsentation ist aktiv – klicken zum Ausschalten'
+                         :'Präsentation ist inaktiv – klicken zum Einschalten';
     // Kombiniertes Vorschaubild: Zonen wie am Gerät, Inhalts-Zone = erstes Bild
     // (rot umrandet = Zone 1), andere Zone(n) = gedimmter Kundenbereich.
     const fm=p.first_media||'';
     const thumb=presPreviewHtml(p, devices);
-    // Text-Chip: Anzeigeart je Gerät (Format · Aufteilung).
-    const artChips=presDevices(p, devices)
-      .map(d=>` <span class="tag">${esc(anzeigeArt(d))}</span>`).join('');
+    // Geräte, die diese Präsentation aktuell abspielen (Name + Anzeigeart + Status).
+    const runDevs=presDevices(p, devices);
+    const devLine = runDevs.length
+      ? `<div class="muted" style="font-size:12px;margin-top:5px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span>▶ Läuft auf:</span>${runDevs.map(d=>`<span class="tag" style="display:inline-flex;align-items:center"><span class="tdot ${d.status||'offline'}" style="width:7px;height:7px;margin-right:5px"></span>${esc(d.name||d.pairing_code)} · ${esc(anzeigeArt(d))}</span>`).join('')}</div>`
+      : `<div class="muted" style="font-size:12px;margin-top:5px">Keinem Bildschirm zugewiesen</div>`;
     row.innerHTML=`
       <div class="row wrap2" style="align-items:center">
         ${thumb}
         <div class="grow" style="min-width:0;flex:1 1 auto">
-          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on">aktiv</span>':''}${artChips}</div>
+          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on">aktiv</span>':' <span class="badge-off">inaktiv</span>'}</div>
           <div class="muted" data-desc style="font-size:12px;margin-top:3px;cursor:pointer" title="Beschreibung bearbeiten">${p.description?esc(p.description):'<i>Keine Beschreibung — hier klicken zum Ergänzen.</i>'}</div>
+          ${devLine}
         </div>
-        <button class="eye${active?' on':''}" data-eye title="${eyeTitle}"${hasDevices?'':' disabled'}>${eyeSvg(active)}</button>
+        <button class="eye${active?' on':''}" data-eye title="${eyeTitle}">${eyeSvg(active)}</button>
         <button class="ghost sm" data-ren title="Umbenennen">✎</button>
         <button class="ghost sm" data-prev title="Vorschau: wie diese Präsentation abgespielt wird">🔍 Vorschau</button>
         <button class="ghost sm" data-edit>Slides</button>
@@ -1298,7 +1302,7 @@ function renderDetail(t, devices, presentations){
     };
     row.querySelector('[data-eye]').onclick=async()=>{
       await API.call('presentations.php','PUT',{id:p.id,active:!active});
-      toast(!active?'Auf dem Gerät aktiviert':'Ausgeblendet'); selectTenant(t); };
+      toast(!active?'Präsentation aktiviert':'Präsentation deaktiviert'); selectTenant(t); };
     row.querySelector('[data-ren]').onclick=async()=>{
       const name=await promptInline('Präsentation umbenennen', p.name);
       if(name===null||name===''||name===p.name) return;

@@ -102,17 +102,12 @@ if ($method === 'PUT') {
         $desc = tw_cut(trim((string) $b['description']), 300);
         $pdo->prepare('UPDATE presentations SET description = ? WHERE id = ?')->execute([$desc, $id]);
     }
-    // Toggle which presentation the tenant's device(s) show. active=true routes all
-    // of the tenant's devices to this presentation; active=false switches off only
-    // the devices currently showing it (-> NULL = folder fallback).
+    // Per-presentation on/off. It ONLY flips this presentation's own flag — it does
+    // not touch any device assignment (each screen keeps what it is set to). An
+    // inactive presentation simply stops playing where it is assigned.
     if (array_key_exists('active', $b)) {
-        if ($b['active']) {
-            $pdo->prepare('UPDATE devices SET presentation_id = ? WHERE tenant_id = ?')
-                ->execute([$id, $owner]);
-        } else {
-            $pdo->prepare('UPDATE devices SET presentation_id = NULL WHERE tenant_id = ? AND presentation_id = ?')
-                ->execute([$owner, $id]);
-        }
+        $pdo->prepare('UPDATE presentations SET active = ? WHERE id = ?')
+            ->execute([$b['active'] ? 1 : 0, $id]);
     }
     if (array_key_exists('slides', $b) && is_array($b['slides'])) {
         $pdo->beginTransaction();

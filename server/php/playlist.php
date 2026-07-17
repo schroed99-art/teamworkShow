@@ -48,6 +48,13 @@ function tw_slides_of(PDO $pdo, string $dir, ?int $presentationId, bool &$hasWea
     if (empty($presentationId)) {
         return [];
     }
+    // A switched-off presentation plays nothing where it is assigned.
+    $act = $pdo->prepare('SELECT active FROM presentations WHERE id = ?');
+    $act->execute([$presentationId]);
+    $isActive = $act->fetchColumn();
+    if ($isActive !== false && (int) $isActive === 0) {
+        return [];
+    }
     $ss = $pdo->prepare(
         'SELECT media_name, kind, text_title, text_body, text_font, text_color, text_size, position, duration_ms FROM slides
          WHERE presentation_id = ? ORDER BY position, id'

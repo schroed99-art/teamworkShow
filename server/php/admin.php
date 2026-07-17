@@ -1490,10 +1490,17 @@ async function editPresentation(p, mount){
   // Bildschirms (außerhalb der Zone) -> hier nicht doppelt zeigen.
   const runsOn=mount?'':presDevices(p, currentDevices)
     .map(d=>`${miniScreenHtml(d, p.id)} <span class="tag">${esc(anzeigeArt(d))}</span>`).join(' ');
+  // Standalone (nicht in eine Zone eingebettet): gleicher Rahmen + magenta Banner
+  // wie im Bildschirm-Editor, nur ohne "Zone N"-Bezeichnung. Eingebettet (mount):
+  // der Zonen-Kasten liefert Rahmen/Banner bereits.
+  const framedOpen=mount?'':`<div class="ibox zone-content" style="margin-top:8px">
+      <div class="ze-banner content"><span>Inhalt / Vorschau</span><span class="zpres">— ${esc(p.name)}</span></div>`;
+  const framedClose=mount?'':'</div>';
   card.innerHTML=`
     <a href="#" id="backPres" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
     <h3 style="margin-top:0">Slides — ${esc(p.name)}</h3>
     ${runsOn?`<div class="row wrap2" style="margin:-4px 0 10px;align-items:center"><span class="muted">Läuft auf:</span> ${runsOn}</div>`:''}
+    ${framedOpen}
     <ul class="list slides" id="slideList"></ul>
     <div class="row wrap2" style="margin-top:8px;gap:8px">
       <select id="mediaPick" class="grow"></select><button class="sm" id="addSlide">+ Slide</button>
@@ -1505,7 +1512,8 @@ async function editPresentation(p, mount){
     </div>
     <div class="row" style="margin-top:12px"><button id="saveSlides">Speichern</button>
       <button class="ghost" id="pvPres" title="Vorschau des gespeicherten Stands">🔍 Vorschau</button>
-      <button class="ghost" id="closeSlides">Schließen</button></div>`;
+      <button class="ghost" id="closeSlides">Schließen</button></div>
+    ${framedClose}`;
   // Master-detail: hide the presentation list and show only this editor below the
   // tab bar (which stays pinned). Back/Schließen restores the list.
   document.getElementById('slidesEditor')?.remove();

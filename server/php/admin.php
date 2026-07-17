@@ -905,8 +905,8 @@ function editScreen(d, focusPres){
   wrap.innerHTML=`
     <a href="#" id="backScreen" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
     <div style="border-top:1px solid var(--line);margin:0 -14px 14px"></div>
-    <h3 style="margin:0 0 6px">Bildschirm — ${esc(d.name||d.pairing_code||'Gerät')}</h3>
-    <div class="row wrap2" style="margin:-4px 0 4px;align-items:center">
+    <h3 style="margin:0 0 16px">Bildschirm — ${esc(d.name||d.pairing_code||'Gerät')}</h3>
+    <div class="row wrap2" style="margin:0 0 4px;align-items:center">
       <span class="muted">Läuft auf:</span> ${miniScreenHtml(d, null)} <span class="tag">${esc(anzeigeArt(d))}</span>
     </div>
     <p class="muted" style="margin:2px 0 10px">Je Zone die Slides ihrer Quell-Präsentation — „Bearbeiten" öffnet den Editor in der Zone.</p>

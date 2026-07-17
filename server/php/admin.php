@@ -723,7 +723,11 @@ function anzeigeArt(d){
   const fmt={portrait:'Hochkant',phone:'Telefon',landscape:'Quer',tablet:'Tablet'}[d.display_format||'portrait']||'Hochkant';
   const mode=d.zone_mode||'single';
   let teilung='eine Fläche';
-  if(mode==='split') teilung='zweigeteilt (Firma/Kunde)';
+  if(mode==='split'){
+    const sp=Math.max(10,Math.min(90,+d.zone_split||70));
+    const dir=(d.zone_axis||'rows')==='rows'?'übereinander':'nebeneinander';
+    teilung='zweigeteilt (Firma/Kunde) · '+dir+' · Firma '+sp+' % / Kunde '+(100-sp)+' %';
+  }
   else if(mode==='custom'){
     let n=1;
     try{

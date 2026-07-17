@@ -142,11 +142,12 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .ze-banner button { padding:4px 10px; font-size:12px; }
   .ze-banner.content button { background:transparent; border:1px solid rgba(255,255,255,.7); color:#fff; }
   .kunde-ph { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
-    padding:26px 12px; min-height:230px; color:var(--dim); }
-  .kunde-ph .logo { width:76px; height:76px; border-radius:50%; border:2px dashed var(--line);
+    padding:34px 12px; min-height:320px; color:var(--dim); }
+  .kunde-ph .kunde-title { font-size:17px; font-weight:700; letter-spacing:.02em; color:var(--text); }
+  .kunde-ph .logo { width:84px; height:84px; border-radius:50%; border:2px dashed var(--line);
     display:flex; align-items:center; justify-content:center; font-size:12px; }
-  .kunde-ph .lines { width:82%; max-width:340px; display:flex; flex-direction:column; gap:9px; }
-  .kunde-ph .lines span { height:11px; border-radius:5px; background:rgba(148,163,184,.16); }
+  .kunde-ph .lines { width:84%; max-width:380px; display:flex; flex-direction:column; gap:10px; }
+  .kunde-ph .lines span { height:12px; border-radius:5px; background:rgba(148,163,184,.16); }
   .kunde-ph .hint { font-size:12.5px; text-align:center; margin-top:4px; line-height:1.5; }
   /* App-Installation + Koppeln nebeneinander; auf schmalen Screens untereinander. */
   .top-tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start; }
@@ -903,7 +904,10 @@ function editScreen(d, focusPres){
   wrap.innerHTML=`
     <a href="#" id="backScreen" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
     <h3 style="margin-top:0">Bildschirm — ${esc(d.name||d.pairing_code||'Gerät')}</h3>
-    <p class="muted" style="margin:-4px 0 10px">Je Zone die Slides ihrer Quell-Präsentation — „Bearbeiten" öffnet den Editor in der Zone.</p>
+    <div class="row wrap2" style="margin:-4px 0 4px;align-items:center">
+      <span class="muted">Läuft auf:</span> ${miniScreenHtml(d, null)} <span class="tag">${esc(anzeigeArt(d))}</span>
+    </div>
+    <p class="muted" style="margin:2px 0 10px">Je Zone die Slides ihrer Quell-Präsentation — „Bearbeiten" öffnet den Editor in der Zone.</p>
     <div data-zones style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;flex-direction:${dirRow?'row':'column'}"></div>`;
   if (body.firstElementChild) body.insertBefore(wrap, body.firstElementChild.nextSibling);
   else body.appendChild(wrap);
@@ -924,9 +928,10 @@ function editScreen(d, focusPres){
     // Kundenbereich-Platzhalter: angedeutetes Logo + Hinweis, dass hier der
     // Kundeninhalt steht (ggf. noch nicht erstellt).
     const kundePh = `<div class="kunde-ph">
+        <div class="kunde-title">Kundenbereich</div>
         <div class="logo">Logo</div>
         <div class="lines"><span style="width:72%"></span><span style="width:56%"></span><span style="width:44%"></span></div>
-        <div class="hint">z. B. Kundenname, Standort-Infos, Hinweise${pres?'':'<br>— Inhalt wird vom Kunden gepflegt / noch nicht erstellt —'}</div>
+        <div class="hint">Hier steht der vom Kunden definierte Inhalt — z. B. Kundenname, Standort-Infos, Hinweise${pres?'':'<br>(noch nicht erstellt)'}</div>
       </div>`;
     const defaultBody = dup ? `<p class="muted" style="margin:4px 0 0">Zeigt dieselbe Präsentation wie Zone ${seen[pid]+1}.</p>`
       : isContentZone ? (pres?'<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>'
@@ -1479,7 +1484,9 @@ async function editPresentation(p, mount){
   const card=document.createElement('div'); card.className='card'; card.id='slidesEditor';
   // "Läuft auf": Mini-Bildschirm + Anzeigeart je Gerät — zeigt beim Bestücken der
   // Slides das Zielformat (hoch/quer) und die Zonen-Aufteilung.
-  const runsOn=presDevices(p, currentDevices)
+  // Im eingebetteten Bildschirm-Editor steht die Anzeigeart bereits im Kopf des
+  // Bildschirms (außerhalb der Zone) -> hier nicht doppelt zeigen.
+  const runsOn=mount?'':presDevices(p, currentDevices)
     .map(d=>`${miniScreenHtml(d, p.id)} <span class="tag">${esc(anzeigeArt(d))}</span>`).join(' ');
   card.innerHTML=`
     <a href="#" id="backPres" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>

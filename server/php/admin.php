@@ -1055,7 +1055,7 @@ function renderDetail(t, devices, presentations){
     row.innerHTML=`
       <div class="row wrap2" style="align-items:center">
         ${thumb}
-        <div class="grow" style="min-width:0">
+        <div class="grow" style="min-width:0;flex:1 1 auto">
           <div><b>${esc(p.name)}</b>${active?' <span class="badge-on">aktiv</span>':''}${artChips}</div>
           <div class="muted" data-desc style="font-size:12px;margin-top:3px;cursor:pointer" title="Beschreibung bearbeiten">${p.description?esc(p.description):'<i>Keine Beschreibung — hier klicken zum Ergänzen.</i>'}</div>
         </div>

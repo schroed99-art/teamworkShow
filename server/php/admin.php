@@ -120,9 +120,9 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .mz-leaf.on { background:rgba(210,26,85,.6); border-color:var(--magenta); }
   /* Kombiniertes Mini-Vorschaubild in der Präsentationsliste: Zonen wie am Gerät,
      Inhalts-Zone zeigt das erste Bild (rot umrandet = Zone 1), andere = Kundenbereich. */
-  .mpv { flex:none; width:44px; height:66px; border:1.5px solid var(--dim); border-radius:7px;
+  .mpv { flex:none; width:52px; height:76px; border:1.5px solid var(--dim); border-radius:7px;
     overflow:hidden; display:inline-flex; vertical-align:middle; background:#0b1120; cursor:pointer; }
-  .mpv.land { width:104px; height:62px; }
+  .mpv.land { width:120px; height:72px; }
   .mpv:hover { border-color:var(--magenta); }
   .mpv-leaf { flex:1 1 0; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center;
     box-sizing:border-box; overflow:hidden; }

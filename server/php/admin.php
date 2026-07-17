@@ -205,6 +205,10 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .pv-wx .loc { font-weight:700; font-size:clamp(12px,5cqw,34px); position:relative; }
   .pv-wx .hint { opacity:.8; font-size:clamp(9px,3.4cqw,22px); position:relative; }
   .pv-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:13px; }
+  /* Leere Kunden-Zone: Platzhalter wie im Bildschirm-Editor (Kundenbereich). */
+  .pv-kunde { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#1e293b; overflow:hidden; }
+  .pv-kunde .kunde-ph { min-height:0; padding:5% 8%; gap:10px; }
+  .pv-kunde .kunde-ph .logo { width:14cqw; height:14cqw; max-width:84px; max-height:84px; min-width:40px; min-height:40px; }
   .pv-ticker { position:absolute; left:0; right:0; bottom:0; overflow:hidden; white-space:nowrap; padding:5px 0; z-index:3; }
   .pv-ticker span { display:inline-block; padding-left:100%; animation:pv-marq linear infinite; }
   @keyframes pv-marq { from{transform:translateX(0)} to{transform:translateX(-100%)} }
@@ -557,9 +561,23 @@ function pvSlideHtml(s, wx){
     ? `<video class="pv-media" src="${mediaUrl(name)}" autoplay muted loop playsinline></video>`
     : `<img class="pv-media" src="${mediaUrl(name)}" alt="">`;
 }
+// Platzhalter für eine leere Kunden-Zone — zeigt, dass der Kunde noch nichts
+// hinterlegt hat (gleiche Optik wie der Bildschirm-Editor).
+function pvKundePh(){
+  return `<div class="pv-kunde"><div class="kunde-ph">`+
+    `<div class="kunde-title">Kundenbereich</div>`+
+    `<div class="logo">Logo</div>`+
+    `<div class="lines"><span></span><span style="width:78%"></span></div>`+
+    `<div class="hint">Hier steht der vom Kunden definierte Inhalt — z. B. Kundenname, Standort-Infos, Hinweise</div>`+
+    `</div></div>`;
+}
 // Läuft die Slides einer Zone durch; nächster Wechsel nach duration_ms.
-function pvPlayZone(zoneEl, slides, wx){
-  if (!slides || !slides.length){ zoneEl.innerHTML='<div class="pv-empty">Keine Slides</div>'; return; }
+// emptyKind='kunde' -> leere Zone zeigt den Kundenbereich-Platzhalter statt "Keine Slides".
+function pvPlayZone(zoneEl, slides, wx, emptyKind){
+  if (!slides || !slides.length){
+    zoneEl.innerHTML = emptyKind==='kunde' ? pvKundePh() : '<div class="pv-empty">Keine Slides</div>';
+    return;
+  }
   let i=0;
   const step=()=>{
     const s=slides[i%slides.length];
@@ -613,7 +631,7 @@ function pvOpen(cfg, caption){
     sep.style.cssText = cols?'width:2px':'height:2px';
     stage.append(comp, sep, cust);
     pvPlayZone(comp, z.company, cfg.wx);
-    pvPlayZone(cust, z.customer, cfg.wx);
+    pvPlayZone(cust, z.customer, cfg.wx, 'kunde');   // untere/rechte Zone = Kunde
   } else {
     const one=zone(); one.style.flex='1'; stage.appendChild(one);
     pvPlayZone(one, cfg.items, cfg.wx);

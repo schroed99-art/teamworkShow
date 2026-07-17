@@ -400,6 +400,33 @@ function confirmDialog(title, text){
 }
 const esc = s => (s??'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+// Nachrichten-Text darf einfache Formatierung tragen (fett/kursiv/Umbruch/Farbe).
+// Für die Editor-Vorschau: nur eine Whitelist an Tags zulassen und alles Gefährliche
+// (script/style, on*-Handler, javascript:-URLs) entfernen. Deckt sich mit dem, was
+// die App via HtmlCompat.fromHtml rendert.
+const NEWS_TAGS={B:1,STRONG:1,I:1,EM:1,U:1,S:1,STRIKE:1,BR:1,P:1,DIV:1,SPAN:1,FONT:1,
+  UL:1,OL:1,LI:1,SMALL:1,BIG:1,SUB:1,SUP:1,H1:1,H2:1,H3:1,H4:1,BLOCKQUOTE:1};
+function sanitizeNewsHtml(raw){
+  const box=document.createElement('div'); box.innerHTML=(raw??'').toString();
+  (function walk(node){
+    Array.from(node.childNodes).forEach(c=>{
+      if(c.nodeType!==1){ return; }
+      if(!NEWS_TAGS[c.tagName]){
+        while(c.firstChild) node.insertBefore(c.firstChild, c); // Tag raus, Inhalt bleibt
+        node.removeChild(c); return;
+      }
+      Array.from(c.attributes).forEach(a=>{
+        const n=a.name.toLowerCase(), v=a.value;
+        const ok=(n==='color'||n==='face'||n==='size') ||
+                 (n==='style' && !/expression|url\s*\(|javascript:/i.test(v));
+        if(!ok) c.removeAttribute(a.name);
+      });
+      walk(c);
+    });
+  })(box);
+  return box.innerHTML;
+}
+
 // Eye (open = active/shown) / eye-off (crossed = hidden) icon for presentation toggle.
 // Device online/offline pill from the server-computed status + seconds_since_seen.
 function agoHuman(s){
@@ -1588,6 +1615,7 @@ async function editPresentation(p, mount){
           </div>
           <input data-nt placeholder="Überschrift…" value="${esc(s.text_title)}" style="width:100%">
           <textarea data-nb rows="3" placeholder="Text der Nachricht…" style="width:100%">${esc(s.text_body)}</textarea>
+          <div class="muted" style="margin-top:2px;font-size:11px">Formatierung erlaubt: &lt;b&gt;fett&lt;/b&gt;, &lt;i&gt;kursiv&lt;/i&gt;, &lt;u&gt;unterstrichen&lt;/u&gt;, &lt;br&gt; Umbruch, &lt;font color="#…"&gt;Farbe&lt;/font&gt;</div>
           <div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:2px">
             <div style="flex:1;min-width:180px"><label class="f">🖼 Hintergrundbild</label>
               <select data-nbg style="width:100%">${bgOpts}</select></div>
@@ -1608,8 +1636,8 @@ async function editPresentation(p, mount){
             ${(s.media_name||'')?'<div style="position:absolute;inset:0;background:rgba(15,23,42,.55)"></div>':''}
             <div style="position:relative;padding:12px 14px;font-family:${ff}">
               <div style="width:40px;height:3px;background:#ff006e;margin-bottom:8px"></div>
-              ${(s.text_title||'').trim()?`<div style="color:${col};font-weight:700;font-size:${Math.round(bsz*1.5)}px;line-height:1.15;font-family:${ff}">${esc(s.text_title)}</div>`:''}
-              ${(s.text_body||'').trim()?`<div style="color:${col};font-weight:${fw};font-size:${Math.round(bsz)}px;line-height:1.25;margin-top:4px;white-space:pre-wrap;font-family:${ff}">${esc(s.text_body)}</div>`:''}
+              ${(s.text_title||'').trim()?`<div style="color:${col};font-weight:700;font-size:${Math.round(bsz*1.5)}px;line-height:1.15;font-family:${ff}">${sanitizeNewsHtml(s.text_title)}</div>`:''}
+              ${(s.text_body||'').trim()?`<div style="color:${col};font-weight:${fw};font-size:${Math.round(bsz)}px;line-height:1.25;margin-top:4px;white-space:pre-wrap;font-family:${ff}">${sanitizeNewsHtml(s.text_body)}</div>`:''}
             </div></div>`;
         };
         drawPrev();

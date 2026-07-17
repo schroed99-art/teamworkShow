@@ -13,6 +13,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.text.HtmlCompat
 import androidx.core.widget.TextViewCompat
 import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.Player
@@ -158,9 +159,11 @@ class Stage(
     /** File-less message slide: the text travels on the item itself. */
     override fun showNews(item: MediaItem) {
         val news = item.news ?: return
-        newsTitle.text = news.title
+        // Title + body may carry simple HTML formatting (<b>, <i>, <br>, <font>…),
+        // authored in the dashboard — render it rather than showing the raw tags.
+        newsTitle.text = HtmlCompat.fromHtml(news.title, HtmlCompat.FROM_HTML_MODE_COMPACT)
         newsTitle.visibility = if (news.title.isBlank()) View.GONE else View.VISIBLE
-        newsBody.text = news.body
+        newsBody.text = HtmlCompat.fromHtml(news.body, HtmlCompat.FROM_HTML_MODE_COMPACT)
         newsBody.visibility = if (news.body.isBlank()) View.GONE else View.VISIBLE
 
         // Colour + font + size — the same knobs the Laufschrift offers. Size 0 keeps

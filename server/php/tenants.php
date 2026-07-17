@@ -7,6 +7,7 @@
  * staff-only.
  */
 require __DIR__ . '/auth.php';
+require __DIR__ . '/status_util.php';
 tw_require_manage();
 
 $pdo = tw_db();
@@ -16,7 +17,25 @@ if ($method === 'GET') {
     [$scope, $args] = tw_tenant_filter('id');
     $st = $pdo->prepare("SELECT id, name, created_at FROM tenants WHERE 1=1 $scope ORDER BY id");
     $st->execute($args);
-    tw_json(['tenants' => $st->fetchAll()]);
+    $tenants = $st->fetchAll();
+
+    // Roll each tenant's device statuses up to one badge for the sidebar list:
+    // green if any online, amber if any alarming, grey if offline, none if empty.
+    $ds = $pdo->query('SELECT tenant_id, TIMESTAMPDIFF(SECOND, last_seen, NOW()) AS secs FROM devices');
+    $byTenant = [];
+    foreach ($ds as $d) {
+        $secs = $d['secs'] === null ? null : (int) $d['secs'];
+        $byTenant[(int) $d['tenant_id']][] = tw_device_status($secs);
+    }
+    foreach ($tenants as &$t) {
+        $sts = $byTenant[(int) $t['id']] ?? [];
+        $t['devices_total'] = count($sts);
+        $t['devices_online'] = count(array_filter($sts, static fn($s) => $s === 'online'));
+        $t['status'] = tw_rollup_status($sts);
+    }
+    unset($t);
+
+    tw_json(['tenants' => $tenants]);
 }
 
 if ($method === 'POST') {

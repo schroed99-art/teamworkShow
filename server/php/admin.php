@@ -98,6 +98,13 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .statuspill.offline { color:#9aa0aa; border-color:#3a3f47; background:#15171b; }
   .statuspill.never { color:#9aa0aa; border-color:#3a3f47; background:#15171b; }
   .statuspill.alarm { color:#ff5c72; border-color:#5a2230; background:#210e13; }
+  /* Kleiner Status-Punkt für die Mandantenliste (Geräte online/offline). */
+  .tdot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:8px;
+    flex:0 0 auto; vertical-align:middle; }
+  .tdot.online { background:#39d353; box-shadow:0 0 0 3px rgba(57,211,83,.18); }
+  .tdot.offline, .tdot.never { background:#9aa0aa; }
+  .tdot.alarm { background:#ff5c72; box-shadow:0 0 0 3px rgba(255,92,114,.18); }
+  .tdot.none { background:transparent; box-shadow:inset 0 0 0 1.5px #3a3f47; }
   .statuspill.alarm .dot { animation:tw-pulse 1.1s ease-in-out infinite; }
   @keyframes tw-pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
   button:hover { filter:brightness(1.08); }
@@ -713,7 +720,9 @@ async function loadTenants(){
   tenants.forEach(t=>{
     const li=document.createElement('li');
     if (activeTenant && t.id===activeTenant.id) li.className='active';
-    li.innerHTML = `<span class="name">${esc(t.name)}</span>`
+    const st=t.status||'none', tot=+t.devices_total||0, on=+t.devices_online||0;
+    const dotTitle=tot?`${on}/${tot} Gerät${tot===1?'':'e'} online`:'Keine Geräte';
+    li.innerHTML = `<span class="name"><span class="tdot ${st}" title="${dotTitle}"></span>${esc(t.name)}</span>`
       + (IS_KUNDE?'':`<button class="ghost sm" data-x="1">✎</button>`);
     li.querySelector('.name').onclick=()=>selectTenant(t);
     li.querySelector('[data-x]')?.addEventListener('click', async(e)=>{ e.stopPropagation();

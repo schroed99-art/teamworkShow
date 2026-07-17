@@ -139,6 +139,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .ze-banner.content { background:var(--magenta); color:#fff; }
   .ze-banner.kunde { background:var(--panel2); color:var(--text); border-bottom:1px solid var(--line); }
   .ze-banner .zpres { font-weight:600; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ze-banner .zactive { font-size:12px; font-weight:700; opacity:.95; white-space:nowrap; }
   .ze-banner button { padding:4px 10px; font-size:12px; }
   .ze-banner.content button { background:transparent; border:1px solid rgba(255,255,255,.7); color:#fff; }
   .kunde-ph { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
@@ -902,8 +903,9 @@ function editScreen(d, focusPres){
   const dirRow=rootAxis==='cols';
   const wrap=document.createElement('div'); wrap.className='card'; wrap.id='screenEditor';
   wrap.innerHTML=`
-    <a href="#" id="backScreen" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
-    <h3 style="margin-top:0">Bildschirm — ${esc(d.name||d.pairing_code||'Gerät')}</h3>
+    <a href="#" id="backScreen" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
+    <div style="border-top:1px solid var(--line);margin:0 -14px 14px"></div>
+    <h3 style="margin:0 0 6px">Bildschirm — ${esc(d.name||d.pairing_code||'Gerät')}</h3>
     <div class="row wrap2" style="margin:-4px 0 4px;align-items:center">
       <span class="muted">Läuft auf:</span> ${miniScreenHtml(d, null)} <span class="tag">${esc(anzeigeArt(d))}</span>
     </div>
@@ -946,7 +948,7 @@ function editScreen(d, focusPres){
         <span>Zone ${i+1} · ${zoneTitle}</span>
         ${pres?`<span class="zpres">— ${esc(pres.name)}</span>`:''}
         <span style="flex:1"></span>
-        ${pres&&!dup?'<button class="ghost sm" data-zedit>Bearbeiten</button>':''}
+        ${pres&&!dup?'<button class="ghost sm" data-zedit>Bearbeiten</button><span class="zactive" data-zactive style="display:none">✏️ In Bearbeitung</span>':''}
       </div>
       <div data-zbody>${defaultBody}</div>`;
     if(pid&&!dup) seen[pid]=i;
@@ -958,6 +960,11 @@ function editScreen(d, focusPres){
         zonesBox.querySelectorAll('[data-zbody]').forEach(z=>{
           if(z!==zbody && z.querySelector('#slidesEditor')) z.innerHTML=z.dataset.default||'';
         });
+        // "Bearbeiten"-Button nur bei nicht-offenen Zonen; die offene zeigt "In Bearbeitung".
+        zonesBox.querySelectorAll('[data-zedit]').forEach(b=>b.style.display='');
+        zonesBox.querySelectorAll('[data-zactive]').forEach(s=>s.style.display='none');
+        const bt=box.querySelector('[data-zedit]'); if(bt) bt.style.display='none';
+        const ac=box.querySelector('[data-zactive]'); if(ac) ac.style.display='';
         editPresentation(pres, zbody);
       };
       zbody.dataset.default = isContentZone?'<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>':kundePh;
@@ -1497,7 +1504,8 @@ async function editPresentation(p, mount){
       <div class="ze-banner content"><span>Inhalt / Vorschau</span><span class="zpres">— ${esc(p.name)}</span></div>`;
   const framedClose=mount?'':'</div>';
   card.innerHTML=`
-    <a href="#" id="backPres" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
+    <a href="#" id="backPres" style="display:${mount?'none':'inline-flex'};align-items:center;gap:6px;margin-bottom:12px;color:var(--dim);text-decoration:none;font-size:13px">← Zurück zu Präsentationen</a>
+    ${mount?'':'<div style="border-top:1px solid var(--line);margin:0 -14px 14px"></div>'}
     <h3 style="margin-top:0">Slides — ${esc(p.name)}</h3>
     ${runsOn?`<div class="row wrap2" style="margin:-4px 0 10px;align-items:center"><span class="muted">Läuft auf:</span> ${runsOn}</div>`:''}
     ${framedOpen}

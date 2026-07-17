@@ -917,8 +917,9 @@ function editScreen(d, focusPres){
     const pid=resolve(lf.source);
     const pres=pid?presOf(pid):null;
     const dup=pid&&seen[pid]!==undefined;
-    // Inhalts-Zone (Firma/Teamwork oder eine feste Präsentation) vs. Kundenbereich.
-    const isContentZone = lf.source==='company' || (lf.source!=='customer' && lf.source!=null && lf.source!=='');
+    // Positionsbasiert: die erste Zone ist der Teamwork-/Inhaltsbereich (magenta),
+    // alle weiteren sind Kundenbereiche. (Eine explizite Firmen-Zone bleibt Inhalt.)
+    const isContentZone = i===0 || lf.source==='company';
     const zoneTitle = isContentZone ? 'Inhalt / Vorschau' : 'Kundenbereich';
     // Kundenbereich-Platzhalter: angedeutetes Logo + Hinweis, dass hier der
     // Kundeninhalt steht (ggf. noch nicht erstellt).

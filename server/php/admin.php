@@ -1267,6 +1267,7 @@ function renderDetail(t, devices, presentations){
         </div>
         <button class="eye${active?' on':''}" data-eye title="${eyeTitle}"${hasDevices?'':' disabled'}>${eyeSvg(active)}</button>
         <button class="ghost sm" data-ren title="Umbenennen">✎</button>
+        <button class="ghost sm" data-prev title="Vorschau: wie diese Präsentation abgespielt wird">🔍 Vorschau</button>
         <button class="ghost sm" data-edit>Slides</button>
         <button class="ghost sm" data-del>Löschen</button>
       </div>`;
@@ -1284,6 +1285,7 @@ function renderDetail(t, devices, presentations){
       const name=await promptInline('Präsentation umbenennen', p.name);
       if(name===null||name===''||name===p.name) return;
       await API.call('presentations.php','PUT',{id:p.id,name}); toast('Umbenannt'); selectTenant(t); };
+    row.querySelector('[data-prev]').onclick=()=>pvPresentation(p.id, p.name);
     row.querySelector('[data-edit]').onclick=()=>openSlides(p);
     row.querySelector('[data-del]').onclick=async()=>{ if(await confirmDialog('Präsentation löschen?', p.name)){
       await API.call('presentations.php?id='+p.id,'DELETE'); toast('Gelöscht'); selectTenant(t); } };

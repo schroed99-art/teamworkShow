@@ -933,10 +933,12 @@ function editScreen(d, focusPres){
         <div class="lines"><span style="width:72%"></span><span style="width:56%"></span><span style="width:44%"></span></div>
         <div class="hint">Hier steht der vom Kunden definierte Inhalt — z. B. Kundenname, Standort-Infos, Hinweise${pres?'':'<br>(noch nicht erstellt)'}</div>
       </div>`;
-    const defaultBody = dup ? `<p class="muted" style="margin:4px 0 0">Zeigt dieselbe Präsentation wie Zone ${seen[pid]+1}.</p>`
-      : isContentZone ? (pres?'<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>'
-                             :'<p class="muted" style="margin:4px 0 0">Quelle im Reiter „Anzeige" (Zonen) bzw. „Geräte" (Präsentation) zuweisen.</p>')
-      : kundePh;
+    // Kundenbereich-Zonen zeigen IMMER den großen Platzhalter (auch wenn ihre Quelle
+    // dieselbe wie Zone 1 ist). Inhalts-Zonen: Duplikat-Hinweis / öffnen / Quelle fehlt.
+    const defaultBody = !isContentZone ? kundePh
+      : dup ? `<p class="muted" style="margin:4px 0 0">Zeigt dieselbe Präsentation wie Zone ${seen[pid]+1}.</p>`
+      : (pres?'<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>'
+             :'<p class="muted" style="margin:4px 0 0">Quelle im Reiter „Anzeige" (Zonen) bzw. „Geräte" (Präsentation) zuweisen.</p>');
     const box=document.createElement('div'); box.className='ibox '+(isContentZone?'zone-content':'zone-kunde');
     box.style.cssText=`flex:1 1 ${dirRow?'340px':'auto'};margin-top:0;min-width:0`;
     box.innerHTML=`

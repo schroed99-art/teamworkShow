@@ -131,6 +131,22 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .mpv-leaf.content .mpv-noimg { color:var(--magenta); font-size:16px; }
   .mpv-leaf.kunde { background:rgba(148,163,184,.10); border:1px solid rgba(148,163,184,.22);
     color:var(--dim); font-size:7px; letter-spacing:.03em; }
+  /* Bildschirm-Editor: Zonen-Banner (Inhalt/Vorschau vs. Kundenbereich) + Platzhalter. */
+  .ibox.zone-content { border-style:dashed; border-color:var(--magenta); }
+  .ibox.zone-kunde { border-style:dashed; }
+  .ze-banner { display:flex; align-items:center; gap:8px; font-weight:700; font-size:12px;
+    letter-spacing:.03em; padding:9px 12px; border-radius:11px 11px 0 0; margin:-14px -14px 12px; }
+  .ze-banner.content { background:var(--magenta); color:#fff; }
+  .ze-banner.kunde { background:var(--panel2); color:var(--text); border-bottom:1px solid var(--line); }
+  .ze-banner .zpres { font-weight:600; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ze-banner button { padding:4px 10px; font-size:12px; }
+  .ze-banner.content button { background:transparent; border:1px solid rgba(255,255,255,.7); color:#fff; }
+  .kunde-ph { display:flex; flex-direction:column; align-items:center; gap:12px; padding:18px 10px 22px; color:var(--dim); }
+  .kunde-ph .logo { width:60px; height:60px; border-radius:50%; border:2px dashed var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:11px; }
+  .kunde-ph .lines { width:82%; max-width:300px; display:flex; flex-direction:column; gap:8px; }
+  .kunde-ph .lines span { height:10px; border-radius:5px; background:rgba(148,163,184,.16); }
+  .kunde-ph .hint { font-size:12px; text-align:center; margin-top:2px; }
   /* App-Installation + Koppeln nebeneinander; auf schmalen Screens untereinander. */
   .top-tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start; }
   @media (max-width:900px){ .top-tiles { grid-template-columns:1fr; } }
@@ -900,30 +916,42 @@ function editScreen(d, focusPres){
     const pid=resolve(lf.source);
     const pres=pid?presOf(pid):null;
     const dup=pid&&seen[pid]!==undefined;
-    const box=document.createElement('div'); box.className='ibox';
+    // Inhalts-Zone (Firma/Teamwork oder eine feste Präsentation) vs. Kundenbereich.
+    const isContentZone = lf.source==='company' || (lf.source!=='customer' && lf.source!=null && lf.source!=='');
+    const zoneTitle = isContentZone ? 'Inhalt / Vorschau' : 'Kundenbereich';
+    // Kundenbereich-Platzhalter: angedeutetes Logo + Hinweis, dass hier der
+    // Kundeninhalt steht (ggf. noch nicht erstellt).
+    const kundePh = `<div class="kunde-ph">
+        <div class="logo">Logo</div>
+        <div class="lines"><span style="width:72%"></span><span style="width:56%"></span><span style="width:44%"></span></div>
+        <div class="hint">z. B. Kundenname, Standort-Infos, Hinweise${pres?'':'<br>— Inhalt wird vom Kunden gepflegt / noch nicht erstellt —'}</div>
+      </div>`;
+    const defaultBody = dup ? `<p class="muted" style="margin:4px 0 0">Zeigt dieselbe Präsentation wie Zone ${seen[pid]+1}.</p>`
+      : isContentZone ? (pres?'<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>'
+                             :'<p class="muted" style="margin:4px 0 0">Quelle im Reiter „Anzeige" (Zonen) bzw. „Geräte" (Präsentation) zuweisen.</p>')
+      : kundePh;
+    const box=document.createElement('div'); box.className='ibox '+(isContentZone?'zone-content':'zone-kunde');
     box.style.cssText=`flex:1 1 ${dirRow?'340px':'auto'};margin-top:0;min-width:0`;
-    const roleTag=lf.source==='company'?' <span class="tag">Firma</span>'
-      :lf.source==='customer'?' <span class="tag">Kunde</span>':'';
     box.innerHTML=`
-      <div class="row" style="align-items:center;gap:8px;margin-bottom:6px">
-        <b>Zone ${i+1}</b>${roleTag}
-        <span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pres?esc(pres.name):'— keine Präsentation zugewiesen —'}</span>
-        <span class="spacer" style="flex:1"></span>
+      <div class="ze-banner ${isContentZone?'content':'kunde'}">
+        <span>Zone ${i+1} · ${zoneTitle}</span>
+        ${pres?`<span class="zpres">— ${esc(pres.name)}</span>`:''}
+        <span style="flex:1"></span>
         ${pres&&!dup?'<button class="ghost sm" data-zedit>Bearbeiten</button>':''}
       </div>
-      <div data-zbody>${dup?`<p class="muted" style="margin:4px 0 0">Zeigt dieselbe Präsentation wie Zone ${seen[pid]+1}.</p>`
-        :pres?'<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>'
-        :'<p class="muted" style="margin:4px 0 0">Quelle im Reiter „Anzeige" (Zonen) bzw. „Geräte" (Präsentation) zuweisen.</p>'}</div>`;
+      <div data-zbody>${defaultBody}</div>`;
     if(pid&&!dup) seen[pid]=i;
     if(pres&&!dup){
       const zbody=box.querySelector('[data-zbody]');
       const mountHere=()=>{
-        // Nur ein aktiver Editor: die Zone, die ihn bisher hatte, bekommt den Hinweis zurück.
+        // Nur ein aktiver Editor: die Zone, die ihn bisher hatte, bekommt ihren
+        // Standard-Inhalt (Hinweis bzw. Kundenbereich-Platzhalter) zurück.
         zonesBox.querySelectorAll('[data-zbody]').forEach(z=>{
-          if(z!==zbody && z.querySelector('#slidesEditor')) z.innerHTML='<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>';
+          if(z!==zbody && z.querySelector('#slidesEditor')) z.innerHTML=z.dataset.default||'';
         });
         editPresentation(pres, zbody);
       };
+      zbody.dataset.default = isContentZone?'<p class="muted" style="margin:4px 0 0">Über „Bearbeiten" öffnen.</p>':kundePh;
       box.querySelector('[data-zedit]').onclick=mountHere;
       if(focusPres && String(pid)===String(focusPres.id) && !autoMounted){ autoMounted=true; setTimeout(mountHere,0); }
     }

@@ -212,6 +212,9 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .pv-wx .loc { font-weight:700; font-size:clamp(12px,5cqw,34px); position:relative; }
   .pv-wx .hint { opacity:.8; font-size:clamp(9px,3.4cqw,22px); position:relative; }
   .pv-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:13px; }
+  /* Slide-Fortschrittsbalken je Zone (wie am Gerät): unten, füllt sich über die Dauer. */
+  .pv-prog { position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(255,255,255,.13); z-index:4; pointer-events:none; }
+  .pv-prog > i { display:block; height:100%; width:0; background:var(--magenta); }
   /* Leere Kunden-Zone: Platzhalter wie im Bildschirm-Editor (Kundenbereich). */
   .pv-kunde { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#1e293b; overflow:hidden; }
   .pv-kunde .kunde-ph { min-height:0; padding:5% 8%; gap:10px; }
@@ -588,9 +591,15 @@ function pvPlayZone(zoneEl, slides, wx, emptyKind){
   let i=0;
   const step=()=>{
     const s=slides[i%slides.length];
-    zoneEl.innerHTML=pvSlideHtml(s, wx);
+    const dur=Math.max(1000, (+s.duration_ms)||8000);
+    // Fortschrittsbalken nur für getaktete Slides — Videos laufen bis zum Ende (wie am Gerät).
+    const isVid=(s.kind||'media')==='media' && isVideo(s.name||s.media_name||'');
+    zoneEl.innerHTML=pvSlideHtml(s, wx)+(isVid?'':'<div class="pv-prog"><i></i></div>');
+    const bar=zoneEl.querySelector('.pv-prog > i');
+    if(bar){ bar.style.width='0%'; void bar.offsetWidth; // reflow, dann linear füllen
+      bar.style.transition='width '+dur+'ms linear'; bar.style.width='100%'; }
     i++;
-    pvTimers.push(setTimeout(step, Math.max(1000, (+s.duration_ms)||8000)));
+    pvTimers.push(setTimeout(step, dur));
   };
   step();
 }

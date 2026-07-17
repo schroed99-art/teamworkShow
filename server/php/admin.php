@@ -37,7 +37,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <style>
-  :root { --magenta:#d21a55; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155;
+  :root { --magenta:#ff006e; --bg:#0f172a; --panel:#1e293b; --panel2:#26344a; --line:#334155;
           --text:#f1f5f9; --dim:#94a3b8; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
@@ -117,7 +117,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
     overflow:hidden; display:inline-flex; vertical-align:middle; background:#0b1120; }
   .mzscreen.land { width:50px; height:32px; }
   .mz-leaf { width:100%; height:100%; box-sizing:border-box; border:1px solid rgba(148,163,184,.35); background:rgba(148,163,184,.12); }
-  .mz-leaf.on { background:rgba(210,26,85,.6); border-color:var(--magenta); }
+  .mz-leaf.on { background:rgba(255,0,110,.6); border-color:var(--magenta); }
   /* Kombiniertes Mini-Vorschaubild in der Präsentationsliste: Zonen wie am Gerät,
      Inhalts-Zone zeigt das erste Bild (rot umrandet = Zone 1), andere = Kundenbereich. */
   .mpv { flex:none; width:52px; height:76px; border:1.5px solid var(--dim); border-radius:7px;
@@ -141,12 +141,13 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .ze-banner .zpres { font-weight:600; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ze-banner button { padding:4px 10px; font-size:12px; }
   .ze-banner.content button { background:transparent; border:1px solid rgba(255,255,255,.7); color:#fff; }
-  .kunde-ph { display:flex; flex-direction:column; align-items:center; gap:12px; padding:18px 10px 22px; color:var(--dim); }
-  .kunde-ph .logo { width:60px; height:60px; border-radius:50%; border:2px dashed var(--line);
-    display:flex; align-items:center; justify-content:center; font-size:11px; }
-  .kunde-ph .lines { width:82%; max-width:300px; display:flex; flex-direction:column; gap:8px; }
-  .kunde-ph .lines span { height:10px; border-radius:5px; background:rgba(148,163,184,.16); }
-  .kunde-ph .hint { font-size:12px; text-align:center; margin-top:2px; }
+  .kunde-ph { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    padding:26px 12px; min-height:230px; color:var(--dim); }
+  .kunde-ph .logo { width:76px; height:76px; border-radius:50%; border:2px dashed var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:12px; }
+  .kunde-ph .lines { width:82%; max-width:340px; display:flex; flex-direction:column; gap:9px; }
+  .kunde-ph .lines span { height:11px; border-radius:5px; background:rgba(148,163,184,.16); }
+  .kunde-ph .hint { font-size:12.5px; text-align:center; margin-top:4px; line-height:1.5; }
   /* App-Installation + Koppeln nebeneinander; auf schmalen Screens untereinander. */
   .top-tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start; }
   @media (max-width:900px){ .top-tiles { grid-template-columns:1fr; } }
@@ -222,7 +223,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   /* media pool */
   .drop { margin-top:6px; padding:16px; border:2px dashed var(--line); border-radius:10px;
           display:flex; align-items:center; gap:14px; flex-wrap:wrap; transition:border-color .15s, background .15s; }
-  .drop.over { border-color:var(--magenta); background:rgba(210,26,85,.10); }
+  .drop.over { border-color:var(--magenta); background:rgba(255,0,110,.10); }
   #upStatus { margin-left:auto; color:var(--magenta); font-size:13px; }
   .poolGrid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); margin-top:14px; }
   .pcard { position:relative; background:#0e0e0e; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
@@ -278,7 +279,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .ze-split { display:flex; width:100%; height:100%; position:relative; }
   .ze-child { position:relative; min-width:0; min-height:0; display:flex; }
   .ze-leaf { position:relative; flex:1; margin:3px; border:1px solid var(--magenta); border-radius:8px;
-             background:rgba(210,26,85,.08); display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+             background:rgba(255,0,110,.08); display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
   .ze-leaf .ze-src { font-size:11px; margin:4px 4px 2px; padding:3px 5px; }
   .ze-leaf .ze-btns { display:flex; gap:3px; margin:0 4px 4px; }
   .ze-leaf .ze-btns button { font-size:11px; padding:2px 6px; line-height:1.15; }
@@ -1352,7 +1353,7 @@ function renderDetail(t, devices, presentations){
     // Eigener Kasten zum Koppeln — optisch analog zur "App-Installation"-Kachel,
     // wird oberhalb der Geräteliste platziert (nicht mehr gedrängt darunter).
     pairWrap=document.createElement('div'); pairWrap.className='card';
-    pairWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06);margin-bottom:14px';
+    pairWrap.style.cssText='border:1px solid var(--magenta);background:rgba(255,0,110,.06);margin-bottom:14px';
     const dAddPres=presentations.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
     pairWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">➕ Neues Gerät koppeln</h3>
       <p class="muted" style="margin:0 0 12px">Code aus dem „Gerät koppeln"-Screen des Geräts eingeben — oder leer lassen, dann wird ein neuer Code erzeugt. <b>Anzeigeformat ist Pflicht</b>; Name und Präsentation sind optional.</p>
@@ -1388,7 +1389,7 @@ function renderDetail(t, devices, presentations){
     // "App-Installation" tile: link to the login-gated download page. Installing
     // and pairing a screen is our job, so a customer never needs the APK.
     const aWrap=document.createElement('div'); aWrap.className='card';
-    aWrap.style.cssText='border:1px solid var(--magenta);background:rgba(210,26,85,.06)';
+    aWrap.style.cssText='border:1px solid var(--magenta);background:rgba(255,0,110,.06)';
     aWrap.innerHTML=`<h3 style="display:flex;align-items:center;gap:8px">📲 App-Installation</h3>
       <p class="muted" style="margin:0 0 12px">Neues Gerät einrichten oder die App manuell aktualisieren – öffnet die Download-Seite (nur für angemeldete Nutzer erreichbar).</p>
       <a href="download.php" target="_blank" rel="noopener"
@@ -1543,7 +1544,7 @@ async function editPresentation(p, mount){
         li.style.cssText='flex-direction:column;align-items:stretch;gap:8px';
         li.innerHTML=`<div class="row" style="gap:8px">
             <span class="handle">⠿</span>
-            <span class="mname" style="flex:1;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #d21a55;color:#fda4b8">📰 Nachricht</span>
+            <span class="mname" style="flex:1;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #ff006e;color:#fda4b8">📰 Nachricht</span>
             <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>
             <button class="ghost sm" data-up>↑</button><button class="ghost sm" data-down>↓</button><button class="ghost sm" data-rm>✕</button>
           </div>
@@ -1556,7 +1557,7 @@ async function editPresentation(p, mount){
           el.onmousedown=ev=>ev.stopPropagation(); });
       } else {
         const label = s.kind==='weather'
-          ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #d21a55;color:#fda4b8">🌤 Wetter-Zwischenbild</span>`
+          ? `<span class="mname" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #ff006e;color:#fda4b8">🌤 Wetter-Zwischenbild</span>`
           : `${thumbHtml(s.media_name)}<span class="mname">${esc(s.media_name)}</span>`;
         li.innerHTML=`<span class="handle">⠿</span>${label}
           <input class="dur" type="number" min="250" step="250" value="${s.duration_ms}"> <span class="tag">ms</span>
@@ -1802,7 +1803,7 @@ async function loadTenantUsers(t){
  */
 function showUserNotice(title, name, email, pw){
   const box=document.querySelector('#usrNotice'); if(!box) return;
-  box.style.cssText='display:block;border:1px solid var(--magenta);background:rgba(210,26,85,.08);'
+  box.style.cssText='display:block;border:1px solid var(--magenta);background:rgba(255,0,110,.08);'
     +'border-radius:12px;padding:14px;margin-bottom:14px';
   box.innerHTML=`<div class="row" style="align-items:flex-start;gap:10px">
       <div class="grow">

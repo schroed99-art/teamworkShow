@@ -18,7 +18,7 @@ function tw_brand_css(): string
   .tw-area { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
     border-radius:999px; padding:4px 11px; white-space:nowrap; line-height:1; }
   .tw-area::before { content:"\2022"; font-size:9px; vertical-align:middle; margin-right:6px; }
-  .tw-area-admin { color:#fecdd6; background:rgba(210,26,85,.16); border:1px solid rgba(210,26,85,.55); }
+  .tw-area-admin { color:#fecdd6; background:rgba(255,0,110,.16); border:1px solid rgba(255,0,110,.55); }
   .tw-area-kunde { color:#bae6fd; background:rgba(56,189,248,.14); border:1px solid rgba(56,189,248,.5); }
   .tw-brandby { position:fixed; right:30px; bottom:14px; z-index:2; font-size:12.5px; color:#94a3b8;
     letter-spacing:.02em; pointer-events:none; }

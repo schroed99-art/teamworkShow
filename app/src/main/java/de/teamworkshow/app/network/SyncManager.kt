@@ -34,8 +34,14 @@ class SyncManager(context: Context, private val mediaDir: File) {
     /** Weather-interstitial background lives here, out of the rotating media scan. */
     private val assetDir = File(mediaDir, ".assets")
 
+    /** News-slide backgrounds live here, also out of the rotating media scan. */
+    private val newsDir = File(mediaDir, ".news")
+
     /** Background hinted by the last playlist response (name/hash/size), or null. */
     private var pendingWeatherAsset: RemoteItem? = null
+
+    /** News backgrounds referenced by the last playlist (name -> file), for pre-fetch. */
+    private val pendingNewsAssets = LinkedHashMap<String, RemoteItem>()
 
     data class RemoteItem(
         val name: String,
@@ -194,6 +200,10 @@ class SyncManager(context: Context, private val mediaDir: File) {
                         body = o.optString("b", ""),
                         position = o.optInt("p", Int.MAX_VALUE),
                         durationMs = o.optLong("d", 0L),
+                        bg = o.optString("bg", ""),
+                        font = o.optString("f", ""),
+                        color = o.optString("c", ""),
+                        size = o.optInt("s", 0),
                     )
                 )
             }
@@ -209,6 +219,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
             arr.put(
                 JSONObject().put("t", s.title).put("b", s.body)
                     .put("p", s.position).put("d", s.durationMs)
+                    .put("bg", s.bg).put("f", s.font).put("c", s.color).put("s", s.size)
             )
         }
         prefs.edit().putString(KEY_NEWS, arr.toString()).apply()
@@ -257,6 +268,10 @@ class SyncManager(context: Context, private val mediaDir: File) {
         val body: String,
         val position: Int,
         val durationMs: Long,
+        val bg: String = "",       // news background image (media-pool file name)
+        val font: String = "",
+        val color: String = "",
+        val size: Int = 0,
     )
 
     /**
@@ -300,6 +315,10 @@ class SyncManager(context: Context, private val mediaDir: File) {
                     body = o.optString("body", ""),
                     position = o.optInt("position", Int.MAX_VALUE),
                     durationMs = o.optLong("duration_ms", 0L),
+                    bg = o.optString("bg", ""),
+                    font = o.optString("font", ""),
+                    color = o.optString("color", ""),
+                    size = o.optInt("size", 0),
                 )
             )
         }
@@ -518,6 +537,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
         // Weather-interstitial background: fetched into a hidden asset dir so it never
         // becomes a rotating slide, and pruned when unset/replaced.
         syncWeatherAsset(base)
+        // News-slide backgrounds: same idea, in their own hidden dir.
+        syncNewsAssets(base)
 
         listener?.onFinish(changed)
         AppLog.i(TAG, "sync done: changed=$changed, remote=${remote.size}, downloaded=$done")
@@ -541,6 +562,60 @@ class SyncManager(context: Context, private val mediaDir: File) {
                 AppLog.w(TAG, "Weather background download failed for ${want.name}: ${e.message}")
             }
         }
+    }
+
+    /** Records a news slide's background (name+hash+size) for pre-fetch, if it has one. */
+    private fun rememberNewsBg(o: JSONObject) {
+        val name = o.optString("bg", "")
+        if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) return
+        pendingNewsAssets[name] = RemoteItem(
+            name = name, hash = o.optString("bg_hash", ""), size = o.optLong("bg_size", -1)
+        )
+    }
+
+    /** Walks the resolved zone tree collecting every news slide's background. */
+    private fun collectZoneNewsBg(node: JSONObject?) {
+        if (node == null) return
+        val children = node.optJSONArray("children")
+        if (children != null) {
+            for (i in 0 until children.length()) {
+                collectZoneNewsBg(children.optJSONObject(i)?.optJSONObject("node"))
+            }
+            return
+        }
+        val slides = node.optJSONArray("slides") ?: return
+        for (i in 0 until slides.length()) {
+            val s = slides.optJSONObject(i) ?: continue
+            if (s.optString("kind", "") == "news") rememberNewsBg(s)
+        }
+    }
+
+    /** Downloads news backgrounds into [newsDir] and prunes ones no longer referenced. */
+    private fun syncNewsAssets(base: String) {
+        val want = pendingNewsAssets
+        newsDir.listFiles()?.forEach { f ->
+            if (f.isFile && f.name !in want) f.delete()
+        }
+        if (want.isEmpty()) return
+        if (!newsDir.exists()) newsDir.mkdirs()
+        for ((name, item) in want) {
+            val local = File(newsDir, name)
+            val fresh = local.exists() && sha256(local).equals(item.hash, ignoreCase = true)
+            if (!fresh) {
+                try {
+                    downloadTo(base, name, local)
+                } catch (e: Exception) {
+                    AppLog.w(TAG, "News background download failed for $name: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /** The downloaded news background for [name], or null when unset/not yet on disk. */
+    fun getNewsBackgroundFile(name: String): File? {
+        if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) return null
+        val f = File(newsDir, name)
+        return if (f.isFile) f else null
     }
 
     /** Central help/contact info, edited in the dashboard and delivered with the playlist. */
@@ -612,6 +687,9 @@ class SyncManager(context: Context, private val mediaDir: File) {
             val out = ArrayList<RemoteItem>(arr.length())
             val weather = ArrayList<SlideMeta>()
             val news = ArrayList<NewsSlide>()
+            // Recomputed from this response; a news background is pre-fetched only
+            // while some slide still references it (flat playlist OR a zone).
+            pendingNewsAssets.clear()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val kind = o.optString("kind", "media")
@@ -629,8 +707,13 @@ class SyncManager(context: Context, private val mediaDir: File) {
                             body = o.optString("body", ""),
                             position = o.optInt("position", Int.MAX_VALUE),
                             durationMs = o.optLong("duration_ms", 0L),
+                            bg = o.optString("bg", ""),
+                            font = o.optString("font", ""),
+                            color = o.optString("color", ""),
+                            size = o.optInt("size", 0),
                         )
                     )
+                    rememberNewsBg(o)
                     continue
                 }
                 val name = o.getString("name")
@@ -658,7 +741,11 @@ class SyncManager(context: Context, private val mediaDir: File) {
             // Per-device display format from the `device` block (folder mode → default).
             saveDisplayFormat(root.optJSONObject("device")?.optString("display_format"))
             // Zone split (null = single full-screen stage, i.e. everything before 5.3).
-            saveZones(root.optJSONObject("zones"))
+            val zones = root.optJSONObject("zones")
+            saveZones(zones)
+            // News backgrounds hide inside zone slideshows too — collect those so the
+            // downloader fetches them just like the flat-playlist ones.
+            collectZoneNewsBg(zones)
             pendingWeatherAsset = root.optJSONObject("weather_asset")?.let { a ->
                 val name = a.optString("name", "")
                 if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) {

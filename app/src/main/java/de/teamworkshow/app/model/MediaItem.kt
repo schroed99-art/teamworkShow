@@ -13,6 +13,14 @@ data class NewsSlide(
     val body: String,
     val position: Int,
     val durationMs: Long,
+    /** Optional background image (a media-pool file name); rendered behind the text. */
+    val bg: String = "",
+    /** Font family key, same set as the Laufschrift ("" | serif | monospace | sans-serif-*). */
+    val font: String = "",
+    /** Text colour as #RRGGBB / #AARRGGBB, or "" for the theme default. */
+    val color: String = "",
+    /** Body font size in sp; 0 = auto-size (the title scales proportionally). */
+    val size: Int = 0,
 )
 
 data class MediaItem(

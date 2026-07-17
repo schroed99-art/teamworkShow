@@ -218,7 +218,10 @@ class MainActivity : AppCompatActivity() {
             }
             playlist.newsProvider = {
                 syncManager.getNewsSlides().map {
-                    MediaItem(File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, it.durationMs, it.position, news = it)
+                    // A news background lives in a hidden dir; use it as the item's file so
+                    // Stage can decode it via the shared bitmap loader (else the placeholder).
+                    val bg = syncManager.getNewsBackgroundFile(it.bg)
+                    MediaItem(bg ?: File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, it.durationMs, it.position, news = it)
                 }
             }
             val stage = newStage(root, playlist, mediaDir)
@@ -304,10 +307,11 @@ class MainActivity : AppCompatActivity() {
     private fun zoneSlideToItem(mediaDir: File, s: SyncManager.ZoneSlide): MediaItem = when (s.kind) {
         "weather" ->
             MediaItem(File(mediaDir, WEATHER_PLACEHOLDER), MediaType.WEATHER, s.durationMs, s.position)
-        "news" -> MediaItem(
-            File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, s.durationMs, s.position,
-            news = NewsSlide(s.title, s.body, s.position, s.durationMs)
-        )
+        "news" -> {
+            val news = NewsSlide(s.title, s.body, s.position, s.durationMs, s.bg, s.font, s.color, s.size)
+            val bg = syncManager.getNewsBackgroundFile(s.bg)
+            MediaItem(bg ?: File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, s.durationMs, s.position, news = news)
+        }
         else -> {
             val file = File(mediaDir, s.name)
             val type = if (file.extension.lowercase() == "mp4") MediaType.VIDEO else MediaType.IMAGE

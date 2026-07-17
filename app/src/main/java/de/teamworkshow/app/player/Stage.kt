@@ -3,13 +3,17 @@ package de.teamworkshow.app.player
 import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
+import android.util.TypedValue
 import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.widget.TextViewCompat
 import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -50,6 +54,8 @@ class Stage(
     private val slideProgress: ProgressBar = root.findViewById(R.id.slideProgress)
     private val weatherView: View = root.findViewById(R.id.weatherView)
     private val newsView: View = root.findViewById(R.id.newsView)
+    private val newsBg: ImageView = root.findViewById(R.id.newsBg)
+    private val newsScrim: View = root.findViewById(R.id.newsScrim)
     private val newsTitle: TextView = root.findViewById(R.id.newsTitle)
     private val newsBody: TextView = root.findViewById(R.id.newsBody)
 
@@ -157,6 +163,28 @@ class Stage(
         newsBody.text = news.body
         newsBody.visibility = if (news.body.isBlank()) View.GONE else View.VISIBLE
 
+        // Colour + font + size — the same knobs the Laufschrift offers. Size 0 keeps
+        // the auto-sizing; a fixed size overrides it (title scales 1.5× the body).
+        val titleColor = parseNewsColor(news.color, 0xFFFFFFFF.toInt())
+        val bodyColor = parseNewsColor(news.color, 0xFFCBD5E1.toInt())
+        applyNewsText(newsTitle, titleColor, newsTypeface(news.font, bold = true),
+            if (news.size > 0) news.size * 1.5f else 0f, 14, 44)
+        applyNewsText(newsBody, bodyColor, newsTypeface(news.font, bold = false),
+            if (news.size > 0) news.size.toFloat() else 0f, 11, 26)
+
+        // Optional background: item.file is the downloaded image (or a non-existent
+        // placeholder). Decode it via the shared loader and dim it with the scrim.
+        val bmp = if (news.bg.isNotBlank() && item.file.isFile) bitmapLoader(item.file) else null
+        if (bmp != null) {
+            newsBg.setImageBitmap(bmp)
+            newsBg.visibility = View.VISIBLE
+            newsScrim.visibility = View.VISIBLE
+        } else {
+            newsBg.setImageDrawable(null)
+            newsBg.visibility = View.GONE
+            newsScrim.visibility = View.GONE
+        }
+
         imageViewA.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
         imageViewB.animate().alpha(0f).setDuration(CROSSFADE_MS).start()
         frontImageView = null
@@ -169,6 +197,40 @@ class Stage(
         newsView.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
         emptyView.visibility = View.GONE
     }
+
+    /** Colour, typeface and (optional) fixed size for one news text view. */
+    private fun applyNewsText(tv: TextView, color: Int, tf: Typeface, sizeSp: Float, autoMin: Int, autoMax: Int) {
+        tv.setTextColor(color)
+        tv.typeface = tf
+        if (sizeSp > 0f) {
+            TextViewCompat.setAutoSizeTextTypeWithDefaults(tv, TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE)
+            tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+        } else {
+            TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                tv, autoMin, autoMax, 1, TypedValue.COMPLEX_UNIT_SP
+            )
+        }
+    }
+
+    /** Maps a Laufschrift-style font key to a system typeface. */
+    private fun newsTypeface(font: String, bold: Boolean): Typeface {
+        val family = when (font) {
+            "serif" -> "serif"
+            "monospace" -> "monospace"
+            "sans-serif-condensed" -> "sans-serif-condensed"
+            "sans-serif-light" -> "sans-serif-light"
+            "sans-serif-medium" -> "sans-serif-medium"
+            else -> "sans-serif"
+        }
+        return Typeface.create(family, if (bold) Typeface.BOLD else Typeface.NORMAL)
+    }
+
+    private fun parseNewsColor(hex: String, fallback: Int): Int =
+        try {
+            if (hex.isNotBlank()) Color.parseColor(hex) else fallback
+        } catch (e: IllegalArgumentException) {
+            fallback
+        }
 
     override fun showEmpty() {
         imageViewA.animate().alpha(0f).setDuration(CROSSFADE_MS).start()

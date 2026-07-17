@@ -42,7 +42,7 @@ if ($method === 'GET') {
             tw_json(['error' => 'not_found'], 404);
         }
         tw_require_tenant((int) $p['tenant_id']);
-        $ss = $pdo->prepare('SELECT id, media_name, kind, text_title, text_body, position, duration_ms FROM slides WHERE presentation_id = ? ORDER BY position, id');
+        $ss = $pdo->prepare('SELECT id, media_name, kind, text_title, text_body, text_font, text_color, text_size, position, duration_ms FROM slides WHERE presentation_id = ? ORDER BY position, id');
         $ss->execute([$id]);
         $p['slides'] = $ss->fetchAll();
         tw_json(['presentation' => $p]);
@@ -118,8 +118,8 @@ if ($method === 'PUT') {
         $pdo->beginTransaction();
         $pdo->prepare('DELETE FROM slides WHERE presentation_id = ?')->execute([$id]);
         $ins = $pdo->prepare(
-            'INSERT INTO slides (presentation_id, media_name, kind, text_title, text_body, position, duration_ms)
-             VALUES (?,?,?,?,?,?,?)'
+            'INSERT INTO slides (presentation_id, media_name, kind, text_title, text_body, text_font, text_color, text_size, position, duration_ms)
+             VALUES (?,?,?,?,?,?,?,?,?,?)'
         );
         $pos = 0;
         foreach ($b['slides'] as $sl) {
@@ -130,15 +130,26 @@ if ($method === 'PUT') {
             $mn = trim((string) ($sl['media_name'] ?? ''));
             $title = '';
             $body = null;
+            $font = '';
+            $color = '';
+            $size = 0;
             if ($kind === 'news') {
-                // A news slide carries its own text and no file. An empty message
-                // would show an empty board, so drop it rather than store it.
-                $mn = '';
+                // A news slide carries its own text (title + body) and, optionally,
+                // a background image (stored in media_name) plus font/colour/size.
+                // An empty message would show an empty board, so drop it.
                 $title = tw_cut(trim((string) ($sl['text_title'] ?? '')), 200);
                 $body = tw_cut(trim((string) ($sl['text_body'] ?? '')), 2000);
                 if ($title === '' && $body === '') {
                     continue;
                 }
+                // Background image must be a bare file name (no path traversal).
+                if ($mn !== '' && (strpbrk($mn, "/\\") !== false || strpos($mn, '..') !== false)) {
+                    $mn = '';
+                }
+                $font = tw_cut(trim((string) ($sl['text_font'] ?? '')), 40);
+                $c = strtoupper(trim((string) ($sl['text_color'] ?? '')));
+                $color = preg_match('/^#[0-9A-F]{6}([0-9A-F]{2})?$/', $c) ? $c : '';
+                $size = max(0, min(200, (int) ($sl['text_size'] ?? 0)));
             } elseif ($kind === 'weather') {
                 $mn = ''; // file-less interstitial
             } elseif ($mn === '') {
@@ -149,7 +160,7 @@ if ($method === 'PUT') {
                 $dur = 250;
             }
             $position = array_key_exists('position', $sl) ? (int) $sl['position'] : $pos;
-            $ins->execute([$id, $mn, $kind, $title, $body, $position, $dur]);
+            $ins->execute([$id, $mn, $kind, $title, $body, $font, $color, $size, $position, $dur]);
             $pos++;
         }
         $pdo->commit();

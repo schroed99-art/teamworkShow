@@ -49,7 +49,7 @@ function tw_slides_of(PDO $pdo, string $dir, ?int $presentationId, bool &$hasWea
         return [];
     }
     $ss = $pdo->prepare(
-        'SELECT media_name, kind, text_title, text_body, position, duration_ms FROM slides
+        'SELECT media_name, kind, text_title, text_body, text_font, text_color, text_size, position, duration_ms FROM slides
          WHERE presentation_id = ? ORDER BY position, id'
     );
     $ss->execute([$presentationId]);
@@ -66,16 +66,32 @@ function tw_slides_of(PDO $pdo, string $dir, ?int $presentationId, bool &$hasWea
             ];
             continue;
         }
-        // News: a file-less slide that carries its own message.
+        // News: a file-less slide that carries its own message. It may name a
+        // background image (a media-pool file) plus font/colour/size. The image
+        // travels with hash+size so the device can pre-fetch it into its hidden
+        // news-asset dir without the picture becoming a rotating slide.
         if ($kind === 'news') {
-            $out[] = [
+            $item = [
                 'name'        => '',
                 'kind'        => 'news',
                 'title'       => (string) ($row['text_title'] ?? ''),
                 'body'        => (string) ($row['text_body'] ?? ''),
+                'font'        => (string) ($row['text_font'] ?? ''),
+                'color'       => (string) ($row['text_color'] ?? ''),
+                'size'        => (int) ($row['text_size'] ?? 0),
                 'position'    => (int) $row['position'],
                 'duration_ms' => (int) $row['duration_ms'],
             ];
+            $bg = (string) ($row['media_name'] ?? '');
+            if ($bg !== '') {
+                $bgMeta = tw_media_meta($dir, $bg);
+                if ($bgMeta !== null) {
+                    $item['bg']      = $bg;
+                    $item['bg_hash'] = $bgMeta['hash'];
+                    $item['bg_size'] = $bgMeta['size'];
+                }
+            }
+            $out[] = $item;
             continue;
         }
         $meta = tw_media_meta($dir, $row['media_name']);

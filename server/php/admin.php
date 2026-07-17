@@ -1492,7 +1492,8 @@ function renderDetail(t, devices, presentations){
 async function editPresentation(p, mount){
   const full=(await API.call('presentations.php?id='+p.id)).presentation;
   let slides=(full.slides||[]).map(s=>({media_name:s.media_name,duration_ms:s.duration_ms,kind:s.kind||'media',
-    text_title:s.text_title||'', text_body:s.text_body||''}));
+    text_title:s.text_title||'', text_body:s.text_body||'',
+    text_font:s.text_font||'', text_color:s.text_color||'', text_size:+s.text_size||0}));
   const body=$('#detailBody');
   const card=document.createElement('div'); card.className='card'; card.id='slidesEditor';
   // "Läuft auf": Mini-Bildschirm + Anzeigeart je Gerät — zeigt beim Bestücken der
@@ -1572,6 +1573,13 @@ async function editPresentation(p, mount){
       // A news slide has no file: it is edited in place, right where it sits in the order.
       if (s.kind==='news') {
         li.style.cssText='flex-direction:column;align-items:stretch;gap:8px';
+        const fontOpts=[['','Standard'],['serif','Serif'],['monospace','Monospace'],
+          ['sans-serif-condensed','Schmal'],['sans-serif-light','Leicht'],['sans-serif-medium','Medium']]
+          .map(([v,l])=>`<option value="${v}"${(s.text_font||'')===v?' selected':''}>${l}</option>`).join('');
+        const bgOpts=`<option value="">— kein Hintergrund —</option>`+media
+          .filter(m=>!/\.mp4$/i.test(m)) // Videos taugen nicht als statischer Hintergrund
+          .map(m=>`<option value="${esc(m)}"${(s.media_name||'')===m?' selected':''}>${esc(m)}</option>`).join('');
+        const curCol=(s.text_color||'').match(/^#[0-9A-Fa-f]{6}/)?s.text_color.slice(0,7):'#FFFFFF';
         li.innerHTML=`<div class="row" style="gap:8px">
             <span class="handle">⠿</span>
             <span class="mname" style="flex:1;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;background:#3a1522;border:1px solid #ff006e;color:#fda4b8">📰 Nachricht</span>
@@ -1579,11 +1587,40 @@ async function editPresentation(p, mount){
             <button class="ghost sm" data-up>↑</button><button class="ghost sm" data-down>↓</button><button class="ghost sm" data-rm>✕</button>
           </div>
           <input data-nt placeholder="Überschrift…" value="${esc(s.text_title)}" style="width:100%">
-          <textarea data-nb rows="3" placeholder="Text der Nachricht…" style="width:100%">${esc(s.text_body)}</textarea>`;
-        li.querySelector('[data-nt]').oninput=e=>{ s.text_title=e.target.value; };
-        li.querySelector('[data-nb]').oninput=e=>{ s.text_body=e.target.value; };
+          <textarea data-nb rows="3" placeholder="Text der Nachricht…" style="width:100%">${esc(s.text_body)}</textarea>
+          <div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:2px">
+            <div style="flex:1;min-width:180px"><label class="f">🖼 Hintergrundbild</label>
+              <select data-nbg style="width:100%">${bgOpts}</select></div>
+            <div><label class="f">Schriftart</label><select data-nf style="width:150px">${fontOpts}</select></div>
+            <div><label class="f">Schriftfarbe</label><input type="color" data-ncol style="width:56px;height:34px;padding:2px" value="${curCol}"></div>
+            <div><label class="f">Schriftgröße (sp, 0=auto)</label><input type="number" min="0" max="120" step="1" data-nsz style="width:120px" value="${+s.text_size||0}"></div>
+          </div>
+          <div data-nprev style="margin-top:2px"></div>`;
+        const prev=li.querySelector('[data-nprev]');
+        const drawPrev=()=>{
+          const col=(s.text_color||'').match(/^#[0-9A-Fa-f]{6}/)?s.text_color.slice(0,7):'#f1f5f9';
+          const ff={serif:'Georgia,serif',monospace:'monospace','sans-serif-condensed':"'Arial Narrow',sans-serif",
+            'sans-serif-light':'system-ui','sans-serif-medium':'system-ui'}[s.text_font||'']||'system-ui';
+          const fw=(s.text_font==='sans-serif-medium')?'600':(s.text_font==='sans-serif-light')?'300':'400';
+          const sz=+s.text_size||0; const bsz=sz>0?Math.max(9,Math.min(28,sz*0.6)):15;
+          const bg=(s.media_name||'')?`background:#0f172a url('media.php?name=${encodeURIComponent(s.media_name)}') center/cover;`:'background:#0f172a;';
+          prev.innerHTML=`<div style="position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;${bg}min-height:82px">
+            ${(s.media_name||'')?'<div style="position:absolute;inset:0;background:rgba(15,23,42,.55)"></div>':''}
+            <div style="position:relative;padding:12px 14px;font-family:${ff}">
+              <div style="width:40px;height:3px;background:#ff006e;margin-bottom:8px"></div>
+              ${(s.text_title||'').trim()?`<div style="color:${col};font-weight:700;font-size:${Math.round(bsz*1.5)}px;line-height:1.15;font-family:${ff}">${esc(s.text_title)}</div>`:''}
+              ${(s.text_body||'').trim()?`<div style="color:${col};font-weight:${fw};font-size:${Math.round(bsz)}px;line-height:1.25;margin-top:4px;white-space:pre-wrap;font-family:${ff}">${esc(s.text_body)}</div>`:''}
+            </div></div>`;
+        };
+        drawPrev();
+        li.querySelector('[data-nt]').oninput=e=>{ s.text_title=e.target.value; drawPrev(); };
+        li.querySelector('[data-nb]').oninput=e=>{ s.text_body=e.target.value; drawPrev(); };
+        li.querySelector('[data-nbg]').onchange=e=>{ s.media_name=e.target.value; drawPrev(); };
+        li.querySelector('[data-nf]').onchange=e=>{ s.text_font=e.target.value; drawPrev(); };
+        li.querySelector('[data-ncol]').oninput=e=>{ s.text_color=e.target.value.toUpperCase(); drawPrev(); };
+        li.querySelector('[data-nsz]').oninput=e=>{ s.text_size=Math.max(0,Math.min(120,parseInt(e.target.value)||0)); drawPrev(); };
         // Dragging from inside the text fields would fight with selecting text.
-        li.querySelectorAll('input,textarea').forEach(el=>{ el.draggable=false;
+        li.querySelectorAll('input,textarea,select').forEach(el=>{ el.draggable=false;
           el.onmousedown=ev=>ev.stopPropagation(); });
       } else {
         const label = s.kind==='weather'
@@ -1610,7 +1647,8 @@ async function editPresentation(p, mount){
   card.querySelector('#addSlide').onclick=()=>{ const m=mp.value; if(m){ slides.push({media_name:m,duration_ms:8000,kind:'media'}); render(); } };
   card.querySelector('#addWeather').onclick=()=>{ slides.push({kind:'weather',media_name:'',duration_ms:8000}); render(); };
   card.querySelector('#addNews').onclick=()=>{
-    slides.push({kind:'news',media_name:'',duration_ms:10000,text_title:'',text_body:''}); render(); };
+    slides.push({kind:'news',media_name:'',duration_ms:10000,text_title:'',text_body:'',
+      text_font:'',text_color:'',text_size:0}); render(); };
   // The weather template is one global design shared by every tenant (weather_layout.php
   // is staff-only), so the customer never gets this entry point.
   card.querySelector('#editWxLayout')?.addEventListener('click', openWeatherLayout);

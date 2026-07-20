@@ -287,7 +287,10 @@ class SyncManager(context: Context, private val mediaDir: File) {
      */
     sealed class ZoneNode {
         data class Split(val axis: String, val children: List<ZoneChild>) : ZoneNode()
-        data class Leaf(val slides: List<ZoneSlide>) : ZoneNode()
+        /** [role] tags a split leaf as "company" or "customer" (null = undefined, e.g.
+         *  a custom-tree leaf). The empty view shows customer stammdaten only where
+         *  role != "company". */
+        data class Leaf(val slides: List<ZoneSlide>, val role: String? = null) : ZoneNode()
     }
 
     /** One weighted child of a split; [size] is a relative weight, not a percent. */
@@ -298,6 +301,15 @@ class SyncManager(context: Context, private val mediaDir: File) {
             if (zones == null) remove(KEY_ZONES) else putString(KEY_ZONES, zones.toString())
         }.apply()
     }
+
+    private fun saveZoneMode(mode: String) {
+        val clean = if (mode in setOf("single", "company", "split", "custom")) mode else "single"
+        prefs.edit().putString(KEY_ZONE_MODE, clean).apply()
+    }
+
+    /** The device's zone mode; drives whether a full-screen empty view is a customer
+     *  surface ("single") or a company/Teamwork one ("company"). */
+    fun getZoneMode(): String = prefs.getString(KEY_ZONE_MODE, "single") ?: "single"
 
     private fun parseZoneSlides(arr: org.json.JSONArray?): List<ZoneSlide> {
         if (arr == null) return emptyList()
@@ -364,8 +376,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
                     ZoneNode.Split(
                         axis,
                         listOf(
-                            ZoneChild(pct.toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("company")))),
-                            ZoneChild((100 - pct).toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("customer")))),
+                            ZoneChild(pct.toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("company")), role = "company")),
+                            ZoneChild((100 - pct).toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("customer")), role = "customer")),
                         )
                     )
                 }
@@ -789,6 +801,9 @@ class SyncManager(context: Context, private val mediaDir: File) {
             // Zone split (null = single full-screen stage, i.e. everything before 5.3).
             val zones = root.optJSONObject("zones")
             saveZones(zones)
+            // Zone mode (single|company|split|custom) decides where the empty view may
+            // show customer stammdaten (never on a company/Teamwork-only surface).
+            saveZoneMode(root.optString("zone_mode", "single"))
             // News backgrounds hide inside zone slideshows too — collect those so the
             // downloader fetches them just like the flat-playlist ones.
             collectZoneNewsBg(zones)
@@ -862,6 +877,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val KEY_CUSTOMER = "customer_info"
         private const val KEY_FORMAT = "display_format"
         private const val KEY_ZONES = "zones"
+        private const val KEY_ZONE_MODE = "zone_mode"
         private const val KEY_NEWS = "news_slides"
         private const val DEFAULT_FORMAT = "portrait"
         private val DISPLAY_FORMATS = setOf("portrait", "phone", "landscape", "tablet")

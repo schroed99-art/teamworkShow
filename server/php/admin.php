@@ -1653,14 +1653,22 @@ function renderDetail(t, devices, presentations){
           <textarea id="custAddress" rows="3" style="width:100%;resize:vertical" maxlength="500" placeholder="Straße Nr.\nPLZ Ort">${esc(t.contact_address||'')}</textarea></div>
         <div><button id="custSave" class="ghost sm">Kundendaten speichern</button></div>
       </div>`;
-    tCust.querySelector('#custSave').onclick=async()=>{
+    const custSave=tCust.querySelector('#custSave');
+    custSave.onclick=async()=>{
       const company=tCust.querySelector('#custCompany').value.trim();
       const address=tCust.querySelector('#custAddress').value.trim();
+      const orig=custSave.textContent; custSave.disabled=true; custSave.textContent='Speichern…';
       try{
         await API.call('tenants.php','PUT',{id:t.id,name:t.name,contact_company:company,contact_address:address});
         t.contact_company=company; t.contact_address=address;
+        const g=tenants.find(x=>x.id===t.id); if(g){ g.contact_company=company; g.contact_address=address; }
         toast('Kundendaten gespeichert');
-      }catch(e){ toast('Speichern fehlgeschlagen'); }
+        custSave.textContent='✓ Gespeichert';
+        setTimeout(()=>{ custSave.textContent=orig; custSave.disabled=false; },1500);
+      }catch(e){
+        toast('Speichern fehlgeschlagen: '+(e.message||e));
+        custSave.textContent=orig; custSave.disabled=false;
+      }
     };
     sWrap.appendChild(tCust);
 

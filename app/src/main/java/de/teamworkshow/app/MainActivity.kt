@@ -224,7 +224,10 @@ class MainActivity : AppCompatActivity() {
                     MediaItem(bg ?: File(mediaDir, NEWS_PLACEHOLDER), MediaType.NEWS, it.durationMs, it.position, news = it)
                 }
             }
-            val stage = newStage(root, playlist, mediaDir)
+            // Single = the device's own (customer) presentation → show customer info.
+            // "company" (Eine Fläche Teamwork) also runs full-screen → never show it.
+            val stage = newStage(root, playlist, mediaDir,
+                showsCustomerInfo = syncManager.getZoneMode() != "company")
             stages.add(stage)
             stage.start()
             return
@@ -258,7 +261,9 @@ class MainActivity : AppCompatActivity() {
             is SyncManager.ZoneNode.Leaf -> {
                 val root = inflateZoneStage(parent, weight, parentVertical)
                 val index = leafIndex[0]++
-                stages.add(newStage(root, leafPlaylist(mediaDir, index), mediaDir))
+                // Customer stammdaten only on the customer leaf, never on the company one.
+                stages.add(newStage(root, leafPlaylist(mediaDir, index), mediaDir,
+                    showsCustomerInfo = node.role != "company"))
             }
             is SyncManager.ZoneNode.Split -> {
                 val vertical = node.axis == "rows"
@@ -319,7 +324,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun newStage(root: View, playlist: PlaylistManager, mediaDir: File) = Stage(
+    private fun newStage(
+        root: View,
+        playlist: PlaylistManager,
+        mediaDir: File,
+        showsCustomerInfo: Boolean = true,
+    ) = Stage(
         context = this,
         root = root,
         playlist = playlist,
@@ -331,7 +341,11 @@ class MainActivity : AppCompatActivity() {
             }
         },
         weatherPainter = { stage -> populateWeather(stage, latestWeather) },
-        customerInfoProvider = { syncManager.getCustomerInfo() },
+        // Kundenstammdaten nur auf der Kundenfläche zeigen, nie auf der Firma/Teamwork-Zone.
+        customerInfoProvider = {
+            if (showsCustomerInfo) syncManager.getCustomerInfo()
+            else SyncManager.CustomerInfo.EMPTY
+        },
     )
 
     private fun forEachStage(action: (Stage) -> Unit) {

@@ -343,6 +343,7 @@ try {
             'anzeige_info'   => $dev['anzeige_info'],
             'display_format' => $dev['display_format'] ?: 'portrait',
         ],
+        'zone_mode' => $zoneMode,   // single|company|split|custom — the app decides where customer info may show
         'zones' => $zones,   // null in single mode — the app then plays `items` full-screen
         'tenant' => [
             'id'      => (int) $dev['tenant_id'],

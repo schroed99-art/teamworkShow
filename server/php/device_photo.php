@@ -58,6 +58,7 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    tw_require_staff(); // Fotos pflegt Teamwork; der Kunde darf sie nur ansehen (GET).
     if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
         tw_json(['ok' => false, 'error' => 'no file'], 400);
     }
@@ -84,6 +85,7 @@ if ($method === 'POST') {
 }
 
 if ($method === 'DELETE') {
+    tw_require_staff(); // nur Teamwork darf Fotos entfernen
     if ($current !== '' && is_file($dir . '/' . $current)) {
         @unlink($dir . '/' . $current);
     }

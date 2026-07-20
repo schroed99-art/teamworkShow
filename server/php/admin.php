@@ -1415,9 +1415,9 @@ function renderDetail(t, devices, presentations){
           <b>📷 Anzeige-Foto</b>
           <span class="muted">Wie der Bildschirm vor Ort aussieht</span>
           <span class="spacer" style="flex:1"></span>
-          <input type="file" accept="image/*" capture="environment" data-photoinput hidden>
+          ${IS_KUNDE?'':`<input type="file" accept="image/*" capture="environment" data-photoinput hidden>
           <button class="ghost sm" data-photoadd>${d.photo?'📷 Ersetzen':'📷 Foto aufnehmen / hochladen'}</button>
-          ${d.photo?'<button class="ghost sm" data-photodel>Entfernen</button>':''}
+          ${d.photo?'<button class="ghost sm" data-photodel>Entfernen</button>':''}`}
         </div>
         <div data-photoview style="margin-top:8px">${d.photo
           ? `<img src="device_photo.php?id=${d.id}&v=${Date.now()}" alt="Anzeige-Foto" title="Zum Vergrößern klicken" data-photolb style="max-width:100%;max-height:280px;border-radius:8px;border:1px solid var(--line);cursor:pointer;display:block">`

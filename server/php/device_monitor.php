@@ -53,23 +53,28 @@ function tw_log(string $logFile, string $msg): void
  */
 function tw_alarm_recipients(): array
 {
-    $configured = tw_mail_config()['alarm_to'];
-    $list = $configured !== ''
-        ? preg_split('/[,;]+/', $configured)
-        : [];
-    if (!$list) {
-        try {
-            $rows = tw_db()->query("SELECT email FROM users WHERE role = 'admin' AND active = 1")->fetchAll();
-            $list = array_map(static fn($r) => (string) $r['email'], $rows);
-        } catch (Throwable $e) {
-            $list = [];
-        }
-    }
     $clean = [];
-    foreach ($list as $e) {
+    // 1) Explicitly configured ALARM_TO (comma/semicolon list). A malformed value
+    //    (e.g. a stray comment) simply yields no valid addresses here and we fall
+    //    through to the admins below — never zero recipients by accident.
+    foreach (preg_split('/[,;]+/', tw_mail_config()['alarm_to']) as $e) {
         $e = trim((string) $e);
         if (filter_var($e, FILTER_VALIDATE_EMAIL)) {
             $clean[strtolower($e)] = $e;
+        }
+    }
+    // 2) Nothing valid configured -> every active admin's login e-mail.
+    if (!$clean) {
+        try {
+            $rows = tw_db()->query("SELECT email FROM users WHERE role = 'admin' AND active = 1")->fetchAll();
+            foreach ($rows as $r) {
+                $e = trim((string) $r['email']);
+                if (filter_var($e, FILTER_VALIDATE_EMAIL)) {
+                    $clean[strtolower($e)] = $e;
+                }
+            }
+        } catch (Throwable $e) {
+            // column/table missing before migration -> no recipients, caller logs it
         }
     }
     return array_values($clean);

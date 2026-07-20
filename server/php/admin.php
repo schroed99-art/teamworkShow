@@ -583,11 +583,21 @@ function pvKundePh(){
     `<div class="hint">Hier steht der vom Kunden definierte Inhalt — z. B. Kundenname, Standort-Infos, Hinweise</div>`+
     `</div></div>`;
 }
+// Platzhalter für die Teamwork-/Firmen-Zone in der Kunden-Vorschau: nur der Name
+// TeamworkShow + Hinweis, dass dieser Inhalt in der Kunden-Vorschau nicht gezeigt wird.
+function pvTeamworkPh(){
+  return `<div class="pv-kunde"><div class="kunde-ph">`+
+    `<div class="kunde-title" style="font-size:20px">Teamwork<span style="color:var(--magenta)">Show</span></div>`+
+    `<div class="hint">Teamwork-Bereich — der Inhalt wird in dieser Vorschau nicht angezeigt.</div>`+
+    `</div></div>`;
+}
 // Läuft die Slides einer Zone durch; nächster Wechsel nach duration_ms.
 // emptyKind='kunde' -> leere Zone zeigt den Kundenbereich-Platzhalter statt "Keine Slides".
 function pvPlayZone(zoneEl, slides, wx, emptyKind){
   if (!slides || !slides.length){
-    zoneEl.innerHTML = emptyKind==='kunde' ? pvKundePh() : '<div class="pv-empty">Keine Slides</div>';
+    zoneEl.innerHTML = emptyKind==='kunde' ? pvKundePh()
+      : emptyKind==='teamwork' ? pvTeamworkPh()
+      : '<div class="pv-empty">Keine Slides</div>';
     return;
   }
   let i=0;
@@ -650,7 +660,9 @@ function pvOpen(cfg, caption){
     // company_first=false -> Kunde zuerst (oben/links), Firma danach.
     if(z.company_first===false) stage.append(cust, sep, comp);
     else stage.append(comp, sep, cust);
-    pvPlayZone(comp, z.company, cfg.wx);
+    // companyKind (z. B. 'teamwork') zeigt in der Firmen-Zone einen Platzhalter statt
+    // echter Slides — für die Kunden-Vorschau, die den Teamwork-Inhalt nicht zeigt.
+    pvPlayZone(comp, z.company, cfg.wx, z.companyKind);
     pvPlayZone(cust, z.customer, cfg.wx, 'kunde');   // Kundenzone
   } else {
     const one=zone(); one.style.flex='1'; stage.appendChild(one);
@@ -684,7 +696,11 @@ async function pvDevice(code, label){
     const tree = custom ? pl.zones.tree : null;
     const zn = (pl.zones && !custom) ? {axis:pl.zones.axis, split:pl.zones.split,
                            company_first:pl.zones.company_first!==false,
-                           company:pl.zones.company||[], customer:pl.zones.customer||[]} : null;
+                           // Der Kunde sieht in seiner Vorschau nur seine Zone; die
+                           // Teamwork-Zone wird zum Platzhalter (Inhalt nicht anzeigen).
+                           company:IS_KUNDE?[]:(pl.zones.company||[]),
+                           companyKind:IS_KUNDE?'teamwork':undefined,
+                           customer:pl.zones.customer||[]} : null;
     const fmt = (pl.device&&pl.device.display_format)||'portrait';
     pvOpen({
       format: fmt, tree, zones: zn, items: pl.items||[],
@@ -719,6 +735,20 @@ async function pvPresentation(id, name){
                  color:w.notices_color, bg:w.notices_bg,
                  font:w.notices_font, size:+w.notices_size };
       }catch(e){}
+    }
+    // Nicht auf einem Zonen-Gerät zugewiesen: hat der Mandant einen geteilten
+    // Bildschirm und ist es eine Kunden-Präsentation, zeige die Aufteilung —
+    // Kunden-Inhalt in der Kunden-Zone, Teamwork-Zone als Platzhalter (deren
+    // Inhalt gehört nicht in die Kunden-Vorschau).
+    const splitDev=currentDevices.find(d=>(d.zone_mode||'single')==='split');
+    if(splitDev && !(+full.is_company)){
+      const zones={ axis:(splitDev.zone_axis||'rows'),
+                    split:Math.max(10,Math.min(90,+splitDev.zone_split||70)),
+                    company_first:(splitDev.zone_company_first==null?true:(+splitDev.zone_company_first!==0)),
+                    company:[], companyKind:'teamwork', customer:items };
+      pvOpen({ format:(splitDev.display_format||'portrait'), zones, items:[], wx:{loc:'',asset:''}, ticker },
+             'Vorschau Kundenbereich: '+(name||'')+' · Teamwork-Zone wird hier nicht gezeigt');
+      return;
     }
     pvOpen({ format:'portrait', zones:null, items, wx:{loc:'',asset:''}, ticker },
            'Präsentation: '+(name||'')+' · Einzelfläche (gespeicherter Stand)');

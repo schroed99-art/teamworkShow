@@ -796,7 +796,9 @@ async function selectTenant(t){
   renderDetail(t, devs.devices||[], pres.presentations||[]);
 }
 
-<?php if (!$isKunde): ?>
+// Diese Render-Helfer werden AUCH im Kundenpfad gebraucht (Präsentationsliste,
+// Slides, Vorschau) — sie dürfen daher NICHT staff-only sein. Reine Funktions-
+// definitionen; die Rechte liegen im Backend, die UI gated Aufrufe per IS_KUNDE.
 /**
  * Source <option>s shared by the legacy company-zone select and every leaf of the
  * free-form editor: the customer's own presentation plus every presentation in the
@@ -1282,7 +1284,6 @@ function initZoneEditor(card, d){
              zone_company_first:+g('zone_company_first').value?1:0,
              company_presentation_id:g('company_presentation_id').value||null }; };
 }
-<?php endif; ?>
 
 function renderDetail(t, devices, presentations){
   const body=$('#detailBody');

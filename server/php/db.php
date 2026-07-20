@@ -17,11 +17,15 @@ function tw_config(): array
     }
     // 2) env file (All-Inkl & co.), kept OUTSIDE the web root. TW_CONFIG works for
     //    both web (.user.ini) and CLI (cron/import); then a private dir above the
-    //    docroot; then a repo-level config/ (only meaningful for non-docroot layouts).
+    //    docroot; then the same private dir derived from THIS file's location so a
+    //    bare CLI cron (no TW_CONFIG, no DOCUMENT_ROOT) still finds it — the PHP
+    //    files are deployed flat into the docroot, so dirname(__DIR__) is the level
+    //    above it; finally a repo-level config/ (only meaningful for non-docroot layouts).
     $docroot = $_SERVER['DOCUMENT_ROOT'] ?? '';
     $candidates = array_filter([
         getenv('TW_CONFIG') ?: null,
         $docroot ? dirname($docroot) . '/teamworkshow-private/app.env' : null,
+        dirname(__DIR__) . '/teamworkshow-private/app.env',
         dirname(__DIR__) . '/config/app.env',
     ]);
     foreach ($candidates as $path) {

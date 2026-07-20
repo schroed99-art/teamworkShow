@@ -1399,8 +1399,26 @@ function renderDetail(t, devices, presentations){
       toast('Beschreibung gespeichert'); selectTenant(t);
     };
     row.querySelector('[data-eye]').onclick=async()=>{
-      await API.call('presentations.php','PUT',{id:p.id,active:!active});
-      toast(!active?'Präsentation aktiviert':'Präsentation deaktiviert'); selectTenant(t); };
+      const activating=!active;
+      await API.call('presentations.php','PUT',{id:p.id,active:activating});
+      if(IS_KUNDE){
+        // Kundensicht: Aktivieren = auf dem eigenen Bildschirm anzeigen (der
+        // Kunden-Zone zuweisen); Deaktivieren der gerade gezeigten Präsentation
+        // schaltet die Zone zurück auf Standardanzeige. So spiegelt „Anzeige"
+        // immer die aktive Präsentation.
+        for(const d of (currentDevices||[])){
+          if((d.zone_mode||'single')==='company') continue; // Gerät ohne Kunden-Zone
+          if(activating){
+            await API.call('devices.php','PUT',{id:d.id,presentation_id:p.id});
+          } else if(String(d.presentation_id)===String(p.id)){
+            await API.call('devices.php','PUT',{id:d.id,presentation_id:null});
+          }
+        }
+        toast(activating?'Aktiviert – wird auf Ihrem Bildschirm angezeigt':'Deaktiviert – Standardanzeige');
+      } else {
+        toast(activating?'Präsentation aktiviert':'Präsentation deaktiviert');
+      }
+      selectTenant(t); };
     row.querySelector('[data-side]')?.addEventListener('click', async()=>{
       const toCompany=!(+p.is_company);
       await API.call('presentations.php','PUT',{id:p.id,is_company:toCompany?1:0});

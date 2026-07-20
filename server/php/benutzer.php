@@ -5,6 +5,7 @@
  * enforced server-side; the UI only hides/disables what the actor may not do.
  */
 require __DIR__ . '/auth.php';
+require_once __DIR__ . '/mailer.php';
 $role = tw_role();
 if ($role === null) {
     header('Location: login.php');
@@ -138,6 +139,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
 
 <script>
 const ACTOR_ROLE = <?= json_encode($role) ?>;
+const MAIL_ON = <?= tw_mail_enabled() ? 'true' : 'false' ?>;
 const $ = s => document.querySelector(s);
 const esc = s => (s??'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ROLE_LABEL = { admin:'Administrator', koordinator:'Koordinator', betrachter:'Betrachter', kunde:'Kunde' };
@@ -156,6 +158,14 @@ const API = {
   }
 };
 function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+/** Toast text reflecting whether the optional credential mail actually went out. */
+function mailResultToast(resp, base){
+  if(resp && resp.mail){
+    return resp.mail.ok ? '📧 '+base+' · E-Mail gesendet'
+                        : '⚠ '+base+' · E-Mail NICHT gesendet – Passwort manuell weitergeben';
+  }
+  return base;
+}
 function genPw(n=10){ const a='ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; const arr=new Uint32Array(n); crypto.getRandomValues(arr);
   let s=''; for(let i=0;i<n;i++) s+=a[arr[i]%a.length]; return s; }
 function canManage(u){ return ACTOR_ROLE==='admin' || u.role!=='admin'; }
@@ -264,6 +274,7 @@ function openCreate(){
     <label class="f">Notiz</label>
     <textarea id="f_note" rows="2" placeholder="Interne Notizen…"></textarea>
     <label class="f"><input type="checkbox" id="f_active" checked style="width:auto"> Aktiv</label>
+    ${MAIL_ON?`<label class="f"><input type="checkbox" id="f_mail" checked style="width:auto"> Zugangsdaten zusätzlich per E-Mail an den Benutzer senden</label>`:''}
     <div class="foot"><button class="ghost" onclick="closeModal()">Abbrechen</button><button id="f_save">Anlegen</button></div>`);
   $('#f_pw').value=genPw();
   $('#f_gen').onclick=()=>$('#f_pw').value=genPw();
@@ -272,8 +283,9 @@ function openCreate(){
 async function saveCreate(){
   const body={ salutation:$('#f_sal').value, first_name:$('#f_fn').value.trim(), last_name:$('#f_ln').value.trim(),
     initials:$('#f_ini').value.trim(), email:$('#f_email').value.trim(), role:$('#f_role').value,
-    temp_password:$('#f_pw').value, note:$('#f_note').value, active:$('#f_active').checked?1:0 };
-  try{ await API.call('users.php','POST',body); toast('Benutzer angelegt'); closeModal(); load(); }
+    temp_password:$('#f_pw').value, note:$('#f_note').value, active:$('#f_active').checked?1:0,
+    send_mail: !!($('#f_mail') && $('#f_mail').checked) };
+  try{ const resp=await API.call('users.php','POST',body); toast(mailResultToast(resp,'Benutzer angelegt')); closeModal(); load(); }
   catch(e){ toast(errMsg(e)); }
 }
 
@@ -309,12 +321,13 @@ function openReset(u){
       <div class="genrow"><input id="f_pw"><button type="button" class="ghost" id="f_gen">Generieren</button></div>
       <div class="hint">Beim ersten Login zwingend geändert. Notieren/weitergeben.</div>
     </div>
+    ${MAIL_ON?`<label class="f"><input type="checkbox" id="f_mail" checked style="width:auto"> Neues Passwort per E-Mail an den Benutzer senden</label>`:''}
     <div class="foot"><button class="ghost" onclick="closeModal()">Abbrechen</button><button id="f_save">Zurücksetzen</button></div>`);
   $('#f_pw').value=genPw();
   $('#f_gen').onclick=()=>$('#f_pw').value=genPw();
   $('#f_save').onclick=async()=>{
-    try{ await API.call('users.php','PUT',{id:u.id,action:'reset_password',temp_password:$('#f_pw').value});
-      toast('Passwort zurückgesetzt'); closeModal(); }
+    try{ const resp=await API.call('users.php','PUT',{id:u.id,action:'reset_password',temp_password:$('#f_pw').value,send_mail:!!($('#f_mail')&&$('#f_mail').checked)});
+      toast(mailResultToast(resp,'Passwort zurückgesetzt')); closeModal(); }
     catch(e){ toast(errMsg(e)); }
   };
 }

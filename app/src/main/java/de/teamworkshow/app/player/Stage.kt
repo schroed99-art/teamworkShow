@@ -46,6 +46,9 @@ class Stage(
     private val preloader: (File, (Bitmap) -> Unit) -> Unit,
     /** Fills this stage's weather layer from the global config + latest forecast. */
     private val weatherPainter: (Stage) -> Unit,
+    /** Kundenstammdaten des Mandanten (Firma + Anschrift) für die Leer-Ansicht. */
+    private val customerInfoProvider: () -> de.teamworkshow.app.network.SyncManager.CustomerInfo =
+        { de.teamworkshow.app.network.SyncManager.CustomerInfo.EMPTY },
 ) : PlayerCallback {
 
     private val imageViewA: ImageView = root.findViewById(R.id.imageViewA)
@@ -250,7 +253,35 @@ class Stage(
             .withEndAction { exoPlayer.stop() }.start()
         hideOverlays()
         frontImageView = null
+        applyCustomerInfo()
         emptyView.visibility = View.VISIBLE
+    }
+
+    /**
+     * Zeigt die Kundenstammdaten (Firma + Anschrift) auf der Leer-Ansicht, falls im
+     * Dashboard gepflegt: „<Firma> / <Anschrift> / hat noch keine Präsentation
+     * hinterlegt." Ohne Daten bleibt die generische Ansicht (Standard-Hinweis).
+     */
+    private fun applyCustomerInfo() {
+        val ci = customerInfoProvider()
+        val company = root.findViewById<TextView>(R.id.emptyCompany)
+        val address = root.findViewById<TextView>(R.id.emptyAddress)
+        val hint = root.findViewById<TextView>(R.id.emptyHint)
+        if (ci.company.isNotBlank()) {
+            company?.text = ci.company
+            company?.visibility = View.VISIBLE
+            if (ci.address.isNotBlank()) {
+                address?.text = ci.address
+                address?.visibility = View.VISIBLE
+            } else {
+                address?.visibility = View.GONE
+            }
+            hint?.setText(R.string.empty_hint_customer)
+        } else {
+            company?.visibility = View.GONE
+            address?.visibility = View.GONE
+            hint?.setText(R.string.empty_hint)
+        }
     }
 
     override fun onSlideStarted(durationMs: Long, next: MediaItem?) {

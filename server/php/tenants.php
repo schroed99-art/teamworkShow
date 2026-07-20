@@ -15,7 +15,7 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
     [$scope, $args] = tw_tenant_filter('id');
-    $st = $pdo->prepare("SELECT id, name, created_at FROM tenants WHERE 1=1 $scope ORDER BY id");
+    $st = $pdo->prepare("SELECT id, name, contact_company, contact_address, created_at FROM tenants WHERE 1=1 $scope ORDER BY id");
     $st->execute($args);
     $tenants = $st->fetchAll();
 
@@ -56,8 +56,13 @@ if ($method === 'PUT') {
     if ($id <= 0 || $name === '') {
         tw_json(['error' => 'id_and_name_required'], 422);
     }
-    $pdo->prepare('UPDATE tenants SET name = ? WHERE id = ?')->execute([$name, $id]);
-    tw_json(['id' => $id, 'name' => $name]);
+    // Kundenstammdaten (Firmenname + Anschrift) sind optional — sie werden auf der
+    // Leer-Ansicht des Geräts angezeigt, wenn (noch) keine Präsentation läuft.
+    $company = mb_substr(trim((string) ($b['contact_company'] ?? '')), 0, 200);
+    $address = mb_substr(trim((string) ($b['contact_address'] ?? '')), 0, 500);
+    $pdo->prepare('UPDATE tenants SET name = ?, contact_company = ?, contact_address = ? WHERE id = ?')
+        ->execute([$name, $company, $address, $id]);
+    tw_json(['id' => $id, 'name' => $name, 'contact_company' => $company, 'contact_address' => $address]);
 }
 
 if ($method === 'DELETE') {

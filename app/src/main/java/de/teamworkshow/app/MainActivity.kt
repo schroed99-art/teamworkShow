@@ -331,6 +331,7 @@ class MainActivity : AppCompatActivity() {
             }
         },
         weatherPainter = { stage -> populateWeather(stage, latestWeather) },
+        customerInfoProvider = { syncManager.getCustomerInfo() },
     )
 
     private fun forEachStage(action: (Stage) -> Unit) {

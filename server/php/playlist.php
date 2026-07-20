@@ -208,7 +208,8 @@ try {
     $stmt = $pdo->prepare(
         'SELECT d.id, d.pairing_code, d.name, d.standort, d.anzeige_info, d.display_format, d.presentation_id,
                 d.zone_mode, d.zone_axis, d.zone_split, d.company_presentation_id, d.zone_layout,
-                t.id AS tenant_id, t.name AS tenant_name
+                t.id AS tenant_id, t.name AS tenant_name,
+                t.contact_company AS tenant_company, t.contact_address AS tenant_address
          FROM devices d JOIN tenants t ON t.id = d.tenant_id
          WHERE d.pairing_code = ?'
     );
@@ -344,8 +345,10 @@ try {
         ],
         'zones' => $zones,   // null in single mode — the app then plays `items` full-screen
         'tenant' => [
-            'id'   => (int) $dev['tenant_id'],
-            'name' => $dev['tenant_name'],
+            'id'      => (int) $dev['tenant_id'],
+            'name'    => $dev['tenant_name'],
+            'company' => (string) ($dev['tenant_company'] ?? ''),
+            'address' => (string) ($dev['tenant_address'] ?? ''),
         ],
         'widgets' => [
             'weather_enabled'  => (bool) ($w['weather_enabled'] ?? false),

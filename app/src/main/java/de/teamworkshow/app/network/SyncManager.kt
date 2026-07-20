@@ -676,6 +676,35 @@ class SyncManager(context: Context, private val mediaDir: File) {
         }.apply()
     }
 
+    /** Kundenstammdaten des Mandanten — auf der Leer-Ansicht gezeigt, wenn keine Präsentation läuft. */
+    data class CustomerInfo(val company: String, val address: String) {
+        fun isEmpty(): Boolean = company.isBlank() && address.isBlank()
+
+        companion object { val EMPTY = CustomerInfo("", "") }
+    }
+
+    fun getCustomerInfo(): CustomerInfo {
+        val raw = prefs.getString(KEY_CUSTOMER, null) ?: return CustomerInfo.EMPTY
+        return try {
+            val o = JSONObject(raw)
+            CustomerInfo(company = o.optString("company"), address = o.optString("address"))
+        } catch (e: Exception) {
+            CustomerInfo.EMPTY
+        }
+    }
+
+    private fun saveCustomerInfo(tenant: JSONObject?) {
+        val company = tenant?.optString("company").orEmpty()
+        val address = tenant?.optString("address").orEmpty()
+        prefs.edit().apply {
+            if (company.isBlank() && address.isBlank()) {
+                remove(KEY_CUSTOMER)
+            } else {
+                putString(KEY_CUSTOMER, JSONObject().put("company", company).put("address", address).toString())
+            }
+        }.apply()
+    }
+
     private fun fetchPlaylist(base: String): List<RemoteItem> {
         val code = getPairingCode()
         val url = if (code != null) {
@@ -753,6 +782,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
             saveWeatherLayout(root.optJSONObject("weather_layout"))
             // Central help/contact info (device mode only); folder mode clears it.
             saveHelpInfo(root.optJSONObject("help"))
+            // Kundenstammdaten des Mandanten (device mode only) für die Leer-Ansicht.
+            saveCustomerInfo(root.optJSONObject("tenant"))
             // Per-device display format from the `device` block (folder mode → default).
             saveDisplayFormat(root.optJSONObject("device")?.optString("display_format"))
             // Zone split (null = single full-screen stage, i.e. everything before 5.3).
@@ -828,6 +859,7 @@ class SyncManager(context: Context, private val mediaDir: File) {
         private const val KEY_WEATHER_LAYOUT = "weather_layout"
         private const val KEY_WIDGETS = "widget_settings"
         private const val KEY_HELP = "help_info"
+        private const val KEY_CUSTOMER = "customer_info"
         private const val KEY_FORMAT = "display_format"
         private const val KEY_ZONES = "zones"
         private const val KEY_NEWS = "news_slides"

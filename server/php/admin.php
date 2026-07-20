@@ -1637,6 +1637,33 @@ function renderDetail(t, devices, presentations){
     sWrap.innerHTML='<h3>Einstellungen</h3>'
       +'<p class="muted" style="margin:-4px 0 6px">Mandanten-spezifische Einstellungen. Globale Hilfe- &amp; Kontaktdaten unter <a href="einstellungen.php" style="color:var(--magenta)">Einstellungen</a>.</p>';
 
+    // Kundenstammdaten: Firmenname + Anschrift. Werden auf der Leer-Ansicht des
+    // Geräts gezeigt, wenn (noch) keine Präsentation läuft ("… hat noch keine
+    // Präsentation hinterlegt").
+    const tCust=document.createElement('div'); tCust.className='ibox';
+    tCust.style.marginBottom='12px';
+    tCust.innerHTML=`<div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
+        <b>🏢 Kundendaten</b>
+        <span class="muted">Firmenname &amp; Anschrift des Kunden — erscheinen auf dem leeren Bildschirm, solange keine Präsentation hinterlegt ist.</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:520px">
+        <div><label class="f">Firmenname</label>
+          <input id="custCompany" style="width:100%" maxlength="200" placeholder="z. B. Muster GmbH" value="${esc(t.contact_company||'')}"></div>
+        <div><label class="f">Anschrift</label>
+          <textarea id="custAddress" rows="3" style="width:100%;resize:vertical" maxlength="500" placeholder="Straße Nr.\nPLZ Ort">${esc(t.contact_address||'')}</textarea></div>
+        <div><button id="custSave" class="ghost sm">Kundendaten speichern</button></div>
+      </div>`;
+    tCust.querySelector('#custSave').onclick=async()=>{
+      const company=tCust.querySelector('#custCompany').value.trim();
+      const address=tCust.querySelector('#custAddress').value.trim();
+      try{
+        await API.call('tenants.php','PUT',{id:t.id,name:t.name,contact_company:company,contact_address:address});
+        t.contact_company=company; t.contact_address=address;
+        toast('Kundendaten gespeichert');
+      }catch(e){ toast('Speichern fehlgeschlagen'); }
+    };
+    sWrap.appendChild(tCust);
+
     const tDel=document.createElement('div'); tDel.className='ibox';
     tDel.innerHTML=`<div class="row" style="align-items:center;gap:10px;margin-bottom:8px">
         <b>🗑 Mandant löschen</b>

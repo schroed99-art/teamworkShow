@@ -73,6 +73,30 @@
             android:textSize="26sp"
             android:gravity="center" />
 
+        <!-- Kundenstammdaten (Firmenname + Anschrift) — nur sichtbar, wenn im
+             Dashboard gepflegt; sonst bleibt die generische Leer-Ansicht. -->
+        <TextView
+            android:id="@+id/emptyCompany"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/brand_magenta"
+            android:textStyle="bold"
+            android:textSize="20sp"
+            android:gravity="center"
+            android:layout_marginTop="14dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/emptyAddress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#CBD5E1"
+            android:textSize="15sp"
+            android:gravity="center"
+            android:lineSpacingMultiplier="1.25"
+            android:layout_marginTop="4dp"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/emptyHint"
             android:layout_width="match_parent"

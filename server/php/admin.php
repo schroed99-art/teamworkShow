@@ -972,16 +972,29 @@ function presPreviewHtml(p, devs){
   const imgCell=fm
     ? (isVideo(fm)?`<video src="${mediaUrl(fm)}" muted preload="metadata"></video>`:`<img src="${mediaUrl(fm)}" alt="">`)
     : `<span class="mpv-noimg">🖼</span>`;
-  const dev=presDevices(p, devs)[0];
+  // Bevorzugt das Gerät, dem die Präsentation zugewiesen ist; sonst der erste
+  // Bildschirm des Mandanten — so zeigt auch eine noch NICHT zugewiesene
+  // Präsentation die echte Aufteilung (z. B. Split Firma/Kunde) statt einer
+  // Einzelfläche, damit der Kunde den geteilten Bildschirm erkennt.
+  const assigned=presDevices(p, devs)[0];
+  const dev=assigned||(devs&&devs[0]);
   if(!dev) return `<span class="mpv" data-lb title="${esc(fm||'Noch keine Slides')}"><div class="mpv-leaf content">${imgCell}</div></span>`;
+  const isCompany=+p.is_company===1;
   const isContent=src=>{
-    if(src==='company') return String(dev.company_presentation_id)===String(p.id);
-    if(src==='customer'||src==null||src==='') return String(dev.presentation_id)===String(p.id);
-    return String(src)===String(p.id);
+    if(assigned){
+      if(src==='company') return String(dev.company_presentation_id)===String(p.id);
+      if(src==='customer'||src==null||src==='') return String(dev.presentation_id)===String(p.id);
+      return String(src)===String(p.id);
+    }
+    // Noch nicht zugewiesen: Inhalt läuft in seiner Zone — Kunden-Inhalt in der
+    // Kunden-Zone, Teamwork-Inhalt in der Firmen-Zone.
+    if(src==='company') return isCompany;
+    if(src==='customer'||src==null||src==='') return !isCompany;
+    return false;
   };
   const leafFn=src=> isContent(src)
     ? `<div class="mpv-leaf content">${imgCell}</div>`
-    : `<div class="mpv-leaf kunde">Kunde</div>`;
+    : `<div class="mpv-leaf kunde">${src==='company'?'Teamwork':'Kunde'}</div>`;
   const isLand=dev.display_format==='landscape';
   return `<span class="mpv${isLand?' land':''}" data-lb title="${esc(p.name)} — ${esc(anzeigeArt(dev))}">${zoneNodeRender(deviceZoneNode(dev),leafFn)}</span>`;
 }

@@ -105,6 +105,11 @@ class SyncManager(context: Context, private val mediaDir: File) {
         prefs.edit().putString(KEY_URL, url.trim().trimEnd('/')).apply()
     }
 
+    /** True once a server URL is explicitly stored (maintenance menu or auto-pin) —
+     *  as opposed to falling back to the app's built-in default. */
+    fun hasStoredServerUrl(): Boolean =
+        !prefs.getString(KEY_URL, null).isNullOrBlank()
+
     /** Device pairing code; when set, the server returns an ordered, timed playlist. */
     fun getPairingCode(): String? =
         prefs.getString(KEY_PAIRING, null)?.trim()?.takeIf { it.isNotEmpty() }
@@ -503,6 +508,16 @@ class SyncManager(context: Context, private val mediaDir: File) {
         } catch (e: Exception) {
             AppLog.w(TAG, "Playlist fetch failed: ${e.message}")
             return false
+        }
+
+        // Pin the server URL on first successful contact: a device that relied on the
+        // app's built-in default now stores it, so a changed default in a later release
+        // can no longer move it to another server. A URL set in the maintenance menu
+        // already counts as stored and is never overwritten here — a deliberate server
+        // migration (enter a new URL) still takes effect.
+        if (!hasStoredServerUrl()) {
+            setServerUrl(base)
+            AppLog.i(TAG, "Server URL pinned to $base after first successful sync")
         }
 
         if (!mediaDir.exists()) mediaDir.mkdirs()

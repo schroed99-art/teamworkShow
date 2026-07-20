@@ -130,6 +130,11 @@ if ($method === 'POST') {
     // A customer creates into their own tenant, whatever the body claims.
     $tenantId = $bound ? tw_owning_tenant($tenantId) : $tenantId;
     $tenantId = tw_check_kunde_tenant($pdo, $role, $tenantId);
+    // Only a 'kunde' is ever tenant-bound; strip any stray tenant_id off a staff
+    // role so it can't accidentally be created as tenant-confined (mirrors PUT).
+    if ($role !== 'kunde') {
+        $tenantId = null;
+    }
     $exists = $pdo->prepare('SELECT id FROM users WHERE email = ?');
     $exists->execute([$email]);
     if ($exists->fetch()) {

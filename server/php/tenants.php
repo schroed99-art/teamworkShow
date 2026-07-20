@@ -21,7 +21,12 @@ if ($method === 'GET') {
 
     // Roll each tenant's device statuses up to one badge for the sidebar list:
     // green if any online, amber if any alarming, grey if offline, none if empty.
-    $ds = $pdo->query('SELECT tenant_id, TIMESTAMPDIFF(SECOND, last_seen, NOW()) AS secs FROM devices');
+    // Scope the scan to the caller's own tenant so a customer never even loads
+    // another tenant's device timing into the process (defense in depth — only
+    // their own row is emitted anyway).
+    [$dScope, $dArgs] = tw_tenant_filter('tenant_id');
+    $ds = $pdo->prepare("SELECT tenant_id, TIMESTAMPDIFF(SECOND, last_seen, NOW()) AS secs FROM devices WHERE 1=1 $dScope");
+    $ds->execute($dArgs);
     $byTenant = [];
     foreach ($ds as $d) {
         $secs = $d['secs'] === null ? null : (int) $d['secs'];

@@ -1491,6 +1491,7 @@ function renderDetail(t, devices, presentations){
           : 'Kundenbereich: bei „Eine Fläche (Kunde)" der ganze Schirm, im Split die Kunden-Zone, im freien Layout die Quelle „Kunde". Leer = Standardanzeige.'}</p>
       </div>
       ${IS_KUNDE?'':zoneFields(d)}
+      ${IS_KUNDE?'<p class="muted" style="margin:8px 0 2px">🔒 Wetter &amp; Laufschrift richtet Ihr Ansprechpartner (Teamwork) ein — hier nur zur Information.</p><fieldset disabled style="border:0;padding:0;margin:0;min-width:0">':''}
       <div class="ibox">
         <div class="row" style="align-items:center;gap:10px;margin-bottom:4px">
           <b>🌤 Wetter</b>
@@ -1530,7 +1531,8 @@ function renderDetail(t, devices, presentations){
           <div><label class="f">Rahmen-Deckkraft (%)</label><input type="number" min="0" max="100" data-nc="op" style="width:90px" value="40"></div>
         </div>
       </div>
-      <div class="row" style="margin-top:10px"><span class="spacer" style="flex:1"></span><button class="sm" data-saveanz>Anzeige speichern</button></div>`;
+      ${IS_KUNDE?'</fieldset>':''}
+      <div class="row" style="margin-top:10px"><span class="spacer" style="flex:1"></span><button class="sm" data-saveanz>${IS_KUNDE?'Präsentation speichern':'Anzeige speichern'}</button></div>`;
     if(!IS_KUNDE) initZoneEditor(c, d);
     c.querySelector('[data-saveanz]').onclick=async()=>{
       // Kunden-/Haupt-Präsentation (presentation_id) + Zonen hängen am Gerät ->
@@ -1542,18 +1544,22 @@ function renderDetail(t, devices, presentations){
       } else if(presSel){
         await API.call('devices.php','PUT',{id:d.id, ...presPart});
       }
-      const w=f=>c.querySelector(`[data-w="${f}"]`);
-      const nc=k=>c.querySelector(`[data-nc="${k}"]`);
-      const op=Math.max(0,Math.min(100,parseInt(nc('op').value||'0',10)||0));
-      const aHex=Math.round(op/100*255).toString(16).padStart(2,'0');
-      const nbg='#'+aHex+(nc('rgb').value||'#000000').slice(1);
-      await API.call('widgets.php','PUT',{device_id:d.id,
-        weather_enabled:w('weather_enabled').checked, weather_location:w('weather_location').value,
-        notices_enabled:w('notices_enabled').checked, notices_text:w('notices_text').value,
-        notices_size:+w('notices_size').value||15, notices_height:+w('notices_height').value||0, notices_bg:nbg,
-        notices_font:w('notices_font').value, notices_speed:+w('notices_speed').value||90,
-        notices_color:(nc('fg').value||'#FFFFFF')});
-      toast('Anzeige gespeichert');
+      // Wetter/Laufschrift sind beim Kunden read-only (Teamwork pflegt sie) -> nur
+      // Personal speichert die Widgets; der Kunde speichert ausschließlich die Präsentation.
+      if(!IS_KUNDE){
+        const w=f=>c.querySelector(`[data-w="${f}"]`);
+        const nc=k=>c.querySelector(`[data-nc="${k}"]`);
+        const op=Math.max(0,Math.min(100,parseInt(nc('op').value||'0',10)||0));
+        const aHex=Math.round(op/100*255).toString(16).padStart(2,'0');
+        const nbg='#'+aHex+(nc('rgb').value||'#000000').slice(1);
+        await API.call('widgets.php','PUT',{device_id:d.id,
+          weather_enabled:w('weather_enabled').checked, weather_location:w('weather_location').value,
+          notices_enabled:w('notices_enabled').checked, notices_text:w('notices_text').value,
+          notices_size:+w('notices_size').value||15, notices_height:+w('notices_height').value||0, notices_bg:nbg,
+          notices_font:w('notices_font').value, notices_speed:+w('notices_speed').value||90,
+          notices_color:(nc('fg').value||'#FFFFFF')});
+      }
+      toast(IS_KUNDE?'Präsentation gespeichert':'Anzeige gespeichert');
       // Ansicht sofort aktualisieren: Mini-Bildschirme, Anzeigeart-Chips und der
       // Bildschirm-Editor lesen die Zonen-Daten aus dem Mandanten-Datensatz.
       selectTenant(t);

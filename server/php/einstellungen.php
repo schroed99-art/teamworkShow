@@ -63,6 +63,23 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   .tab.active { color:var(--text); border-bottom-color:var(--magenta); }
   .panel { display:none; }
   .panel.active { display:block; }
+  .logfilter { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .lf { background:var(--panel2); color:var(--dim); border:1px solid var(--line); border-radius:8px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; }
+  .lf:hover { color:var(--text); }
+  .lf.active { color:#fff; background:var(--magenta); border-color:var(--magenta); }
+  #logtable { max-height:60vh; overflow:auto; border:1px solid var(--line); border-radius:10px; }
+  .logtbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .logtbl th { text-align:left; color:var(--dim); font-weight:600; padding:7px 10px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--panel); }
+  .logtbl td { padding:7px 10px; border-bottom:1px solid #26344a; vertical-align:top; }
+  .logtbl tr:last-child td { border-bottom:0; }
+  .lt-ts { white-space:nowrap; color:var(--dim); }
+  .lt-det { color:var(--dim); }
+  .lbadge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .lb-auth { background:#1e3a5f; color:#7ab8ff; }
+  .lb-device { background:#3a2f0f; color:#ffcf6b; }
+  .lb-sync { background:#0f3a2f; color:#5bd6a8; }
+  .lb-update { background:#2f0f3a; color:#d68bff; }
+  .lb-admin { background:#3a0f22; color:#ff7aa8; }
 </style>
 <?php require_once __DIR__ . '/brand_partials.php'; echo tw_brand_css(); ?>
 </head>
@@ -81,6 +98,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   <div class="tabs">
     <div class="tab active" data-p="users">Benutzerverwaltung</div>
     <div class="tab" data-p="help">Hilfe &amp; Kontakt</div>
+    <?php if ($role === 'admin'): ?><div class="tab" data-p="log">Protokoll</div><?php endif; ?>
   </div>
 
   <div class="panel active" id="panel-users">
@@ -108,6 +126,17 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
       <div class="row" style="margin-top:14px"><span class="spacer"></span><button id="save">Speichern</button></div>
     </div>
   </div>
+
+  <?php if ($role === 'admin'): ?>
+  <div class="panel" id="panel-log">
+    <div class="card">
+      <h3>Protokoll</h3>
+      <p class="muted" style="margin:0 0 12px">Anmeldungen, Geräte-Verbindungen, Synchronisierungen und App-Updates. <b>Kundendaten sind anonymisiert</b> (E-Mail maskiert, Mandant nur als Nummer).</p>
+      <div class="logfilter" id="logfilter"></div>
+      <div id="logtable"><p class="muted">Lädt…</p></div>
+    </div>
+  </div>
+  <?php endif; ?>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -116,6 +145,7 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
     document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+t.dataset.p));
+    if(t.dataset.p==='log' && typeof loadLog==='function') loadLog();
   });
   const inputs = () => document.querySelectorAll('[data-h]');
   function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
@@ -132,6 +162,27 @@ if (is_file($vfile) && preg_match("/'version'\\s*=>\\s*'([^']+)'/", (string) fil
       toast(r.ok ? 'Gespeichert' : 'Speichern fehlgeschlagen');
     } catch(e) { toast('Speichern fehlgeschlagen'); }
   };
+<?php if ($role === 'admin'): ?>
+  // --- Protokoll ---------------------------------------------------------
+  const LOG_CATS = [['','Alle'],['auth','Anmeldungen'],['device','Geräte'],['sync','Sync'],['update','Updates'],['admin','Admin']];
+  let logCat = '';
+  const escLog = s => (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function fmtTs(s){ const m=/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(s||''); return m?`${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}`:(s||''); }
+  async function loadLog(){
+    const f=$('#logfilter');
+    f.innerHTML=LOG_CATS.map(([k,l])=>`<button class="lf ${k===logCat?'active':''}" data-k="${k}">${l}</button>`).join('');
+    f.querySelectorAll('.lf').forEach(b=>b.onclick=()=>{ logCat=b.dataset.k; loadLog(); });
+    const t=$('#logtable'); t.innerHTML='<p class="muted">Lädt…</p>';
+    let d; try{ const r=await fetch('audit.php?limit=300'+(logCat?'&category='+encodeURIComponent(logCat):'')); d=r.ok?await r.json():null; }catch(e){ d=null; }
+    if(!d||!d.rows){ t.innerHTML='<p class="muted">Konnte Protokoll nicht laden.</p>'; return; }
+    if(!d.rows.length){ t.innerHTML='<p class="muted">Keine Einträge in dieser Kategorie.</p>'; return; }
+    const body=d.rows.map(r=>{
+      const who=[r.actor, r.device_code?('Gerät '+r.device_code):'', r.tenant_id?('Mandant #'+r.tenant_id):''].filter(Boolean).map(escLog).join(' · ');
+      return `<tr><td class="lt-ts">${escLog(fmtTs(r.ts))}</td><td><span class="lbadge lb-${escLog(r.category)}">${escLog(r.label)}</span></td><td>${who}</td><td class="lt-det">${escLog(r.detail)}</td></tr>`;
+    }).join('');
+    t.innerHTML=`<table class="logtbl"><thead><tr><th>Zeit</th><th>Ereignis</th><th>Wer / Gerät</th><th>Detail</th></tr></thead><tbody>${body}</tbody></table>`;
+  }
+<?php endif; ?>
 </script>
 </body>
 </html>

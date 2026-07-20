@@ -5,6 +5,7 @@
  * self-service change. Clears must_change_pw on success.
  */
 require __DIR__ . '/db.php';
+require __DIR__ . '/audit_log.php';
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -27,6 +28,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hash = password_hash($p1, PASSWORD_DEFAULT);
         tw_db()->prepare('UPDATE users SET pass_hash = ?, must_change_pw = 0 WHERE id = ?')->execute([$hash, $uid]);
         $done = true;
+        try {
+            $u = tw_db()->prepare('SELECT email, role FROM users WHERE id = ?');
+            $u->execute([$uid]);
+            $row = $u->fetch() ?: [];
+            tw_audit('auth', 'password_changed', [
+                'actor_email' => (string) ($row['email'] ?? ''),
+                'actor_role'  => (string) ($row['role'] ?? ''),
+            ]);
+        } catch (Throwable $e) {
+            // logging is best-effort — never block the password change
+        }
     }
 }
 ?><!doctype html>

@@ -7,12 +7,19 @@
  *   GET ?logout=1              -> destroys the session, 302 -> login.php
  */
 require __DIR__ . '/db.php';
+require __DIR__ . '/audit_log.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
 if (isset($_GET['logout'])) {
+    if (!empty($_SESSION['tw_email'])) {
+        tw_audit('auth', 'logout', [
+            'actor_email' => (string) $_SESSION['tw_email'],
+            'actor_role'  => (string) ($_SESSION['tw_role'] ?? ''),
+        ]);
+    }
     $_SESSION = [];
     session_destroy();
     header('Location: login.php');
@@ -43,6 +50,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['tw_user_id'] = (int) $user['id'];
         $_SESSION['tw_role']    = $user['role'];
         $_SESSION['tw_email']   = $user['email'];
+        tw_audit('auth', 'login_ok', [
+            'actor_email' => (string) $user['email'],
+            'actor_role'  => (string) $user['role'],
+            'tenant_id'   => $user['tenant_id'] ?? null,
+        ]);
         if ((int) $user['must_change_pw'] === 1) {
             header('Location: change_password.php');
         } else {
@@ -52,6 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     http_response_code(401);
     $error = 'E-Mail oder Passwort falsch.';
+    // Failed attempt: mask the entered address (we do not know whose it is).
+    tw_audit('auth', 'login_fail', ['actor' => 'Fehlversuch ' . tw_mask_email($email)]);
 }
 
 // Pre-fill the e-mail field: from the failed POST, or from a ?email= link (the

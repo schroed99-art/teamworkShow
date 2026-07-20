@@ -20,6 +20,7 @@
  */
 require __DIR__ . '/auth.php';
 require __DIR__ . '/mailer.php';
+require __DIR__ . '/audit_log.php';
 $actorRole = tw_require_manage();          // 'admin', 'koordinator' or 'kunde'
 $actorId   = tw_current_user_id();
 $bound     = tw_is_tenant_bound();         // true => customer self-service
@@ -182,6 +183,12 @@ if ($method === 'POST') {
     ]);
     $newId = (int) $pdo->lastInsertId();
     $name = trim(trim((string) ($b['first_name'] ?? '')) . ' ' . trim((string) ($b['last_name'] ?? '')));
+    tw_audit('admin', 'user_created', [
+        'actor_email' => (string) ($_SESSION['tw_email'] ?? ''),
+        'actor_role'  => $actorRole,
+        'tenant_id'   => $tenantId,
+        'detail'      => 'Rolle: ' . $role . ' · ' . ($role === 'kunde' ? tw_mask_email($email) : $email),
+    ]);
     tw_json(['id' => $newId] + tw_maybe_mail_credentials($pdo, $b, $email, $name, $temp, false, $tenantId), 201);
 }
 
@@ -211,6 +218,12 @@ if ($method === 'PUT') {
             ->execute([password_hash($temp, PASSWORD_DEFAULT), $id]);
         $name = trim(((string) $target['first_name']) . ' ' . ((string) $target['last_name']));
         $targetTenantId = isset($target['tenant_id']) && $target['tenant_id'] !== null ? (int) $target['tenant_id'] : null;
+        tw_audit('admin', 'password_reset', [
+            'actor_email' => (string) ($_SESSION['tw_email'] ?? ''),
+            'actor_role'  => $actorRole,
+            'tenant_id'   => $targetTenantId,
+            'detail'      => 'Ziel: ' . ((string) $target['role'] === 'kunde' ? tw_mask_email((string) $target['email']) : (string) $target['email']),
+        ]);
         tw_json(['ok' => true] + tw_maybe_mail_credentials($pdo, $b, (string) $target['email'], $name, $temp, true, $targetTenantId));
     }
 

@@ -17,6 +17,31 @@
 require __DIR__ . '/db.php';
 require __DIR__ . '/status_util.php';
 require __DIR__ . '/mailer.php';
+require __DIR__ . '/audit_log.php';
+
+/**
+ * Mirror a device status transition into the audit trail (Einstellungen ->
+ * Protokoll). Only real presence states are logged; 'never'/unchanged are skipped
+ * by the caller. The device name is intentionally not stored (privacy) — the
+ * opaque pairing code + tenant id are enough to identify it.
+ */
+function tw_audit_device(array $dev, string $status, ?int $secs): void
+{
+    $map = [
+        'online'  => ['device_online',  ''],
+        'offline' => ['device_offline', 'seit ' . tw_dur_human($secs) . ' offline'],
+        'alarm'   => ['device_alarm',   'offline seit ' . tw_dur_human($secs)],
+    ];
+    if (!isset($map[$status])) {
+        return;
+    }
+    [$event, $detail] = $map[$status];
+    tw_audit('device', $event, [
+        'device_code' => (string) ($dev['pairing_code'] ?? ''),
+        'tenant_id'   => $dev['tenant_id'] ?? null,
+        'detail'      => $detail,
+    ]);
+}
 
 if (PHP_SAPI !== 'cli') {
     $want = (string) (tw_config()['cron_key'] ?? '');
@@ -169,6 +194,7 @@ foreach ($devices as $d) {
                 $logFile,
                 sprintf('%-7s %s "%s"  (erstmals erfasst, %s)', strtoupper($status), $d['pairing_code'], $d['name'], tw_ago_human($secs))
             );
+            tw_audit_device($d, $status, $secs);
             if ($status === 'alarm') {
                 tw_notify_admin_alarm($logFile, $d, $secs);
             }
@@ -192,6 +218,7 @@ foreach ($devices as $d) {
         );
         $alerted = $status === 'alarm' ? 1 : 0;
         $ins->execute([$id, $status, $alerted]);
+        tw_audit_device($d, $status, $secs);
         if ($status === 'alarm') {
             tw_notify_admin_alarm($logFile, $d, $secs);
         }
@@ -199,9 +226,13 @@ foreach ($devices as $d) {
         // Still alarm but not yet alerted (e.g. crossed the threshold without a
         // status label change) — alert once.
         tw_log($logFile, sprintf('ALARM  %s "%s"  offline (%s)', $d['pairing_code'], $d['name'], tw_ago_human($secs)));
+        tw_audit_device($d, 'alarm', $secs);
         tw_notify_admin_alarm($logFile, $d, $secs);
         $setAlerted->execute([$id]);
     }
 }
+
+// Keep the audit trail small — drop anything older than 90 days (best-effort).
+tw_audit_prune(90);
 
 echo "checked " . count($devices) . " device(s)\n";

@@ -208,6 +208,7 @@ try {
     $stmt = $pdo->prepare(
         'SELECT d.id, d.pairing_code, d.name, d.standort, d.anzeige_info, d.display_format, d.presentation_id,
                 d.zone_mode, d.zone_axis, d.zone_split, d.zone_company_first, d.company_presentation_id, d.zone_layout,
+                d.last_seen, TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) AS since_seen,
                 t.id AS tenant_id, t.name AS tenant_name,
                 t.contact_company AS tenant_company, t.contact_address AS tenant_address
          FROM devices d JOIN tenants t ON t.id = d.tenant_id
@@ -218,6 +219,20 @@ try {
 
     if (!$dev) {
         tw_json(['error' => 'unknown_device', 'items' => []], 404);
+    }
+
+    // Audit the sync BEFORE stamping last_seen, so the gap reflects the real
+    // absence. First contact and a reconnect (> 5 min gap) are logged at once;
+    // an always-online device only writes an hourly heartbeat (throttled) so the
+    // 60-second pull loop never floods the trail.
+    $sinceSeen = $dev['last_seen'] === null ? null : (int) $dev['since_seen'];
+    require_once __DIR__ . '/audit_log.php';
+    if ($sinceSeen === null) {
+        tw_audit('sync', 'device_sync', ['device_code' => $dev['pairing_code'], 'tenant_id' => $dev['tenant_id'], 'detail' => 'erste Verbindung']);
+    } elseif ($sinceSeen > 300) {
+        tw_audit('sync', 'device_sync', ['device_code' => $dev['pairing_code'], 'tenant_id' => $dev['tenant_id'], 'detail' => 'nach ' . tw_dur_human($sinceSeen) . ' wieder verbunden']);
+    } else {
+        tw_audit_throttled('sync', 'device_sync', (string) $dev['pairing_code'], 3600, ['tenant_id' => $dev['tenant_id']]);
     }
 
     $pdo->prepare('UPDATE devices SET last_seen = NOW() WHERE id = ?')->execute([$dev['id']]);

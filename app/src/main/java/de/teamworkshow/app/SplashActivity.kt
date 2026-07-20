@@ -28,11 +28,28 @@ class SplashActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_splash)
+        applyBrandedAppName()
         findViewById<android.widget.TextView>(R.id.splashVersion)?.text =
             "v${BuildConfig.VERSION_NAME}"
         hideSystemBars()
 
         handler.postDelayed({ goToMain() }, SPLASH_DURATION_MS)
+    }
+
+    /** App-Name mit magenta „Show" (Logo-Farbe): „Teamwork" hell, „Show" in brand_magenta. */
+    private fun applyBrandedAppName() {
+        val tv = findViewById<android.widget.TextView>(R.id.appName) ?: return
+        val name = getString(R.string.app_name)
+        val start = name.indexOf("Show")
+        if (start < 0) return
+        val span = android.text.SpannableString(name)
+        span.setSpan(
+            android.text.style.ForegroundColorSpan(
+                androidx.core.content.ContextCompat.getColor(this, R.color.brand_magenta)
+            ),
+            start, start + "Show".length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        tv.text = span
     }
 
     private fun goToMain() {

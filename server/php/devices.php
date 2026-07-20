@@ -246,12 +246,16 @@ if ($method === 'PUT') {
     if (array_key_exists('presentation_id', $b)) {
         $presId = !empty($b['presentation_id']) ? (int) $b['presentation_id'] : null;
         if ($presId !== null) {
-            $ps = $pdo->prepare('SELECT tenant_id FROM presentations WHERE id = ?');
+            $ps = $pdo->prepare('SELECT tenant_id, is_company FROM presentations WHERE id = ?');
             $ps->execute([$presId]);
-            $presOwner = $ps->fetchColumn();
+            $prow = $ps->fetch();
             // Never let a device show a presentation from a different tenant.
-            if ($presOwner === false || (int) $presOwner !== $owner) {
+            if (!$prow || (int) $prow['tenant_id'] !== $owner) {
                 tw_json(['error' => 'presentation_not_in_tenant'], 422);
+            }
+            // A customer may only assign their OWN (customer-side) presentations.
+            if (tw_is_tenant_bound() && (int) ($prow['is_company'] ?? 0) === 1) {
+                tw_json(['error' => 'presentation_not_yours'], 403);
             }
         }
         $set[] = 'presentation_id = ?';

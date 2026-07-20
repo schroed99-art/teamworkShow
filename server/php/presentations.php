@@ -42,6 +42,10 @@ if ($method === 'GET') {
             tw_json(['error' => 'not_found'], 404);
         }
         tw_require_tenant((int) $p['tenant_id']);
+        // Ein Kunde sieht nur eigene Inhalte, nie Teamwork-/Firmen-Präsentationen.
+        if (tw_is_tenant_bound() && (int) ($p['is_company'] ?? 0) === 1) {
+            tw_json(['error' => 'not_found'], 404);
+        }
         $ss = $pdo->prepare('SELECT id, media_name, kind, text_title, text_body, text_font, text_color, text_size, position, duration_ms FROM slides WHERE presentation_id = ? ORDER BY position, id');
         $ss->execute([$id]);
         $p['slides'] = $ss->fetchAll();
@@ -52,15 +56,17 @@ if ($method === 'GET') {
     $firstMedia = "(SELECT s.media_name FROM slides s
                      WHERE s.presentation_id = p.id AND s.kind = 'media' AND s.media_name <> ''
                      ORDER BY s.position, s.id LIMIT 1) AS first_media";
+    // A customer never sees Teamwork/company presentations, only their own content.
+    $custFilter = tw_is_tenant_bound() ? ' AND p.is_company = 0' : '';
     $tenantId = (int) ($_GET['tenant_id'] ?? 0);
     if ($tenantId > 0) {
         tw_require_tenant($tenantId);
-        $s = $pdo->prepare("SELECT p.*, $firstMedia FROM presentations p WHERE p.tenant_id = ? ORDER BY p.id");
+        $s = $pdo->prepare("SELECT p.*, $firstMedia FROM presentations p WHERE p.tenant_id = ?$custFilter ORDER BY p.id");
         $s->execute([$tenantId]);
         $rows = $s->fetchAll();
     } else {
         [$scope, $args] = tw_tenant_filter('p.tenant_id');
-        $s = $pdo->prepare("SELECT p.*, $firstMedia FROM presentations p WHERE 1=1 $scope ORDER BY p.id");
+        $s = $pdo->prepare("SELECT p.*, $firstMedia FROM presentations p WHERE 1=1 $scope$custFilter ORDER BY p.id");
         $s->execute($args);
         $rows = $s->fetchAll();
     }
@@ -75,7 +81,10 @@ if ($method === 'POST') {
     if ($tenantId <= 0 || $name === '') {
         tw_json(['error' => 'tenant_id_and_name_required'], 422);
     }
-    $pdo->prepare('INSERT INTO presentations (tenant_id, name) VALUES (?, ?)')->execute([$tenantId, $name]);
+    // A customer's presentation is always customer content; staff may create either.
+    $isCompany = tw_is_tenant_bound() ? 0 : (int) (bool) ($b['is_company'] ?? 0);
+    $pdo->prepare('INSERT INTO presentations (tenant_id, name, is_company) VALUES (?, ?, ?)')
+        ->execute([$tenantId, $name, $isCompany]);
     tw_json(['id' => (int) $pdo->lastInsertId(), 'name' => $name], 201);
 }
 
@@ -90,6 +99,19 @@ if ($method === 'PUT') {
         tw_json(['error' => 'not_found'], 404);
     }
     tw_require_tenant($owner);
+    // A customer may only ever touch their own (customer-side) presentations.
+    if (tw_is_tenant_bound()) {
+        $ic = $pdo->prepare('SELECT is_company FROM presentations WHERE id = ?');
+        $ic->execute([$id]);
+        if ((int) $ic->fetchColumn() === 1) {
+            tw_json(['error' => 'not_found'], 404);
+        }
+    }
+    // Kunde/Teamwork-Zugehörigkeit umschalten — nur Personal, nie ein Kunde.
+    if (array_key_exists('is_company', $b) && !tw_is_tenant_bound()) {
+        $pdo->prepare('UPDATE presentations SET is_company = ? WHERE id = ?')
+            ->execute([$b['is_company'] ? 1 : 0, $id]);
+    }
     if (array_key_exists('name', $b)) {
         $newName = trim((string) $b['name']);
         if ($newName === '') {

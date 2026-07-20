@@ -1337,11 +1337,12 @@ function renderDetail(t, devices, presentations){
       <div class="row wrap2" style="align-items:center">
         ${thumb}
         <div class="grow" style="min-width:0;flex:1 1 auto">
-          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on" title="Wird gespielt, wo sie zugewiesen ist">aktiv</span>':' <span class="badge-off" title="Pausiert – zugewiesene Zone bleibt leer, Zuweisung bleibt erhalten">inaktiv</span>'}</div>
+          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on" title="Wird gespielt, wo sie zugewiesen ist">aktiv</span>':' <span class="badge-off" title="Pausiert – zugewiesene Zone bleibt leer, Zuweisung bleibt erhalten">inaktiv</span>'}${(!IS_KUNDE&&+p.is_company)?' <span class="badge-off" title="Teamwork-/Firmen-Inhalt – für den Kunden nicht sichtbar">🏢 Teamwork</span>':''}</div>
           <div class="muted" data-desc style="font-size:12px;margin-top:3px;cursor:pointer" title="Beschreibung bearbeiten">${p.description?esc(p.description):'<i>Keine Beschreibung — hier klicken zum Ergänzen.</i>'}</div>
           ${devLine}
         </div>
         <button class="eye${active?' on':''}" data-eye title="${eyeTitle}">${eyeSvg(active)}</button>
+        ${IS_KUNDE?'':`<button class="ghost sm" data-side title="Kunde ↔ Teamwork umschalten. Teamwork-Inhalte sieht der Kunde nicht.">${+p.is_company?'🏢 Teamwork':'👤 Kunde'}</button>`}
         <button class="ghost sm" data-ren title="Umbenennen">✎</button>
         <button class="ghost sm" data-prev title="Vorschau: wie diese Präsentation abgespielt wird">🔍 Vorschau</button>
         <button class="ghost sm" data-edit>Slides</button>
@@ -1357,6 +1358,10 @@ function renderDetail(t, devices, presentations){
     row.querySelector('[data-eye]').onclick=async()=>{
       await API.call('presentations.php','PUT',{id:p.id,active:!active});
       toast(!active?'Präsentation aktiviert':'Präsentation deaktiviert'); selectTenant(t); };
+    row.querySelector('[data-side]')?.addEventListener('click', async()=>{
+      const toCompany=!(+p.is_company);
+      await API.call('presentations.php','PUT',{id:p.id,is_company:toCompany?1:0});
+      toast(toCompany?'Als Teamwork-Inhalt markiert (für Kunde ausgeblendet)':'Als Kunden-Inhalt markiert'); selectTenant(t); });
     row.querySelector('[data-ren]').onclick=async()=>{
       const name=await promptInline('Präsentation umbenennen', p.name);
       if(name===null||name===''||name===p.name) return;

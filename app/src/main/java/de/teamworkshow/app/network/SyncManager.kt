@@ -376,12 +376,15 @@ class SyncManager(context: Context, private val mediaDir: File) {
                     // Legacy fixed split -> two leaves, so the tree renderer serves both.
                     val axis = if (o.optString("axis", "rows") == "cols") "cols" else "rows"
                     val pct = o.optInt("split", 70).coerceIn(10, 90)
+                    // Position der Firmen-Zone: zuerst (oben/links) oder danach. Der %-Anteil
+                    // gehört immer der Firmen-Zone, egal wo sie sitzt.
+                    val companyFirst = o.optBoolean("company_first", true)
+                    val companyChild = ZoneChild(pct.toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("company")), role = "company"))
+                    val customerChild = ZoneChild((100 - pct).toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("customer")), role = "customer"))
                     ZoneNode.Split(
                         axis,
-                        listOf(
-                            ZoneChild(pct.toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("company")), role = "company")),
-                            ZoneChild((100 - pct).toFloat(), ZoneNode.Leaf(parseZoneSlides(o.optJSONArray("customer")), role = "customer")),
-                        )
+                        if (companyFirst) listOf(companyChild, customerChild)
+                        else listOf(customerChild, companyChild)
                     )
                 }
                 else -> null

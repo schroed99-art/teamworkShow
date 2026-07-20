@@ -287,6 +287,11 @@ if ($method === 'PUT') {
             $set[] = 'zone_split = ?';
             $vals[] = tw_zone_split($b['zone_split']);
         }
+        // Position der Firmen-Zone: 1 = zuerst (oben/links), 0 = danach (unten/rechts).
+        if (array_key_exists('zone_company_first', $b)) {
+            $set[] = 'zone_company_first = ?';
+            $vals[] = !empty($b['zone_company_first']) ? 1 : 0;
+        }
         if (array_key_exists('company_presentation_id', $b)) {
             $cid = !empty($b['company_presentation_id']) ? (int) $b['company_presentation_id'] : null;
             // Deliberately NOT restricted to the device's tenant: the company zone

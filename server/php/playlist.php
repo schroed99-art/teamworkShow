@@ -207,7 +207,7 @@ try {
     $pdo = tw_db();
     $stmt = $pdo->prepare(
         'SELECT d.id, d.pairing_code, d.name, d.standort, d.anzeige_info, d.display_format, d.presentation_id,
-                d.zone_mode, d.zone_axis, d.zone_split, d.company_presentation_id, d.zone_layout,
+                d.zone_mode, d.zone_axis, d.zone_split, d.zone_company_first, d.company_presentation_id, d.zone_layout,
                 t.id AS tenant_id, t.name AS tenant_name,
                 t.contact_company AS tenant_company, t.contact_address AS tenant_address
          FROM devices d JOIN tenants t ON t.id = d.tenant_id
@@ -276,6 +276,8 @@ try {
             'mode'    => 'split',
             'axis'    => (string) ($dev['zone_axis'] ?? 'rows'),
             'split'   => (int) ($dev['zone_split'] ?? 70),  // the company zone's share, %
+            // company_first: true = Firma zuerst (oben/links), false = danach (unten/rechts).
+            'company_first' => ((int) ($dev['zone_company_first'] ?? 1)) === 1,
             'company' => $company,
             'customer' => $customer,
         ];

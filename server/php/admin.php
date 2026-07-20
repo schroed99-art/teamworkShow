@@ -643,13 +643,15 @@ function pvOpen(cfg, caption){
   } else if (cfg.zones){
     const z=cfg.zones, cols=z.axis==='cols';
     stage.style.flexDirection = cols?'row':'column';
-    const comp=zone(), cust=zone();          // company first = oben/links, wie im Gerät
+    const comp=zone(), cust=zone();          // Firmen-Zone hat immer z.split %, egal wo sie sitzt
     comp.style.flex=z.split; cust.style.flex=(100-z.split);
     const sep=document.createElement('div'); sep.className='pv-zsep';
     sep.style.cssText = cols?'width:2px':'height:2px';
-    stage.append(comp, sep, cust);
+    // company_first=false -> Kunde zuerst (oben/links), Firma danach.
+    if(z.company_first===false) stage.append(cust, sep, comp);
+    else stage.append(comp, sep, cust);
     pvPlayZone(comp, z.company, cfg.wx);
-    pvPlayZone(cust, z.customer, cfg.wx, 'kunde');   // untere/rechte Zone = Kunde
+    pvPlayZone(cust, z.customer, cfg.wx, 'kunde');   // Kundenzone
   } else {
     const one=zone(); one.style.flex='1'; stage.appendChild(one);
     pvPlayZone(one, cfg.items, cfg.wx);
@@ -681,6 +683,7 @@ async function pvDevice(code, label){
     const custom = pl.zones && pl.zones.mode==='custom';
     const tree = custom ? pl.zones.tree : null;
     const zn = (pl.zones && !custom) ? {axis:pl.zones.axis, split:pl.zones.split,
+                           company_first:pl.zones.company_first!==false,
                            company:pl.zones.company||[], customer:pl.zones.customer||[]} : null;
     const fmt = (pl.device&&pl.device.display_format)||'portrait';
     pvOpen({
@@ -902,9 +905,11 @@ function miniScreenHtml(d, presId){
   } else if(mode==='split'){
     const vertical=(d.zone_axis||'rows')==='rows';
     const sp=Math.max(10,Math.min(90,+d.zone_split||70));
+    const cfirst=(d.zone_company_first==null)?true:(+d.zone_company_first!==0);
+    const compLeaf=`<div style="flex:${sp} 1 0;min-width:0;min-height:0"><div class="mz-leaf${String(d.company_presentation_id)===String(presId)?' on':''}"></div></div>`;
+    const custLeaf=`<div style="flex:${100-sp} 1 0;min-width:0;min-height:0"><div class="mz-leaf${hl('customer')?' on':''}"></div></div>`;
     inner=`<div style="display:flex;width:100%;height:100%;flex-direction:${vertical?'column':'row'}">`
-      +`<div style="flex:${sp} 1 0;min-width:0;min-height:0"><div class="mz-leaf${String(d.company_presentation_id)===String(presId)?' on':''}"></div></div>`
-      +`<div style="flex:${100-sp} 1 0;min-width:0;min-height:0"><div class="mz-leaf${hl('customer')?' on':''}"></div></div></div>`;
+      +(cfirst?compLeaf+custLeaf:custLeaf+compLeaf)+`</div>`;
   } else {
     inner=`<div class="mz-leaf${hl('customer')?' on':''}"></div>`;
   }
@@ -917,9 +922,10 @@ function deviceZoneNode(dev){
   if(mode==='split'){
     const vertical=(dev.zone_axis||'rows')==='rows';
     const sp=Math.max(10,Math.min(90,+dev.zone_split||70));
-    return {axis:vertical?'rows':'cols',children:[
-      {size:sp,node:{zone:{source:'company'}}},
-      {size:100-sp,node:{zone:{source:'customer'}}}]};
+    const cfirst=(dev.zone_company_first==null)?true:(+dev.zone_company_first!==0);
+    const comp={size:sp,node:{zone:{source:'company'}}};
+    const cust={size:100-sp,node:{zone:{source:'customer'}}};
+    return {axis:vertical?'rows':'cols',children:cfirst?[comp,cust]:[cust,comp]};
   }
   if(mode==='custom'){
     try{ const lay=dev.zone_layout?(typeof dev.zone_layout==='string'?JSON.parse(dev.zone_layout):dev.zone_layout):null;
@@ -1089,6 +1095,7 @@ function editScreen(d, focusPres){
 
 function zoneFields(d){
   const mode=d.zone_mode||'single', axis=d.zone_axis||'rows', split=d.zone_split??70;
+  const cfirst=(d.zone_company_first==null)?true:(+d.zone_company_first!==0);
   const cid=d.company_presentation_id;
   // Der Editor ist fest an das Anzeigeformat des Geräts gebunden (hoch/quer ist
   // pro Gerät fix; eingestellt wird es im Reiter "Geräte"). Keine Format-Tabs mehr.
@@ -1117,7 +1124,12 @@ function zoneFields(d){
           <div><label class="f">Anteil Firmen-Zone (%)</label>
             <input type="number" min="10" max="90" step="5" data-f="zone_split" value="${split}" style="width:100%"></div>
         </div>
-        <p class="muted" style="margin:8px 0 0">Firmen-Zone zuerst (oben/links), Kunden-Zone füllt den Rest.</p>
+        <div style="margin-top:10px"><label class="f">Position der Firmen-Zone</label>
+          <select data-f="zone_company_first" data-zone-cpos style="width:100%;max-width:340px">
+            <option value="1"${cfirst?' selected':''}></option>
+            <option value="0"${!cfirst?' selected':''}></option>
+          </select></div>
+        <p class="muted" data-split-hint style="margin:8px 0 0"></p>
       </div>
 
       <div data-zone-firma style="display:none;margin-top:10px">
@@ -1146,6 +1158,23 @@ function initZoneEditor(card, d){
   const firmaHint=root.querySelector('[data-firma-hint]');
   const custom=root.querySelector('[data-zone-custom]');
   const canvas=root.querySelector('[data-ze-canvas]');
+  const axisSel=root.querySelector('[data-f="zone_axis"]');
+  const cposSel=root.querySelector('[data-zone-cpos]');
+  const splitHint=root.querySelector('[data-split-hint]');
+
+  // Position-Labels folgen der Teilungsachse: Zeilen -> oben/unten, Spalten -> links/rechts.
+  function updateSplitLabels(){
+    const cols=(axisSel&&axisSel.value==='cols');
+    if(cposSel){ cposSel.options[0].textContent=cols?'Links':'Oben';
+                 cposSel.options[1].textContent=cols?'Rechts':'Unten'; }
+    if(splitHint){ const first=cposSel?cposSel.value==='1':true;
+      const fPos=cols?(first?'links':'rechts'):(first?'oben':'unten');
+      const kPos=cols?(first?'rechts':'links'):(first?'unten':'oben');
+      splitHint.textContent=`Firmen-Zone ${fPos} (Anteil %), Kunden-Zone ${kPos} füllt den Rest.`; }
+  }
+  if(axisSel) axisSel.addEventListener('change',updateSplitLabels);
+  if(cposSel) cposSel.addEventListener('change',updateSplitLabels);
+  updateSplitLabels();
 
   // Per-format trees. A missing format defaults to a single customer zone, which
   // resolves identically to the 'single' fallback, so storing it is harmless.
@@ -1221,7 +1250,7 @@ function initZoneEditor(card, d){
     custom.style.display = m==='custom'?'':'none';
     if(firmaHint) firmaHint.textContent = m==='company'
       ? 'Der ganze Bildschirm zeigt diese Teamwork-Präsentation — kein Kundenbereich.'
-      : 'Firmen-Zone oben/links; Kunden-Zone füllt den Rest.';
+      : 'Diese Präsentation läuft in der Firmen-Zone.';
     if(m==='custom') draw(); }
   modeSel.onchange=updateVis; updateVis();
 
@@ -1230,6 +1259,7 @@ function initZoneEditor(card, d){
     const g=f=>root.querySelector(`[data-f="${f}"]`);
     if(m==='company') return { zone_mode:'company', company_presentation_id:g('company_presentation_id').value||null };
     return { zone_mode:m, zone_axis:g('zone_axis').value, zone_split:+g('zone_split').value||70,
+             zone_company_first:+g('zone_company_first').value?1:0,
              company_presentation_id:g('company_presentation_id').value||null }; };
 }
 <?php endif; ?>

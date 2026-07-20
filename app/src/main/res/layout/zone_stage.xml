@@ -53,7 +53,7 @@
             android:layout_width="140dp"
             android:layout_height="140dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/splash_logo"
+            android:src="@drawable/logo_light"
             android:layout_marginBottom="20dp"
             android:contentDescription="@string/logo_desc" />
 

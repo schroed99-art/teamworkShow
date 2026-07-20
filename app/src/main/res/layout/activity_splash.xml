@@ -1,15 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Branded launch screen: freigestelltes Logo mittig auf dunklem CI-Grund,
+     App-Name + Version. Bewusst gleich gestaltet wie die Leer-Ansicht (zone_stage.xml). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/brand_background">
+    android:background="#0F172A">
 
-    <!-- Full-bleed branded start screen -->
-    <ImageView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:src="@drawable/splashscreen_v3"
-        android:scaleType="centerCrop"
-        android:contentDescription="@string/logo_desc" />
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="24dp">
+
+        <ImageView
+            android:layout_width="180dp"
+            android:layout_height="180dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/logo_light"
+            android:layout_marginBottom="22dp"
+            android:contentDescription="@string/logo_desc" />
+
+        <View
+            android:layout_width="48dp"
+            android:layout_height="3dp"
+            android:background="@color/brand_magenta"
+            android:layout_marginBottom="18dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textColor="#F1F5F9"
+            android:textStyle="bold"
+            android:textSize="28sp"
+            android:letterSpacing="0.01"
+            android:gravity="center" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/splashVersion"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="28dp"
+        android:textColor="#64748B"
+        android:textSize="13sp" />
 
 </FrameLayout>

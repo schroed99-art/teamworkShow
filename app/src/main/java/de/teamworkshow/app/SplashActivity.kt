@@ -28,6 +28,8 @@ class SplashActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_splash)
+        findViewById<android.widget.TextView>(R.id.splashVersion)?.text =
+            "v${BuildConfig.VERSION_NAME}"
         hideSystemBars()
 
         handler.postDelayed({ goToMain() }, SPLASH_DURATION_MS)

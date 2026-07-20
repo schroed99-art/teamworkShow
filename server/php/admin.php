@@ -875,6 +875,26 @@ function presDevices(p, devs){
   });
 }
 
+// In welcher Zone eines Geräts läuft Präsentation p? Liefert eine kurze Rolle
+// ("Kundenbereich"/"Teamwork"/…) für die Präsentationsliste, damit sichtbar ist,
+// WO eine Präsentation zugewiesen ist (nicht nur DASS sie es ist).
+function presZoneRole(p, d){
+  const mode=d.zone_mode||'single', roles=[];
+  if(mode!=='company' && String(d.presentation_id)===String(p.id))
+    roles.push(mode==='single'?'Vollbild':(mode==='split'?'Kundenbereich':'Kundenbereich'));
+  if((mode==='split'||mode==='company') && String(d.company_presentation_id)===String(p.id))
+    roles.push(mode==='company'?'Vollbild (Teamwork)':'Teamwork');
+  if(mode==='custom'){
+    try{
+      const lay=d.zone_layout?(typeof d.zone_layout==='string'?JSON.parse(d.zone_layout):d.zone_layout):null;
+      const node=lay&&lay.layouts?lay.layouts[d.display_format||'portrait']:null;
+      const any=x=>!x?false:(x.children?x.children.some(c=>any(c.node)):String(x.zone?x.zone.source:'')===String(p.id));
+      if(node&&any(node)) roles.push('Zone (frei)');
+    }catch(e){}
+  }
+  return roles.join(' + ');
+}
+
 /** Rekursive Mini-Zonen-Box: Splits als Flex, Blätter als (ggf. hervorgehobene) Fläche. */
 function miniZoneBox(node, hl){
   if(!node||!node.children){
@@ -1306,14 +1326,17 @@ function renderDetail(t, devices, presentations){
     const thumb=presPreviewHtml(p, devices);
     // Geräte, die diese Präsentation aktuell abspielen (Name + Anzeigeart + Status).
     const runDevs=presDevices(p, devices);
+    // "aktiv" = wird gespielt (wo zugewiesen); "inaktiv" = zugewiesen, aber pausiert
+    // (die Zone bleibt leer). Label + Zonen-Rolle machen den Unterschied sichtbar.
+    const runLabel = active ? '▶ Läuft auf:' : '⏸ Pausiert – zugewiesen zu:';
     const devLine = runDevs.length
-      ? `<div class="muted" style="font-size:12px;margin-top:5px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span>▶ Läuft auf:</span>${runDevs.map(d=>`<span class="tag" style="display:inline-flex;align-items:center"><span class="tdot ${d.status||'offline'}" style="width:7px;height:7px;margin-right:5px"></span>${esc(d.name||d.pairing_code)} · ${esc(anzeigeArt(d))}</span>`).join('')}</div>`
-      : `<div class="muted" style="font-size:12px;margin-top:5px">Keinem Bildschirm zugewiesen</div>`;
+      ? `<div class="muted" style="font-size:12px;margin-top:5px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span>${runLabel}</span>${runDevs.map(d=>{const zr=presZoneRole(p,d);return `<span class="tag" style="display:inline-flex;align-items:center"><span class="tdot ${d.status||'offline'}" style="width:7px;height:7px;margin-right:5px"></span>${esc(d.name||d.pairing_code)}${zr?' · '+esc(zr):''}</span>`;}).join('')}</div>`
+      : `<div class="muted" style="font-size:12px;margin-top:5px">Auf keinem Bildschirm zugewiesen</div>`;
     row.innerHTML=`
       <div class="row wrap2" style="align-items:center">
         ${thumb}
         <div class="grow" style="min-width:0;flex:1 1 auto">
-          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on">aktiv</span>':' <span class="badge-off">inaktiv</span>'}</div>
+          <div><b>${esc(p.name)}</b>${active?' <span class="badge-on" title="Wird gespielt, wo sie zugewiesen ist">aktiv</span>':' <span class="badge-off" title="Pausiert – zugewiesene Zone bleibt leer, Zuweisung bleibt erhalten">inaktiv</span>'}</div>
           <div class="muted" data-desc style="font-size:12px;margin-top:3px;cursor:pointer" title="Beschreibung bearbeiten">${p.description?esc(p.description):'<i>Keine Beschreibung — hier klicken zum Ergänzen.</i>'}</div>
           ${devLine}
         </div>

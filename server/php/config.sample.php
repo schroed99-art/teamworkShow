@@ -17,4 +17,16 @@ return [
     'admin_password' => 'CHANGE_ME',
     // Secret for the URL-triggered device monitor (KAS cron). Empty => web call denied.
     'cron_key' => '',
+    // Outgoing mail (SMTP). Empty host/user/pass => mailer disabled (degrades to a
+    // no-op + log). On the VM, fill these in config.php; on All-Inkl use app.env.
+    'smtp' => [
+        'host'      => '',
+        'port'      => '465',
+        'security'  => 'ssl', // ssl (465) | tls (587, STARTTLS) | none
+        'user'      => '',
+        'pass'      => '',
+        'from'      => '',    // empty => same as user
+        'from_name' => 'TeamworkShow',
+        'alarm_to'  => '',    // comma list; empty => all active admins
+    ],
 ];

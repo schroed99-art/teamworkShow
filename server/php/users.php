@@ -19,6 +19,7 @@
  *   - moving a user to another tenant     -> tw_owning_tenant()
  */
 require __DIR__ . '/auth.php';
+require __DIR__ . '/mailer.php';
 $actorRole = tw_require_manage();          // 'admin', 'koordinator' or 'kunde'
 $actorId   = tw_current_user_id();
 $bound     = tw_is_tenant_bound();         // true => customer self-service
@@ -65,6 +66,21 @@ function tw_check_kunde_tenant(PDO $pdo, string $role, ?int $tenantId): ?int
         tw_json(['error' => 'tenant_not_found'], 422);
     }
     return $tenantId;
+}
+
+/**
+ * When the request asked for it (send_mail truthy), e-mail the login credentials
+ * to the user and return a {mail:{ok,error}} block for the JSON response; else an
+ * empty array. A mail failure never blocks the CRUD result — the account/reset
+ * already succeeded and the dashboard still shows the password as a fallback.
+ */
+function tw_maybe_mail_credentials(array $b, string $email, string $name, string $tempPassword, bool $isReset): array
+{
+    if (empty($b['send_mail'])) {
+        return [];
+    }
+    $res = tw_mail_credentials($email, $name, $email, $tempPassword, $isReset);
+    return ['mail' => ['ok' => (bool) $res['ok'], 'error' => $res['error']]];
 }
 
 function tw_public_user(array $u): array
@@ -156,7 +172,9 @@ if ($method === 'POST') {
         (string) ($b['note'] ?? ''),
         isset($b['active']) ? (int) (bool) $b['active'] : 1,
     ]);
-    tw_json(['id' => (int) $pdo->lastInsertId()], 201);
+    $newId = (int) $pdo->lastInsertId();
+    $name = trim(trim((string) ($b['first_name'] ?? '')) . ' ' . trim((string) ($b['last_name'] ?? '')));
+    tw_json(['id' => $newId] + tw_maybe_mail_credentials($b, $email, $name, $temp, false), 201);
 }
 
 if ($method === 'PUT') {
@@ -183,7 +201,8 @@ if ($method === 'PUT') {
         }
         $pdo->prepare('UPDATE users SET pass_hash = ?, must_change_pw = 1 WHERE id = ?')
             ->execute([password_hash($temp, PASSWORD_DEFAULT), $id]);
-        tw_json(['ok' => true]);
+        $name = trim(((string) $target['first_name']) . ' ' . ((string) $target['last_name']));
+        tw_json(['ok' => true] + tw_maybe_mail_credentials($b, (string) $target['email'], $name, $temp, true));
     }
 
     // Field update (email is immutable).

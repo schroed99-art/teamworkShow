@@ -63,6 +63,17 @@ function tw_load_env(string $path): array
         'openweather_api_key' => $env['OPENWEATHER_API_KEY'] ?? '',
         'admin_password'      => $env['ADMIN_PASSWORD'] ?? '',
         'cron_key'            => $env['CRON_KEY'] ?? '',
+        // Outgoing mail (SMTP). Empty host/user/pass => mailer disabled (no-op).
+        'smtp' => [
+            'host'      => $env['SMTP_HOST'] ?? '',
+            'port'      => $env['SMTP_PORT'] ?? '465',
+            'security'  => $env['SMTP_SECURITY'] ?? 'ssl',
+            'user'      => $env['SMTP_USER'] ?? '',
+            'pass'      => $env['SMTP_PASS'] ?? '',
+            'from'      => $env['MAIL_FROM'] ?? '',
+            'from_name' => $env['MAIL_FROM_NAME'] ?? 'TeamworkShow',
+            'alarm_to'  => $env['ALARM_TO'] ?? '',
+        ],
     ];
 }
 

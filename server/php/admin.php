@@ -11,6 +11,7 @@
  * (see auth.php), so this page never has to be the thing that gets it right.
  */
 require __DIR__ . '/auth.php';
+require_once __DIR__ . '/mailer.php';
 $role = tw_role();
 if ($role === null) {
     header('Location: login.php');
@@ -403,6 +404,9 @@ const DEEP_TENANT = <?= (int) ($_GET['tenant'] ?? 0) ?>;
 // endpoints, so IS_KUNDE is about not showing a customer a door they can't open.
 const IS_KUNDE = <?= $isKunde ? 'true' : 'false' ?>;
 const CURRENT_UID = <?= $actorId ?>;   // to keep someone from locking themselves out
+// Whether the backend can actually send e-mail (SMTP configured). Gates the
+// "send credentials / message by mail" UI so we never offer a dead button.
+const MAIL_ON = <?= tw_mail_enabled() ? 'true' : 'false' ?>;
 function fmtSize(b){ if(b==null||b<0)return '–'; if(b<1024)return b+' B'; if(b<1048576)return (b/1024).toFixed(0)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
@@ -1741,6 +1745,8 @@ function renderDetail(t, devices, presentations){
         <label class="f">Temp-Passwort</label>
         <div class="row"><input id="uPw" class="grow" style="font-family:ui-monospace,monospace"><button class="ghost sm" id="uGen">Generieren</button></div>
         <p class="muted" style="margin:6px 0 0">Muss beim ersten Login geändert werden. Jetzt notieren und dem Kunden weitergeben — später ist es nur noch zurücksetzbar, nicht auslesbar.</p>
+        ${MAIL_ON?`<label class="row" style="margin-top:10px;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="uSendMail" checked><span>Zugangsdaten zusätzlich per E-Mail an den Kunden senden</span></label>`:''}
         <div class="row" style="margin-top:12px"><span class="spacer" style="flex:1"></span><button class="sm" id="uAdd">+ Zugang anlegen</button></div>
       </div>`;
     panels.usr=uWrap;
@@ -2168,16 +2174,19 @@ async function loadTenantUsers(t){
       </div>
       <span class="badge-on" style="${u.active?'':'color:var(--dim);border-color:var(--line);background:transparent'}">${u.active?'aktiv':'inaktiv'}</span>
       <button class="ghost sm" data-reset title="Neues Temp-Passwort vergeben">⟳ Passwort</button>
+      ${(!IS_KUNDE&&MAIL_ON)?`<button class="ghost sm" data-msg title="Nachricht per E-Mail senden">✉ Nachricht</button>`:''}
       <button class="ghost sm" data-act ${self?'disabled':''}>${u.active?'Deaktivieren':'Aktivieren'}</button>
       <button class="ghost sm" data-del ${self?'disabled':''} style="border-color:#5a2230;color:#ff6b8a">Löschen</button>`;
     row.querySelector('[data-reset]').onclick=async()=>{
       const pw=genPw();
       try{
-        await API.call('users.php','PUT',{id:u.id,action:'reset_password',temp_password:pw});
-        toast('Passwort zurückgesetzt');
+        const r=await API.call('users.php','PUT',{id:u.id,action:'reset_password',temp_password:pw,send_mail:MAIL_ON});
         showUserNotice('Passwort zurückgesetzt', name, u.email, pw);
+        toast(mailResultToast(r,'Passwort zurückgesetzt'));
       }catch(e){ toast(userErr(e)); }
     };
+    const msgBtn=row.querySelector('[data-msg]');
+    if(msgBtn) msgBtn.onclick=()=>messageDialog(u);
     row.querySelector('[data-act]').onclick=async()=>{
       try{ await API.call('users.php','PUT',{id:u.id,role:'kunde',tenant_id:t.id,active:u.active?0:1});
         toast(u.active?'Deaktiviert':'Aktiviert'); loadTenantUsers(t); }
@@ -2226,18 +2235,73 @@ async function createTenantUser(t, wrap){
   const g=id=>wrap.querySelector(id);
   const email=g('#uMail').value.trim(), pw=g('#uPw').value;
   const fn=g('#uFn').value.trim(), ln=g('#uLn').value.trim();
+  const sendMail = !!(g('#uSendMail') && g('#uSendMail').checked);
   if(!email){ toast('E-Mail fehlt'); return; }
+  let resp;
   try{
-    await API.call('users.php','POST',{
+    resp = await API.call('users.php','POST',{
       email, role:'kunde', tenant_id:t.id, temp_password:pw,
-      first_name:fn, last_name:ln, active:1,
+      first_name:fn, last_name:ln, active:1, send_mail:sendMail,
     });
   }catch(e){ toast(userErr(e)); return; }
   g('#uFn').value=''; g('#uLn').value=''; g('#uMail').value=''; g('#uPw').value=genPw();
-  toast('Zugang angelegt');
   // Refresh first, so the banner sits directly above the row it is talking about.
   await loadTenantUsers(t);
   showUserNotice('Zugang angelegt', [fn,ln].filter(Boolean).join(' ')||email, email, pw);
+  toast(mailResultToast(resp, 'Zugang angelegt'));
+}
+/** Toast text reflecting whether the optional credential mail went out. */
+function mailResultToast(resp, base){
+  if(resp && resp.mail){
+    return resp.mail.ok ? '📧 '+base+' · E-Mail gesendet'
+                        : '⚠ '+base+' · E-Mail NICHT gesendet – Passwort manuell weitergeben';
+  }
+  return base;
+}
+
+/**
+ * Compose + send a free-text message by e-mail to one customer login. Branded
+ * overlay (never a native prompt). Staff-only path — the button that opens this
+ * is already hidden for IS_KUNDE and message.php refuses non-staff anyway.
+ */
+function messageDialog(u){
+  const name=[u.first_name,u.last_name].filter(Boolean).join(' ')||u.email;
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(2,6,23,.66);display:flex;'
+    +'align-items:center;justify-content:center;z-index:9999;padding:20px';
+  ov.innerHTML=`<div style="background:var(--card,#0f172a);border:1px solid var(--line,#1e293b);
+      border-radius:16px;max-width:520px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="height:4px;width:46px;background:var(--magenta,#D21A55);border-radius:2px;margin-bottom:12px"></div>
+    <h3 style="margin:0 0 2px">Nachricht senden</h3>
+    <p class="muted" style="margin:0 0 12px">An ${esc(name)} · ${esc(u.email)}</p>
+    <label class="f">Betreff</label>
+    <input id="msgSubj" style="width:100%" maxlength="180" placeholder="Betreff">
+    <label class="f" style="margin-top:8px;display:block">Nachricht</label>
+    <textarea id="msgBody" rows="6" style="width:100%;resize:vertical" placeholder="Ihre Nachricht…"></textarea>
+    <div class="row" style="margin-top:14px;gap:8px">
+      <span class="spacer" style="flex:1"></span>
+      <button class="ghost sm" id="msgCancel">Abbrechen</button>
+      <button class="sm" id="msgSend">✉ Senden</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  ov.querySelector('#msgCancel').onclick=close;
+  ov.querySelector('#msgSubj').focus();
+  ov.querySelector('#msgSend').onclick=async()=>{
+    const subject=ov.querySelector('#msgSubj').value.trim();
+    const bodyTxt=ov.querySelector('#msgBody').value.trim();
+    if(!subject||!bodyTxt){ toast('Betreff und Nachricht ausfüllen'); return; }
+    const btn=ov.querySelector('#msgSend'); btn.disabled=true; btn.textContent='Senden…';
+    try{
+      const r=await API.call('message.php','POST',{user_id:u.id, subject, body:bodyTxt});
+      close();
+      toast(r&&r.ok ? '📧 Nachricht gesendet' : '⚠ Nachricht nicht gesendet');
+    }catch(e){
+      btn.disabled=false; btn.textContent='✉ Senden';
+      toast(userErr(e));
+    }
+  };
 }
 
 // ---- Medienpool (shared media folder: upload / preview / delete) ----

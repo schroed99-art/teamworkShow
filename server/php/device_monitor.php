@@ -16,6 +16,7 @@
  */
 require __DIR__ . '/db.php';
 require __DIR__ . '/status_util.php';
+require __DIR__ . '/mailer.php';
 
 if (PHP_SAPI !== 'cli') {
     $want = (string) (tw_config()['cron_key'] ?? '');
@@ -46,18 +47,76 @@ function tw_log(string $logFile, string $msg): void
     @file_put_contents($logFile, date('Y-m-d H:i:s') . '  ' . $msg . "\n", FILE_APPEND);
 }
 
-/** Placeholder — wire real mail() here later (currently only logged). */
+/**
+ * Recipients for device-offline alarms: the configured ALARM_TO list, or — when
+ * empty — every active admin's login e-mail. De-duplicated, validated.
+ */
+function tw_alarm_recipients(): array
+{
+    $configured = tw_mail_config()['alarm_to'];
+    $list = $configured !== ''
+        ? preg_split('/[,;]+/', $configured)
+        : [];
+    if (!$list) {
+        try {
+            $rows = tw_db()->query("SELECT email FROM users WHERE role = 'admin' AND active = 1")->fetchAll();
+            $list = array_map(static fn($r) => (string) $r['email'], $rows);
+        } catch (Throwable $e) {
+            $list = [];
+        }
+    }
+    $clean = [];
+    foreach ($list as $e) {
+        $e = trim((string) $e);
+        if (filter_var($e, FILTER_VALIDATE_EMAIL)) {
+            $clean[strtolower($e)] = $e;
+        }
+    }
+    return array_values($clean);
+}
+
+/**
+ * Notify the admin(s) that a device has gone into alarm (offline past the window).
+ * Sends one e-mail via SMTP; when mail is disabled/unconfigured or fails it simply
+ * logs the reason and returns — the monitor must never die on a mail hiccup.
+ */
 function tw_notify_admin_alarm(string $logFile, array $dev, ?int $secs): void
 {
-    tw_log(
-        $logFile,
-        sprintf(
-            'EMAIL (deaktiviert) -> Admin: Gerät %s "%s" seit %s offline',
-            $dev['pairing_code'],
-            $dev['name'] !== '' ? $dev['name'] : '(ohne Name)',
-            tw_ago_human($secs)
-        )
-    );
+    $code = (string) ($dev['pairing_code'] ?? '');
+    $name = ($dev['name'] ?? '') !== '' ? (string) $dev['name'] : '(ohne Name)';
+    $ago  = tw_ago_human($secs);
+
+    if (!tw_mail_enabled()) {
+        tw_log($logFile, sprintf('EMAIL (nicht konfiguriert) -> Admin: Gerät %s "%s" seit %s offline', $code, $name, $ago));
+        return;
+    }
+    $to = tw_alarm_recipients();
+    if (!$to) {
+        tw_log($logFile, sprintf('EMAIL (kein Empfänger) -> Gerät %s "%s" seit %s offline', $code, $name, $ago));
+        return;
+    }
+
+    $subject = sprintf('⚠ TeamworkShow: Gerät "%s" offline', $name);
+    $eName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+    $eCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
+    $eAgo  = htmlspecialchars($ago, ENT_QUOTES, 'UTF-8');
+    $html = "<div style=\"font-family:system-ui,Arial,sans-serif;color:#0F172A\">"
+        . "<h2 style=\"color:#D21A55;margin:0 0 8px\">Gerät offline</h2>"
+        . "<p>Ein Anzeigegerät meldet sich seit <b>$eAgo</b> nicht mehr.</p>"
+        . "<table style=\"border-collapse:collapse;font-size:14px\">"
+        . "<tr><td style=\"padding:2px 12px 2px 0;color:#64748B\">Gerät</td><td><b>$eName</b></td></tr>"
+        . "<tr><td style=\"padding:2px 12px 2px 0;color:#64748B\">Pairing-Code</td><td>$eCode</td></tr>"
+        . "<tr><td style=\"padding:2px 12px 2px 0;color:#64748B\">Offline seit</td><td>$eAgo</td></tr>"
+        . "</table>"
+        . "<p style=\"color:#64748B;font-size:12px;margin-top:16px\">Automatische Meldung des TeamworkShow-Gerätemonitors.</p>"
+        . "</div>";
+
+    $res = tw_send_mail($to, $subject, $html);
+    if ($res['ok']) {
+        tw_log($logFile, sprintf('EMAIL gesendet -> %s: Gerät %s "%s" seit %s offline', implode(', ', $res['sent']), $code, $name, $ago));
+    } else {
+        tw_log($logFile, sprintf('EMAIL FEHLER (%s) -> Gerät %s "%s" seit %s offline', (string) $res['error'], $code, $name, $ago));
+    }
 }
 
 // Ensure the state table exists (idempotent — also created by the migration).

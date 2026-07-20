@@ -261,7 +261,10 @@ class SyncManager(context: Context, private val mediaDir: File) {
             (prefs.getString(KEY_WEATHER_LAYOUT, "") ?: "") + "|" +
             (prefs.getString(KEY_FORMAT, "") ?: "") + "|" +
             (prefs.getString(KEY_ZONES, "") ?: "") + "|" +
-            (prefs.getString(KEY_NEWS, "") ?: "")
+            (prefs.getString(KEY_NEWS, "") ?: "") + "|" +
+            // Customer stammdaten drive the empty view; a change must trigger a reload
+            // even when no media/slide changed (the whole point of the empty screen).
+            (prefs.getString(KEY_CUSTOMER, "") ?: "")
 
     // ---------- Screen zones (Phase 5.3) ----------
 

@@ -50,14 +50,9 @@
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="0"
-            android:minWidth="80dp"
-            android:minHeight="80dp"
-            android:maxWidth="140dp"
-            android:maxHeight="140dp"
-            android:adjustViewBounds="true"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:scaleType="fitCenter"
             android:src="@drawable/ic_teamwork_logo"
             android:layout_marginBottom="22dp"
             android:contentDescription="@string/logo_desc" />

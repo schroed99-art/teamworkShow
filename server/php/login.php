@@ -53,6 +53,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     http_response_code(401);
     $error = 'E-Mail oder Passwort falsch.';
 }
+
+// Pre-fill the e-mail field: from the failed POST, or from a ?email= link (the
+// credentials mail sends the recipient here so only the password is left to type).
+$prefillEmail = trim((string) ($_POST['email'] ?? $_GET['email'] ?? ''));
+$focusPassword = $prefillEmail !== '';
 ?><!doctype html>
 <html lang="de">
 <head>
@@ -89,9 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <h1>Teamwork<span>Show</span></h1>
     <p class="sub">Anmeldung</p>
     <label for="email">E-Mail</label>
-    <input id="email" name="email" type="email" autofocus autocomplete="username" value="<?= htmlspecialchars((string) ($_POST['email'] ?? ''), ENT_QUOTES) ?>">
+    <input id="email" name="email" type="email"<?= $focusPassword ? '' : ' autofocus' ?> autocomplete="username" value="<?= htmlspecialchars($prefillEmail, ENT_QUOTES) ?>">
     <label for="password">Passwort</label>
-    <input id="password" name="password" type="password" autocomplete="current-password">
+    <input id="password" name="password" type="password"<?= $focusPassword ? ' autofocus' : '' ?> autocomplete="current-password">
     <button type="submit">Anmelden</button>
     <?php if ($error !== ''): ?><div class="err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
   </form>

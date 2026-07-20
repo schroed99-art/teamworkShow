@@ -78,12 +78,25 @@ function tw_current_base_url(): string
  * login e-mail. The password is a one-time temp password that must be changed on
  * first login (must_change_pw = 1), so it is fine to transport it this way.
  *
+ * $tenant, when given, is the recipient's Mandant (keys name/contact_company/
+ * contact_address) and is shown as a block so it is obvious from the mail which
+ * customer the access belongs to.
+ *
+ * @param ?array{name?:string,contact_company?:string,contact_address?:string} $tenant
  * @return array{ok:bool, error:?string, sent:string[]}
  */
-function tw_mail_credentials(string $to, string $name, string $email, string $tempPassword, bool $isReset): array
+function tw_mail_credentials(string $to, string $name, string $email, string $tempPassword, bool $isReset, ?array $tenant = null): array
 {
     $base = tw_current_base_url();
-    $loginUrl = $base !== '' ? $base . '/admin.php' : '';
+    // Point at the login page (not the admin app) and pre-fill the e-mail so the
+    // recipient only has to type the password.
+    $loginUrl = '';
+    if ($base !== '') {
+        $loginUrl = $base . '/login.php';
+        if ($email !== '') {
+            $loginUrl .= '?email=' . rawurlencode($email);
+        }
+    }
     $eName = htmlspecialchars($name !== '' ? $name : $email, ENT_QUOTES, 'UTF-8');
     $eEmail = htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
     $ePw   = htmlspecialchars($tempPassword, ENT_QUOTES, 'UTF-8');
@@ -92,12 +105,39 @@ function tw_mail_credentials(string $to, string $name, string $email, string $te
         : 'für Sie wurde ein Zugang zum TeamworkShow-Dashboard angelegt.';
     $subject = $isReset ? 'TeamworkShow: Passwort zurückgesetzt' : 'TeamworkShow: Ihr Zugang';
 
+    // Which customer/Mandant does this access belong to? Shown up top so it is
+    // recognisable at a glance. Empty fields are skipped; a company identical to
+    // the tenant name is not repeated.
+    $tenantHtml = '';
+    if (is_array($tenant)) {
+        $tName = trim((string) ($tenant['name'] ?? ''));
+        $tComp = trim((string) ($tenant['contact_company'] ?? ''));
+        $tAddr = trim((string) ($tenant['contact_address'] ?? ''));
+        $lines = [];
+        if ($tName !== '') {
+            $lines[] = '<b>' . htmlspecialchars($tName, ENT_QUOTES, 'UTF-8') . '</b>';
+        }
+        if ($tComp !== '' && $tComp !== $tName) {
+            $lines[] = htmlspecialchars($tComp, ENT_QUOTES, 'UTF-8');
+        }
+        if ($tAddr !== '') {
+            $lines[] = nl2br(htmlspecialchars($tAddr, ENT_QUOTES, 'UTF-8'));
+        }
+        if ($lines) {
+            $tenantHtml = '<p style="color:#64748B;font-size:13px;margin:12px 0 4px">Kunde / Mandant</p>'
+                . '<div style="border-left:3px solid #D21A55;padding:2px 0 2px 10px;font-size:14px;line-height:1.5">'
+                . implode('<br>', $lines)
+                . '</div>';
+        }
+    }
+
     $linkHtml = $loginUrl !== ''
         ? '<p><a href="' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '" style="color:#D21A55">Zum Login</a></p>'
         : '';
     $html = "<div style=\"font-family:system-ui,Arial,sans-serif;color:#0F172A\">"
-        . "<h2 style=\"color:#D21A55;margin:0 0 8px\">TeamworkShow</h2>"
+        . "<h2 style=\"color:#0F172A;margin:0 0 8px\">Teamwork<span style=\"color:#D21A55\">Show</span></h2>"
         . "<p>Hallo $eName,<br>$intro</p>"
+        . $tenantHtml
         . "<table style=\"border-collapse:collapse;font-size:14px;margin:8px 0\">"
         . "<tr><td style=\"padding:2px 12px 2px 0;color:#64748B\">Login (E-Mail)</td><td><b>$eEmail</b></td></tr>"
         . "<tr><td style=\"padding:2px 12px 2px 0;color:#64748B\">Passwort</td><td><b>$ePw</b></td></tr>"

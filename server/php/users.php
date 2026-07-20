@@ -74,12 +74,20 @@ function tw_check_kunde_tenant(PDO $pdo, string $role, ?int $tenantId): ?int
  * empty array. A mail failure never blocks the CRUD result — the account/reset
  * already succeeded and the dashboard still shows the password as a fallback.
  */
-function tw_maybe_mail_credentials(array $b, string $email, string $name, string $tempPassword, bool $isReset): array
+function tw_maybe_mail_credentials(PDO $pdo, array $b, string $email, string $name, string $tempPassword, bool $isReset, ?int $tenantId): array
 {
     if (empty($b['send_mail'])) {
         return [];
     }
-    $res = tw_mail_credentials($email, $name, $email, $tempPassword, $isReset);
+    // Include the recipient's Mandant (name + contact) so the mail states which
+    // customer the access is for. Staff logins have no tenant -> no block.
+    $tenant = null;
+    if ($tenantId !== null && $tenantId > 0) {
+        $ts = $pdo->prepare('SELECT name, contact_company, contact_address FROM tenants WHERE id = ?');
+        $ts->execute([$tenantId]);
+        $tenant = $ts->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+    $res = tw_mail_credentials($email, $name, $email, $tempPassword, $isReset, $tenant);
     return ['mail' => ['ok' => (bool) $res['ok'], 'error' => $res['error']]];
 }
 
@@ -174,7 +182,7 @@ if ($method === 'POST') {
     ]);
     $newId = (int) $pdo->lastInsertId();
     $name = trim(trim((string) ($b['first_name'] ?? '')) . ' ' . trim((string) ($b['last_name'] ?? '')));
-    tw_json(['id' => $newId] + tw_maybe_mail_credentials($b, $email, $name, $temp, false), 201);
+    tw_json(['id' => $newId] + tw_maybe_mail_credentials($pdo, $b, $email, $name, $temp, false, $tenantId), 201);
 }
 
 if ($method === 'PUT') {
@@ -202,7 +210,8 @@ if ($method === 'PUT') {
         $pdo->prepare('UPDATE users SET pass_hash = ?, must_change_pw = 1 WHERE id = ?')
             ->execute([password_hash($temp, PASSWORD_DEFAULT), $id]);
         $name = trim(((string) $target['first_name']) . ' ' . ((string) $target['last_name']));
-        tw_json(['ok' => true] + tw_maybe_mail_credentials($b, (string) $target['email'], $name, $temp, true));
+        $targetTenantId = isset($target['tenant_id']) && $target['tenant_id'] !== null ? (int) $target['tenant_id'] : null;
+        tw_json(['ok' => true] + tw_maybe_mail_credentials($pdo, $b, (string) $target['email'], $name, $temp, true, $targetTenantId));
     }
 
     // Field update (email is immutable).

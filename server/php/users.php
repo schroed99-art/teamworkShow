@@ -98,6 +98,7 @@ function tw_public_user(array $u): array
     $u['id']        = (int) $u['id'];
     $u['active']    = (int) $u['active'];
     $u['tenant_id'] = isset($u['tenant_id']) && $u['tenant_id'] !== null ? (int) $u['tenant_id'] : null;
+    $u['notify_device_alarm'] = isset($u['notify_device_alarm']) ? (int) $u['notify_device_alarm'] : 1;
     return $u;
 }
 function tw_find_user(PDO $pdo, int $id): ?array
@@ -123,7 +124,8 @@ if ($method === 'GET') {
     $args  = $tenantId > 0 ? [$tenantId] : [];
     $st = $pdo->prepare(
         "SELECT u.id, u.email, u.role, u.tenant_id, t.name AS tenant_name, u.salutation,
-                u.first_name, u.last_name, u.initials, u.note, u.active, u.must_change_pw
+                u.first_name, u.last_name, u.initials, u.note, u.active, u.must_change_pw,
+                u.notify_device_alarm
            FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
            $where
           ORDER BY u.role, u.last_name, u.first_name, u.id"
@@ -166,8 +168,8 @@ if ($method === 'POST') {
         tw_json(['error' => 'email_taken'], 409);
     }
     $st = $pdo->prepare(
-        'INSERT INTO users (email, pass_hash, role, tenant_id, salutation, first_name, last_name, initials, note, active, must_change_pw)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
+        'INSERT INTO users (email, pass_hash, role, tenant_id, salutation, first_name, last_name, initials, note, active, notify_device_alarm, must_change_pw)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
     );
     $st->execute([
         $email,
@@ -180,6 +182,7 @@ if ($method === 'POST') {
         trim((string) ($b['initials'] ?? '')),
         (string) ($b['note'] ?? ''),
         isset($b['active']) ? (int) (bool) $b['active'] : 1,
+        isset($b['notify_device_alarm']) ? (int) (bool) $b['notify_device_alarm'] : 1,
     ]);
     $newId = (int) $pdo->lastInsertId();
     $name = trim(trim((string) ($b['first_name'] ?? '')) . ' ' . trim((string) ($b['last_name'] ?? '')));
@@ -264,8 +267,12 @@ if ($method === 'PUT') {
         $tenantId = null;
     }
 
+    $notify = array_key_exists('notify_device_alarm', $b)
+        ? (int) (bool) $b['notify_device_alarm']
+        : (int) ($target['notify_device_alarm'] ?? 1);
+
     $st = $pdo->prepare(
-        'UPDATE users SET role = ?, tenant_id = ?, salutation = ?, first_name = ?, last_name = ?, initials = ?, note = ?, active = ?
+        'UPDATE users SET role = ?, tenant_id = ?, salutation = ?, first_name = ?, last_name = ?, initials = ?, note = ?, active = ?, notify_device_alarm = ?
            WHERE id = ?'
     );
     $st->execute([
@@ -277,6 +284,7 @@ if ($method === 'PUT') {
         trim((string) ($b['initials'] ?? $target['initials'])),
         (string) ($b['note'] ?? $target['note']),
         $active,
+        $notify,
         $id,
     ]);
     tw_json(['ok' => true]);

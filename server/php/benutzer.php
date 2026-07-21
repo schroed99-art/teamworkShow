@@ -274,6 +274,7 @@ function openCreate(){
     <label class="f">Notiz</label>
     <textarea id="f_note" rows="2" placeholder="Interne Notizen…"></textarea>
     <label class="f"><input type="checkbox" id="f_active" checked style="width:auto"> Aktiv</label>
+    <label class="f"><input type="checkbox" id="f_alarm" checked style="width:auto"> 📟 Bei Geräte-Ausfall benachrichtigen <span class="hint" style="margin-left:6px">nur für Admin-Konten wirksam</span></label>
     ${MAIL_ON?`<label class="f"><input type="checkbox" id="f_mail" checked style="width:auto"> Zugangsdaten zusätzlich per E-Mail an den Benutzer senden</label>`:''}
     <div class="foot"><button class="ghost" onclick="closeModal()">Abbrechen</button><button id="f_save">Anlegen</button></div>`);
   $('#f_pw').value=genPw();
@@ -284,6 +285,7 @@ async function saveCreate(){
   const body={ salutation:$('#f_sal').value, first_name:$('#f_fn').value.trim(), last_name:$('#f_ln').value.trim(),
     initials:$('#f_ini').value.trim(), email:$('#f_email').value.trim(), role:$('#f_role').value,
     temp_password:$('#f_pw').value, note:$('#f_note').value, active:$('#f_active').checked?1:0,
+    notify_device_alarm:$('#f_alarm').checked?1:0,
     send_mail: !!($('#f_mail') && $('#f_mail').checked) };
   try{ const resp=await API.call('users.php','POST',body); toast(mailResultToast(resp,'Benutzer angelegt')); closeModal(); load(); }
   catch(e){ toast(errMsg(e)); }
@@ -301,12 +303,14 @@ function openEdit(u){
     <label class="f">Notiz</label>
     <textarea id="f_note" rows="2" placeholder="Interne Notizen…">${esc(u.note||'')}</textarea>
     <label class="f"><input type="checkbox" id="f_active" ${u.active?'checked':''} style="width:auto"> Aktiv <span class="hint" style="margin-left:6px">Inaktive Benutzer können sich nicht anmelden</span></label>
+    <label class="f"><input type="checkbox" id="f_alarm" ${u.notify_device_alarm?'checked':''} style="width:auto"> 📟 Bei Geräte-Ausfall benachrichtigen <span class="hint" style="margin-left:6px">nur für Admin-Konten wirksam</span></label>
     <div class="foot"><button class="ghost" onclick="closeModal()">Abbrechen</button><button id="f_save">Speichern</button></div>`);
   $('#f_save').onclick=()=>saveEdit(u.id);
 }
 async function saveEdit(id){
   const body={ id, salutation:$('#f_sal').value, first_name:$('#f_fn').value.trim(), last_name:$('#f_ln').value.trim(),
-    initials:$('#f_ini').value.trim(), role:$('#f_role').value, note:$('#f_note').value, active:$('#f_active').checked?1:0 };
+    initials:$('#f_ini').value.trim(), role:$('#f_role').value, note:$('#f_note').value, active:$('#f_active').checked?1:0,
+    notify_device_alarm:$('#f_alarm').checked?1:0 };
   try{ await API.call('users.php','PUT',body); toast('Gespeichert'); closeModal(); load(); }
   catch(e){ toast(errMsg(e)); }
 }

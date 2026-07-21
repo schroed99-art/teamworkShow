@@ -88,18 +88,33 @@ function tw_alarm_recipients(): array
             $clean[strtolower($e)] = $e;
         }
     }
-    // 2) Nothing valid configured -> every active admin's login e-mail.
+    // 2) Nothing valid configured -> the admins who opted IN to device alarms
+    //    (users.notify_device_alarm). Falls back to EVERY active admin when the
+    //    column is missing (pre-migration) or nobody is currently flagged, so an
+    //    alarm is never silently dropped.
     if (!$clean) {
+        $emails = [];
         try {
-            $rows = tw_db()->query("SELECT email FROM users WHERE role = 'admin' AND active = 1")->fetchAll();
-            foreach ($rows as $r) {
-                $e = trim((string) $r['email']);
-                if (filter_var($e, FILTER_VALIDATE_EMAIL)) {
-                    $clean[strtolower($e)] = $e;
-                }
-            }
+            $emails = tw_db()
+                ->query("SELECT email FROM users WHERE role = 'admin' AND active = 1 AND notify_device_alarm = 1")
+                ->fetchAll(PDO::FETCH_COLUMN);
         } catch (Throwable $e) {
-            // column/table missing before migration -> no recipients, caller logs it
+            $emails = []; // notify_device_alarm not there yet
+        }
+        if (!$emails) {
+            try {
+                $emails = tw_db()
+                    ->query("SELECT email FROM users WHERE role = 'admin' AND active = 1")
+                    ->fetchAll(PDO::FETCH_COLUMN);
+            } catch (Throwable $e) {
+                $emails = [];
+            }
+        }
+        foreach ($emails as $e) {
+            $e = trim((string) $e);
+            if (filter_var($e, FILTER_VALIDATE_EMAIL)) {
+                $clean[strtolower($e)] = $e;
+            }
         }
     }
     return array_values($clean);

@@ -828,7 +828,10 @@ class SyncManager(context: Context, private val mediaDir: File) {
     }
 
     private fun downloadTo(base: String, name: String, dest: File) {
-        val url = "$base/media.php?name=" + URLEncoder.encode(name, "UTF-8")
+        // Send the pairing code so a hardened media.php can authorise the fetch
+        // (screens have no login). Harmless while the server still serves openly.
+        var url = "$base/media.php?name=" + URLEncoder.encode(name, "UTF-8")
+        getPairingCode()?.let { url += "&device=" + URLEncoder.encode(it, "UTF-8") }
         val conn = openGet(url)
         try {
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {

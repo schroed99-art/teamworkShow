@@ -62,10 +62,35 @@ class SyncManager(context: Context, private val mediaDir: File) {
         val noticesHeight: Int,
         val noticesFont: String,
         val noticesColor: String,
-        val noticesSpeed: Int
+        val noticesSpeed: Int,
+        val schedule: Schedule = Schedule.ALWAYS_ON
     ) {
         companion object {
             val EMPTY = WidgetSettings(false, "", false, "", 15, "#66000000", 0, "", "#FFFFFFFF", 90)
+        }
+    }
+
+    /**
+     * Weekly on/off plan (schools, public buildings). Outside every on-window of
+     * the current weekday the screen goes dark; a weekday without windows stays
+     * dark all day; enabled=false means always on. `standby` additionally asks
+     * the display to go into standby (best-effort, hardware-dependent).
+     */
+    data class Schedule(
+        val enabled: Boolean,
+        val standby: Boolean,
+        /** Calendar.DAY_OF_WEEK (1=Sun … 7=Sat) -> on-windows as [startMin, endMin). */
+        val windows: Map<Int, List<Pair<Int, Int>>>
+    ) {
+        /** True = show content, false = screen should be dark. */
+        fun isOnAt(dayOfWeek: Int, minuteOfDay: Int): Boolean {
+            if (!enabled) return true
+            val wins = windows[dayOfWeek] ?: return false
+            return wins.any { minuteOfDay >= it.first && minuteOfDay < it.second }
+        }
+
+        companion object {
+            val ALWAYS_ON = Schedule(false, false, emptyMap())
         }
     }
 
@@ -438,11 +463,40 @@ class SyncManager(context: Context, private val mediaDir: File) {
                 noticesHeight = o.optInt("nh", 0),
                 noticesFont = o.optString("nf", ""),
                 noticesColor = o.optString("nc", "#FFFFFFFF"),
-                noticesSpeed = o.optInt("nsp", 90)
+                noticesSpeed = o.optInt("nsp", 90),
+                schedule = parseSchedule(o.optJSONObject("sch"))
             )
         } catch (e: Exception) {
             WidgetSettings.EMPTY
         }
+    }
+
+    /** Server shape: {enabled, standby, days:{mon..sun:[{from:"HH:MM",to:"HH:MM"}]}}. */
+    private fun parseSchedule(o: JSONObject?): Schedule {
+        if (o == null) return Schedule.ALWAYS_ON
+        // Index + 1 = Calendar.DAY_OF_WEEK (SUNDAY = 1).
+        val keys = listOf("sun", "mon", "tue", "wed", "thu", "fri", "sat")
+        val days = o.optJSONObject("days")
+        val map = HashMap<Int, List<Pair<Int, Int>>>()
+        for (i in keys.indices) {
+            val arr = days?.optJSONArray(keys[i])
+            val wins = ArrayList<Pair<Int, Int>>()
+            if (arr != null) {
+                for (j in 0 until arr.length()) {
+                    val w = arr.optJSONObject(j) ?: continue
+                    val from = hhmmToMinutes(w.optString("from", ""))
+                    val to = hhmmToMinutes(w.optString("to", ""))
+                    if (from >= 0 && to > from) wins.add(from to to)
+                }
+            }
+            map[i + 1] = wins
+        }
+        return Schedule(o.optBoolean("enabled", false), o.optBoolean("standby", false), map)
+    }
+
+    private fun hhmmToMinutes(s: String): Int {
+        val m = Regex("^([01]\\d|2[0-3]):([0-5]\\d)$").find(s) ?: return -1
+        return m.groupValues[1].toInt() * 60 + m.groupValues[2].toInt()
     }
 
     private fun saveWidgetSettings(w: JSONObject?) {
@@ -457,6 +511,8 @@ class SyncManager(context: Context, private val mediaDir: File) {
             .put("nf", w?.optString("notices_font", "") ?: "")
             .put("nc", w?.optString("notices_color", "#FFFFFFFF") ?: "#FFFFFFFF")
             .put("nsp", w?.optInt("notices_speed", 90) ?: 90)
+        // Weekly on/off plan; only stored when the server sent one (absent = always on).
+        w?.optJSONObject("schedule")?.let { out.put("sch", it) }
         prefs.edit().putString(KEY_WIDGETS, out.toString()).apply()
     }
 

@@ -379,7 +379,9 @@ try {
             'notices_font'     => (string) ($w['notices_font'] ?? ''),
             'notices_color'    => (string) ($w['notices_color'] ?? '#FFFFFFFF'),
             'notices_speed'    => (int) ($w['notices_speed'] ?? 90),
-            'schedule'         => $w['schedule'] ?? null,
+            // Weekly on/off plan, decoded so the app receives an object (null = always on).
+            'schedule'         => (isset($w['schedule']) && $w['schedule'] !== '')
+                ? json_decode((string) $w['schedule'], true) : null,
         ],
         'weather_layout' => $weatherLayout,
         'weather_asset'  => $weatherAsset,

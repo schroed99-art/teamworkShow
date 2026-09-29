@@ -100,6 +100,15 @@ class Stage(
     fun start() = controller.start()
     fun reload() = controller.reload()
 
+    /** Scheduled off-time: stop advancing and stop decoding video (screen is black anyway). */
+    fun pause() {
+        controller.stop()
+        exoPlayer.pause()
+    }
+
+    /** Back in on-time: restart the slideshow from the current playlist. */
+    fun resume() = controller.start()
+
     fun release() {
         controller.stop()
         slideAnimator?.cancel()

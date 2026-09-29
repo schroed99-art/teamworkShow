@@ -111,6 +111,21 @@ class MainActivity : AppCompatActivity() {
 
     private val tapTimestamps = ArrayDeque<Long>()
 
+    // Scheduled off-time (weekly plan from the dashboard): black overlay + backlight
+    // to minimum + paused playback, optionally an HDMI-CEC standby attempt. Evaluated
+    // on a 30 s tick and right after every sync; the cached plan applies at launch,
+    // so a reboot during off-time goes dark immediately without waiting for the server.
+    private lateinit var blackoutOverlay: View
+    private var blackoutOn = false
+    private var standbyOn = false
+    private var currentSchedule: SyncManager.Schedule = SyncManager.Schedule.ALWAYS_ON
+    private val blackoutRunnable = object : Runnable {
+        override fun run() {
+            evaluateSchedule()
+            mainHandler.postDelayed(this, BLACKOUT_TICK_MS)
+        }
+    }
+
     companion object {
         private const val TAG = "MainActivity"
         private const val CROSSFADE_MS = 300L
@@ -119,6 +134,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAP_WINDOW_MS = 2_000L
         private const val CORNER_DP = 150f
         private const val SYNC_INTERVAL_MS = 60_000L
+        private const val BLACKOUT_TICK_MS = 30_000L
         private const val WEATHER_PLACEHOLDER = "__weather__"
         private const val NEWS_PLACEHOLDER = "__news__"
         private const val PREFS = "teamworkshow_settings"
@@ -172,6 +188,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.versionLabel).text = appVersionText()
         updateBadge = findViewById(R.id.updateBadge)
         updateBadge.setOnClickListener { onUpdateBadgeClicked() }
+        blackoutOverlay = findViewById(R.id.blackoutOverlay)
 
         val mediaDir = resolveMediaDir()
         AppLog.i(TAG, "media dir: ${mediaDir.absolutePath}")
@@ -182,6 +199,10 @@ class MainActivity : AppCompatActivity() {
         updatePairingOverlay()
 
         buildStages(mediaDir)
+
+        // Apply the last known on/off plan right away, then re-check every 30 s.
+        currentSchedule = syncManager.getWidgetSettings().schedule
+        mainHandler.post(blackoutRunnable)
 
         // Immediate sync on launch, then poll periodically.
         mainHandler.post(syncRunnable)
@@ -407,6 +428,9 @@ class MainActivity : AppCompatActivity() {
                     forEachStage { it.reload() }
                 }
                 applyWidgets(widgets)
+                // A plan edited in the dashboard takes effect on this sync, not the next tick.
+                currentSchedule = widgets.schedule
+                evaluateSchedule()
                 updatePairingOverlay()
                 // A changed display format recreates the activity to load its layout.
                 applyDisplayOrientation()
@@ -493,6 +517,82 @@ class MainActivity : AppCompatActivity() {
             } else {
                 getString(R.string.pairing_server_label, url)
             }
+        }
+    }
+
+    // ---------- Scheduled off-time ----------
+
+    /** Applies the weekly on/off plan for "now". */
+    private fun evaluateSchedule() {
+        val cal = java.util.Calendar.getInstance()
+        val minute = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+        val on = currentSchedule.isOnAt(cal.get(java.util.Calendar.DAY_OF_WEEK), minute)
+        applyBlackout(dark = !on, standby = currentSchedule.standby)
+    }
+
+    private fun applyBlackout(dark: Boolean, standby: Boolean) {
+        if (dark == blackoutOn) {
+            // Already in that state; only follow a standby toggle made while dark.
+            if (dark && standby != standbyOn) {
+                tryDisplayStandby(standby)
+                standbyOn = standby
+            }
+            return
+        }
+        blackoutOn = dark
+        AppLog.i(TAG, if (dark) "schedule: off-time -> screen dark" else "schedule: on-time -> screen on")
+        blackoutOverlay.visibility = if (dark) View.VISIBLE else View.GONE
+        // Backlight to minimum while dark (really off on many built-in panels);
+        // hand control back to the system afterwards.
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (dark) 0f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        if (dark) forEachStage { it.pause() } else forEachStage { it.resume() }
+        if (dark && standby) {
+            tryDisplayStandby(true)
+            standbyOn = true
+        } else if (!dark && standbyOn) {
+            tryDisplayStandby(false)
+            standbyOn = false
+        }
+    }
+
+    /**
+     * Best-effort HDMI-CEC: standby the connected display (enter) or wake it and
+     * switch its input back to us (leave). CEC control is a system API — on most
+     * boxes a normal app is refused, which is expected: the screen then simply
+     * stays black. The outcome is logged so a technician can see what the box allows.
+     */
+    private fun tryDisplayStandby(enter: Boolean) {
+        try {
+            val mgr = getSystemService("hdmi_control")
+            if (mgr == null) {
+                AppLog.i(TAG, "standby: no HDMI-CEC service on this device — black screen only")
+                return
+            }
+            val client = mgr.javaClass.getMethod("getPlaybackClient").invoke(mgr)
+            if (client == null) {
+                AppLog.i(TAG, "standby: device is not an HDMI playback source — black screen only")
+                return
+            }
+            if (enter) {
+                client.javaClass.getMethod("sendStandby").invoke(client)
+                AppLog.i(TAG, "standby: CEC standby sent")
+            } else {
+                val cbClass = Class.forName("android.hardware.hdmi.HdmiPlaybackClient\$OneTouchPlayCallback")
+                val cb = java.lang.reflect.Proxy.newProxyInstance(cbClass.classLoader, arrayOf(cbClass)) { proxy, method, args ->
+                    when (method.name) {
+                        "hashCode" -> System.identityHashCode(proxy)
+                        "equals" -> proxy === args?.getOrNull(0)
+                        "toString" -> "OneTouchPlayCallback"
+                        else -> null
+                    }
+                }
+                client.javaClass.getMethod("oneTouchPlay", cbClass).invoke(client, cb)
+                AppLog.i(TAG, "standby: CEC wake (one-touch-play) sent")
+            }
+        } catch (e: Throwable) {
+            AppLog.i(TAG, "standby: not supported here (${e.javaClass.simpleName}) — black screen only")
         }
     }
 

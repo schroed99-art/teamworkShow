@@ -862,6 +862,100 @@ function zoneSourceGroups(sel, includeCustomer){
  * zoneFields() draws only the shell; initZoneEditor() wires it after insertion and
  * hangs _getZoneBody() on the card for the save handler.
  */
+// ---- Betriebszeiten: Wochenplan an/aus je Gerät (Schulen, öffentliche Gebäude) ----
+// Gespeichert in widget_settings.schedule; die App schaltet außerhalb der Zeiten
+// schwarz (optional HDMI-CEC-Standby). Ein Zeitfenster pro Tag; Tag ohne Haken =
+// ganztägig aus; Plan inaktiv = durchgehend an.
+const SCH_DAYS=[['mon','Mo'],['tue','Di'],['wed','Mi'],['thu','Do'],['fri','Fr'],['sat','Sa'],['sun','So']];
+const SCH_WORK={from:'07:00',to:'17:00'};
+const SCH_DEFAULT={enabled:false,standby:false,days:{mon:[SCH_WORK],tue:[SCH_WORK],wed:[SCH_WORK],thu:[SCH_WORK],fri:[SCH_WORK],sat:[],sun:[]}};
+function scheduleFields(){
+  return `<div class="ibox" data-sch>
+    <div class="row" style="align-items:center;gap:10px;margin-bottom:6px">
+      <b>⏻ Betriebszeiten</b>
+      <span class="muted">Außerhalb der Zeiten bleibt der Bildschirm schwarz</span>
+      <span class="spacer" style="flex:1"></span>
+      <label class="f" style="margin:0"><input type="checkbox" data-sch-en> aktiv</label>
+    </div>
+    <div data-sch-grid style="display:grid;gap:6px">
+      ${SCH_DAYS.map(([k,l])=>`<div data-day="${k}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label class="f" style="margin:0;min-width:58px"><input type="checkbox" data-dayon> ${l}</label>
+        <input type="time" data-from value="07:00" style="width:110px">
+        <span class="muted">bis</span>
+        <input type="time" data-to value="17:00" style="width:110px">
+        <span class="muted" data-offlbl style="display:none">ganztägig aus</span>
+      </div>`).join('')}
+    </div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button type="button" class="ghost sm" data-sch-school>Schulzeiten (Mo–Fr 07–17)</button>
+      <button type="button" class="ghost sm" data-sch-copy>Montag auf Di–Fr übertragen</button>
+    </div>
+    <label class="f" style="margin-top:10px"><input type="checkbox" data-sch-sb> Display zusätzlich in Standby schalten <span class="muted">(HDMI-CEC — nur wenn das Gerät es erlaubt, sonst bleibt es beim schwarzen Bild)</span></label>
+    <p class="muted" style="margin:6px 0 0" data-sch-now></p>
+  </div>`;
+}
+function scheduleRead(c){
+  const box=c.querySelector('[data-sch]'); if(!box) return null;
+  const days={};
+  box.querySelectorAll('[data-day]').forEach(r=>{
+    days[r.dataset.day]=r.querySelector('[data-dayon]').checked
+      ? [{from:r.querySelector('[data-from]').value, to:r.querySelector('[data-to]').value}] : [];
+  });
+  return {enabled:box.querySelector('[data-sch-en]').checked, standby:box.querySelector('[data-sch-sb]').checked, days};
+}
+/** Kürzel des ersten Tags, bei dem „von" nicht vor „bis" liegt — '' wenn alles passt. */
+function scheduleInvalid(s){
+  if(!s||!s.enabled) return '';
+  for(const [k,l] of SCH_DAYS){ const w=(s.days[k]||[])[0]; if(w && !(w.from && w.to && w.from<w.to)) return l; }
+  return '';
+}
+function scheduleWrite(c, s){
+  const box=c.querySelector('[data-sch]'); if(!box) return;
+  s=s||SCH_DEFAULT;
+  box.querySelector('[data-sch-en]').checked=!!s.enabled;
+  box.querySelector('[data-sch-sb]').checked=!!s.standby;
+  box.querySelectorAll('[data-day]').forEach(r=>{
+    const w=((s.days||{})[r.dataset.day]||[])[0];
+    r.querySelector('[data-dayon]').checked=!!w;
+    if(w){ r.querySelector('[data-from]').value=w.from; r.querySelector('[data-to]').value=w.to; }
+  });
+  scheduleRefresh(box);
+}
+/** Tage ohne Haken sperren/beschriften + Vorschau „wäre jetzt an/aus" (Browser-Uhr). */
+function scheduleRefresh(box){
+  const en=box.querySelector('[data-sch-en]').checked;
+  box.querySelector('[data-sch-grid]').style.opacity=en?'1':'.45';
+  box.querySelectorAll('[data-day]').forEach(r=>{
+    const on=r.querySelector('[data-dayon]').checked;
+    r.querySelector('[data-from]').disabled=!on; r.querySelector('[data-to]').disabled=!on;
+    r.querySelector('[data-offlbl]').style.display=on?'none':'';
+  });
+  const now=box.querySelector('[data-sch-now]');
+  if(!en){ now.textContent='Zeitplan inaktiv — der Bildschirm läuft durchgehend.'; return; }
+  const d=new Date(), key=['sun','mon','tue','wed','thu','fri','sat'][d.getDay()];
+  const hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const r=box.querySelector(`[data-day="${key}"]`);
+  const isOn=r.querySelector('[data-dayon]').checked
+    && r.querySelector('[data-from]').value<=hm && hm<r.querySelector('[data-to]').value;
+  now.innerHTML=`Nach diesem Plan wäre der Bildschirm <b>jetzt ${isOn?'an':'aus (schwarz)'}</b>. Wirkt nach dem Speichern beim nächsten Abgleich (≤ 1 Min).`;
+}
+function initSchedule(c){
+  const box=c.querySelector('[data-sch]'); if(!box) return;
+  box.addEventListener('input',()=>scheduleRefresh(box));
+  box.addEventListener('change',()=>scheduleRefresh(box));
+  box.querySelector('[data-sch-school]').onclick=()=>
+    scheduleWrite(c,{...SCH_DEFAULT, enabled:true, standby:box.querySelector('[data-sch-sb]').checked});
+  box.querySelector('[data-sch-copy]').onclick=()=>{
+    const mon=box.querySelector('[data-day="mon"]'), q=(r,s)=>r.querySelector(s);
+    ['tue','wed','thu','fri'].forEach(k=>{ const r=box.querySelector(`[data-day="${k}"]`);
+      q(r,'[data-dayon]').checked=q(mon,'[data-dayon]').checked;
+      q(r,'[data-from]').value=q(mon,'[data-from]').value;
+      q(r,'[data-to]').value=q(mon,'[data-to]').value; });
+    scheduleRefresh(box);
+  };
+  scheduleWrite(c, null);
+}
+
 /** "Anzeigeart" eines Geräts für die Präsentationsliste: Format · Aufteilung,
  *  z. B. "Hochkant · zweigeteilt". Bei frei aufgeteilten Layouts zählt die
  *  Blattzahl des Layouts für das Geräteformat (fehlt es, läuft eine Fläche). */
@@ -1540,7 +1634,7 @@ function renderDetail(t, devices, presentations){
   // Inhaltlich (was der Bildschirm zeigt), daher eigener Reiter mit EIGENEM
   // Speichern-Button, getrennt vom Gerät (Hardware/Identität im Geräte-Reiter).
   const anzWrap=document.createElement('div'); anzWrap.className='card';
-  anzWrap.innerHTML=`<h3>Anzeige</h3><p class="muted" style="margin:-4px 0 6px">Bildschirm-Zonen, Wetter und Laufschrift — je Bildschirm. Bestimmt, was auf dem Gerät dargestellt wird.</p>`;
+  anzWrap.innerHTML=`<h3>Anzeige</h3><p class="muted" style="margin:-4px 0 6px">Bildschirm-Zonen, Wetter, Laufschrift und Betriebszeiten — je Bildschirm. Bestimmt, was und wann das Gerät etwas zeigt.</p>`;
   if(!devices.length){
     const hint=document.createElement('p'); hint.className='muted'; hint.style.marginTop='10px';
     hint.textContent=IS_KUNDE?'Für Sie ist noch kein Bildschirm eingerichtet.':'Noch kein Gerät gekoppelt — lege zuerst im Reiter „Geräte" eines an.';
@@ -1562,7 +1656,7 @@ function renderDetail(t, devices, presentations){
           : 'Kundenbereich: bei „Eine Fläche (Kunde)" der ganze Schirm, im Split die Kunden-Zone, im freien Layout die Quelle „Kunde". Leer = Standardanzeige.'}</p>
       </div>
       ${IS_KUNDE?'':zoneFields(d)}
-      ${IS_KUNDE?'<p class="muted" style="margin:8px 0 2px">🔒 Wetter &amp; Laufschrift richtet Ihr Ansprechpartner (Teamwork) ein — hier nur zur Information.</p><fieldset disabled style="border:0;padding:0;margin:0;min-width:0">':''}
+      ${IS_KUNDE?'<p class="muted" style="margin:8px 0 2px">🔒 Wetter, Laufschrift &amp; Betriebszeiten richtet Ihr Ansprechpartner (Teamwork) ein — hier nur zur Information.</p><fieldset disabled style="border:0;padding:0;margin:0;min-width:0">':''}
       <div class="ibox">
         <div class="row" style="align-items:center;gap:10px;margin-bottom:4px">
           <b>🌤 Wetter</b>
@@ -1602,12 +1696,18 @@ function renderDetail(t, devices, presentations){
           <div><label class="f">Rahmen-Deckkraft (%)</label><input type="number" min="0" max="100" data-nc="op" style="width:90px" value="40"></div>
         </div>
       </div>
+      ${scheduleFields()}
       ${IS_KUNDE?'</fieldset>':''}
       <div class="row" style="margin-top:10px"><span class="spacer" style="flex:1"></span><button class="sm" data-saveanz>${IS_KUNDE?'Präsentation speichern':'Anzeige speichern'}</button></div>`;
     if(!IS_KUNDE) initZoneEditor(c, d);
+    initSchedule(c);
     c.querySelector('[data-saveanz]').onclick=async()=>{
       // Kunden-/Haupt-Präsentation (presentation_id) + Zonen hängen am Gerät ->
-      // devices.php-PUT; Wetter/Laufschrift -> widgets.php. Alles über DIESEN Button.
+      // devices.php-PUT; Wetter/Laufschrift/Betriebszeiten -> widgets.php. Alles über DIESEN Button.
+      // Erst prüfen, damit bei einem Zeitfehler nichts halb gespeichert wird.
+      const sch=scheduleRead(c);
+      const bad=IS_KUNDE?'':scheduleInvalid(sch);
+      if(bad){ toast(`Betriebszeiten: „von" muss vor „bis" liegen (${bad})`); return; }
       const presSel=c.querySelector('[data-anzpres]');
       const presPart=presSel?{presentation_id:presSel.value||null}:{};
       if(!IS_KUNDE && c._getZoneBody){
@@ -1628,7 +1728,7 @@ function renderDetail(t, devices, presentations){
           notices_enabled:w('notices_enabled').checked, notices_text:w('notices_text').value,
           notices_size:+w('notices_size').value||15, notices_height:+w('notices_height').value||0, notices_bg:nbg,
           notices_font:w('notices_font').value, notices_speed:+w('notices_speed').value||90,
-          notices_color:(nc('fg').value||'#FFFFFF')});
+          notices_color:(nc('fg').value||'#FFFFFF'), schedule:sch});
       }
       toast(IS_KUNDE?'Präsentation gespeichert':'Anzeige gespeichert');
       // Ansicht sofort aktualisieren: Mini-Bildschirme, Anzeigeart-Chips und der
@@ -1654,6 +1754,9 @@ function renderDetail(t, devices, presentations){
       else if(/^#[0-9a-fA-F]{6}$/.test(bg)){ a=255; rgb=bg; }
       if(nc('rgb')) nc('rgb').value=rgb;
       if(nc('op')) nc('op').value=Math.round(a/255*100);
+      // Betriebszeiten: widgets.php liefert die Spalte roh (JSON-Text oder null).
+      let sch=null; try{ sch=w.schedule?JSON.parse(w.schedule):null; }catch(e){}
+      scheduleWrite(c, sch);
     }).catch(()=>{});
   });
   panels.anz=anzWrap;

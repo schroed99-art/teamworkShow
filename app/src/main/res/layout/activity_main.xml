@@ -197,4 +197,16 @@
 
     </LinearLayout>
 
+    <!-- Scheduled off-time (weekly plan): full black on top of everything. Not
+         clickable — the 5-tap maintenance gate lives in dispatchTouchEvent, so the
+         menu stays reachable while the screen is dark. -->
+    <View
+        android:id="@+id/blackoutOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FF000000"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone" />
+
 </FrameLayout>
